@@ -23,11 +23,12 @@ model_dir = "iic/SenseVoiceSmall"
 model_py_path = os.path.join(SENSEVOICE_DIR, "model.py")
 model = AutoModel(
     model=model_dir,
-    trust_remote_code=True,
+    trust_remote_code=False,
     remote_code=model_py_path,
     vad_model="fsmn-vad",
-    vad_kwargs={"max_single_segment_time": 30000},
-    device="cpu",  # 使用CPU
+    spk_model="cam++",
+    device="cpu",
+    disable_update=True
 )
 
 model_load_time = time.time() - start_time
@@ -37,15 +38,30 @@ print("开始识别音频...")
 start_time = time.time()
 
 # 使用os.path.join构建输入文件路径
-input_file = os.path.join(SCRIPT_DIR, "input", "123.MP3")
+input_file = os.path.join(SCRIPT_DIR, "input", "zh.wav")
+
+# 在生成前添加
+print("generate参数:", {
+    "output_timestamp": True,
+    "spk_mode": "vad_segment"
+})
+
 res = model.generate(
+    output_timestamp=True,  # 开启时间戳功能
     input=input_file,
-    cache={},
-    language="auto",  # "zn", "en", "yue", "ja", "ko", "nospeech"
+    language="auto",
     use_itn=True,
     batch_size_s=60,
-    merge_vad=True,
-    merge_length_s=15,
+    vad_kwargs={
+        "max_single_segment_time": 30000
+    },
+    spk_mode="vad_segment",
+    spk_kwargs={
+        "cb_kwargs": {
+            "threshold": 0.5
+        },
+        "return_spk_res": True
+    }
 )
 text = rich_transcription_postprocess(res[0]["text"])
 
@@ -66,3 +82,8 @@ with open(output_file, "a", encoding="utf-8") as f:
     f.write(f"识别结果：\n{text}")
 
 print(f"识别结果已追加到: {output_file}")
+
+print("返回结果:", res)
+if len(res) > 0:
+    print("时间戳:", "timestamp" in res[0])
+    print("结果内容:", res[0].keys())
