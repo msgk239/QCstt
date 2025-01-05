@@ -127,12 +127,15 @@ const hasFiles = computed(() => fileList.value.length > 0)
 // 初始化语言列表
 const initLanguages = async () => {
   try {
-    const response = await getLanguages()
-    if (response.code === 0) {
-      languages.value = response.result
+    const response = await fetch('http://localhost:8010/api/languages')
+    const json = await response.json()
+    if (json.code === 200) {
+      languages.value = json.data
+    } else {
+      ElMessage.error(json.message || '获取语言列表失败')
     }
   } catch (error) {
-    ElMessage.error('获取语言列表失败')
+    ElMessage.error('获取语言列表失败：' + error.message)
   }
 }
 
@@ -158,16 +161,26 @@ const handleRecognize = async () => {
 
   recognizing.value = true
   try {
-    const files = fileList.value.map(f => f.raw)
-    const keys = fileList.value.map(f => f.name).join(',')
+    const formData = new FormData()
+    formData.append('file', fileList.value[0].raw)
+    formData.append('language', language.value)
     
-    const response = await recognizeAudio(files, keys, language.value, device.value)
+    const response = await fetch('http://localhost:8010/api/recognize', {
+      method: 'POST',
+      body: formData
+    })
     
-    if (response.code === 0) {
-      results.value = response.result
+    const json = await response.json()
+    if (json.code === 200) {
+      results.value = [
+        {
+          key: fileList.value[0].name,
+          ...json.data
+        }
+      ]
       ElMessage.success('识别完成')
     } else {
-      ElMessage.error(response.message || '识别失败')
+      ElMessage.error(json.message || '识别失败')
     }
   } catch (error) {
     ElMessage.error('识别失败：' + error.message)
