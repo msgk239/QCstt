@@ -52,6 +52,33 @@
 - 支持 VAD 语音活动检测
 - 集成 CAMPPlus 说话人识别
 
+关于说话人分离的重要说明：
+1. 初始化参数设置：
+   - spk_mode 必须在 AutoModel 初始化时设置，而不是在 generate 调用时
+   - 正确设置：spk_mode="vad_segment"（使用 VAD 分割的说话人识别模式）
+
+2. 聚类参数配置：
+   - ClusterBackend 的参数名为 merge_thr 而不是 threshold
+   - 示例配置：
+     ```python
+     spk_kwargs={
+         "cb_kwargs": {
+             "merge_thr": 0.5  # 控制说话人聚类的合并阈值
+         },
+         "return_spk_res": True
+     }
+     ```
+
+3. 性能优化：
+   - ncpu：设置 PyTorch 的线程数（建议为 CPU 核心数的 1/4 到 1/2）
+   - batch_size：CPU 模式下建议保持为 1
+
+4. 调试要点：
+   - 检查 VAD 分割结果是否正确
+   - 确认说话人嵌入向量的提取
+   - 验证聚类结果的合理性
+   - 观察时间戳的连续性
+
 ### 2. API 服务层 (api_service.py)
 - 基于 FastAPI 框架
 - 处理音频文件上传
