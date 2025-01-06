@@ -165,8 +165,11 @@ class FileService:
         """获取回收站文件列表"""
         try:
             files = []
+            print(f"Checking trash directory: {self.trash_dir}")  # 添加调试日志
+            
             # 直接读取回收站目录下的所有文件
             if os.path.exists(self.trash_dir):
+                print(f"Trash directory exists, contents: {os.listdir(self.trash_dir)}")  # 添加调试日志
                 for filename in os.listdir(self.trash_dir):
                     if query and query.lower() not in filename.lower():
                         continue
@@ -191,6 +194,8 @@ class FileService:
                         except Exception as e:
                             print(f"Error parsing filename {filename}: {str(e)}")
                             continue
+            else:
+                print("Trash directory does not exist!")  # 添加调试日志
             
             # 按删除日期倒序排序
             files.sort(key=lambda x: x['delete_date'], reverse=True)
@@ -199,6 +204,8 @@ class FileService:
             total = len(files)
             start_idx = (page - 1) * page_size
             end_idx = start_idx + page_size
+            
+            print(f"Found {total} files in trash")  # 添加调试日志
             
             return {
                 "code": 200,

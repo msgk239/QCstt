@@ -112,18 +112,36 @@ const dialogCallback = ref(null)
 const fetchFiles = async () => {
   loading.value = true
   try {
+    console.log('Fetching trash files with params:', {
+      page: currentPage.value,
+      page_size: pageSize.value,
+      query: searchQuery.value
+    })
+    
     const res = await trashApi.getTrashList({
       page: currentPage.value,
       page_size: pageSize.value,
       query: searchQuery.value || undefined
     })
+    
+    console.log('Trash API response:', res)
+    console.log('Response data structure:', {
+      code: res.code,
+      message: res.message,
+      data: res.data
+    })
+    
     if (res.code === 200) {
+      console.log('Trash items before mapping:', res.data.items)
       files.value = res.data.items.map(file => ({
         ...file,
         duration: '计算中...'
       }))
+      console.log('Trash items after mapping:', files.value)
       total.value = res.data.total
+      console.log('Total files:', total.value)
     } else {
+      console.error('API error:', res)
       ElMessage.error(res.message || '获取文件列表失败')
     }
   } catch (error) {

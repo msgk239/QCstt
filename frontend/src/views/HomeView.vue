@@ -6,11 +6,11 @@
       <div class="toolbar">
         <div class="toolbar-left">
           <el-radio-group v-model="viewMode" size="large">
-            <el-radio-button label="list">
-              <el-icon><List /></el-icon>
+            <el-radio-button value="list">
+              <el-icon><List /></el-icon>列表
             </el-radio-button>
-            <el-radio-button label="grid">
-              <el-icon><Grid /></el-icon>
+            <el-radio-button value="grid">
+              <el-icon><Grid /></el-icon>网格
             </el-radio-button>
           </el-radio-group>
 

@@ -132,7 +132,7 @@
     >
       <div class="speed-list">
         <el-radio-group v-model="playbackRate" @change="handleSpeedChange">
-          <el-radio-button v-for="speed in speeds" :key="speed" :label="speed">
+          <el-radio-button v-for="speed in speeds" :key="speed" :value="speed">
             {{ speed }}x
           </el-radio-button>
         </el-radio-group>

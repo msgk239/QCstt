@@ -2,7 +2,8 @@
 
 基于 FastAPI 和 Vue 3 开发的语音识别系统，支持多语言识别和多种音频格式。
 本系统完全保护用户隐私，所有处理均在本地完成。
-
+需要改py中的FunASR\funasr\auto\auto_model.py
+D:\python3.12.8\Lib\site-packages\funasr\auto\auto_model.py
 ## 隐私保护说明
 
 1. 本地处理：
@@ -190,10 +191,9 @@ npm install
 
 1. 启动服务端
 ```bash
-cd SenseVoice
-python api2.py
+python -m server.api.app
 ```
-服务端将在 http://localhost:8000 启动
+服务端将在 http://localhost:8010 启动
 
 2. 启动前端（开发模式）
 ```bash
