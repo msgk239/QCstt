@@ -1,25 +1,7 @@
 <template>
   <div class="home-view">
-    <!-- 上传区域 -->
-    <el-card class="upload-area" v-show="!fileList.length">
-      <el-upload
-        class="upload-dragger"
-        drag
-        action="#"
-        :auto-upload="false"
-        :show-file-list="false"
-        @change="handleFileChange"
-      >
-        <el-icon class="upload-icon"><Upload /></el-icon>
-        <div class="upload-text">
-          <h3>将文件拖到此处或点击上传</h3>
-          <p>支持 WAV、MP3、FLAC、OGG 格式</p>
-        </div>
-      </el-upload>
-    </el-card>
-
     <!-- 文件列表 -->
-    <div class="file-list" v-show="fileList.length">
+    <div class="file-list">
       <!-- 工具栏 -->
       <div class="toolbar">
         <div class="toolbar-left">
@@ -66,6 +48,7 @@
         v-if="viewMode === 'list'"
         :data="filteredFiles"
         style="width: 100%"
+        v-loading="loading"
       >
         <el-table-column prop="name" label="文件名" min-width="200">
           <template #default="{ row }">
@@ -73,25 +56,34 @@
             <span class="filename">{{ row.name }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="duration" label="时长" width="120" />
+        <el-table-column prop="size" label="大小" width="120">
+          <template #default="{ row }">
+            {{ formatFileSize(row.size) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.status === '已完成' ? 'success' : 'warning'">
+            <el-tag :type="getStatusType(row.status)">
               {{ row.status }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="date" label="修改日期" width="180" />
+        <el-table-column prop="date" label="上传时间" width="180" />
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button-group>
-              <el-button type="primary" link>
-                <el-icon><Edit /></el-icon>
+              <el-button 
+                type="primary" 
+                link 
+                :disabled="row.status !== '已上传'"
+                @click="startRecognition(row)"
+              >
+                开始识别
               </el-button>
               <el-button type="primary" link>
                 <el-icon><Download /></el-icon>
               </el-button>
-              <el-button type="danger" link>
+              <el-button type="danger" link @click="handleDeleteFile(row)">
                 <el-icon><Delete /></el-icon>
               </el-button>
             </el-button-group>
@@ -119,13 +111,18 @@
           </div>
           <div class="file-actions">
             <el-button-group>
-              <el-button type="primary" link>
-                <el-icon><Edit /></el-icon>
+              <el-button 
+                type="primary" 
+                link 
+                :disabled="file.status !== '已上传'"
+                @click="startRecognition(file)"
+              >
+                开始识别
               </el-button>
               <el-button type="primary" link>
                 <el-icon><Download /></el-icon>
               </el-button>
-              <el-button type="danger" link>
+              <el-button type="danger" link @click="handleDeleteFile(file)">
                 <el-icon><Delete /></el-icon>
               </el-button>
             </el-button-group>
@@ -155,10 +152,11 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import * as asrApi from '@/api/modules/asr'
 import FileUpload from '@/components/file/FileUpload.vue'
 import {
-  Upload,
   Document,
   Edit,
   Download,
@@ -178,52 +176,127 @@ const searchQuery = ref('')
 const currentPage = ref(1)
 const pageSize = ref(20)
 
-// 模拟数据
-const fileList = ref([
-  {
-    id: 1,
-    name: '会议记录.mp3',
-    duration: '2小时15分',
-    status: '已完成',
-    date: '2024-03-10 14:30'
-  },
-  {
-    id: 2,
-    name: '访谈录音.wav',
-    duration: '45分钟',
-    status: '处理中',
-    date: '2024-03-09 16:20'
-  }
-])
-
-// 计算属性
-const filteredFiles = computed(() => {
-  return fileList.value.filter(file =>
-    file.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-  )
-})
-
-const totalFiles = computed(() => filteredFiles.value.length)
-
-// 方法
-const handleFileChange = (file) => {
-  console.log('File selected:', file)
-}
+// 文件列表状态
+const fileList = ref([])
+const loading = ref(false)
 
 // 上传对话框
 const uploadDialogVisible = ref(false)
+
+// 获取文件列表
+const fetchFileList = async () => {
+  try {
+    loading.value = true
+    const response = await asrApi.getFileList({
+      page: currentPage.value,
+      page_size: pageSize.value,
+      query: searchQuery.value
+    })
+    
+    if (response.code === 200) {
+      fileList.value = response.data.items.map(file => ({
+        ...file,
+        duration: '计算中...' // TODO: 添加音频时长计算
+      }))
+      totalFiles.value = response.data.total
+    } else {
+      ElMessage.error('获取文件列表失败')
+    }
+  } catch (error) {
+    console.error('Fetch file list error:', error)
+    ElMessage.error('获取文件列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 监听分页和搜索变化
+watch([currentPage, pageSize, searchQuery], () => {
+  fetchFileList()
+})
+
+// 计算属性
+const filteredFiles = computed(() => {
+  return fileList.value
+})
+
+const totalFiles = ref(0) // 改为 ref，因为要从后端获取总数
 
 const showUploadDialog = () => {
   uploadDialogVisible.value = true
 }
 
-const handleUploadSuccess = (files) => {
-  // TODO: 处理上传成功的文件
-  console.log('Upload success:', files)
+const handleUploadSuccess = ({ files, options }) => {
+  console.log('Upload success:', { files, options })
+  ElMessage.success('文件上传成功')
+  fetchFileList() // 刷新文件列表
 }
 
 const handleUploadError = (error) => {
   console.error('Upload error:', error)
+  ElMessage.error('文件上传失败')
+}
+
+// 删除文件
+const handleDeleteFile = async (file) => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除该文件吗？',
+      '删除确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    // 调用删除 API
+    const response = await asrApi.deleteFile(file.id)
+    if (response.code === 200) {
+      ElMessage.success('文件已删除')
+      fetchFileList() // 刷新列表
+    } else {
+      ElMessage.error('删除文件失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Delete file error:', error)
+      ElMessage.error('删除文件失败')
+    }
+  }
+}
+
+// 开始识别
+const startRecognition = async (file) => {
+  ElMessage.info('识别功能尚未实现')
+}
+
+// 初始化
+onMounted(() => {
+  fetchFileList()
+})
+
+// 添加文件大小格式化函数
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i]
+}
+
+// 添加状态类型判断函数
+const getStatusType = (status) => {
+  switch (status) {
+    case '已上传':
+      return 'info'
+    case '待识别':
+      return 'warning'
+    case '已完成':
+      return 'success'
+    default:
+      return 'info'
+  }
 }
 </script>
 
@@ -231,43 +304,6 @@ const handleUploadError = (error) => {
 .home-view {
   padding: 20px;
   height: 100%;
-}
-
-.upload-area {
-  height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.upload-dragger {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.upload-icon {
-  font-size: 48px;
-  color: var(--el-color-primary);
-  margin-bottom: 16px;
-}
-
-.upload-text {
-  text-align: center;
-}
-
-.upload-text h3 {
-  margin: 0 0 8px;
-  font-size: 18px;
-  color: var(--el-text-color-primary);
-}
-
-.upload-text p {
-  margin: 0;
-  color: var(--el-text-color-secondary);
 }
 
 .toolbar {
@@ -290,6 +326,10 @@ const handleUploadError = (error) => {
 .toolbar-right {
   display: flex;
   gap: 8px;
+}
+
+.hidden-upload {
+  display: inline-block;
 }
 
 .grid-view {

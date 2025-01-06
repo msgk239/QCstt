@@ -18,6 +18,7 @@
       :on-remove="handleFileRemove"
       :before-upload="beforeUpload"
       :file-list="fileList"
+      accept=".wav,.mp3,.flac,.ogg"
     >
       <el-icon class="upload-icon"><Upload /></el-icon>
       <div class="upload-text">
@@ -25,6 +26,23 @@
         <p>支持 WAV、MP3、FLAC、OGG 格式，单个文件不超过 50MB</p>
       </div>
     </el-upload>
+
+    <!-- 上传选项 -->
+    <div class="upload-options">
+      <div class="option-item">
+        <span class="option-label">识别语言：</span>
+        <el-select 
+          v-model="language" 
+          size="small"
+        >
+          <el-option label="自动检测" value="auto" />
+          <el-option label="中文" value="zh" />
+          <el-option label="英文" value="en" />
+          <el-option label="日语" value="ja" />
+          <el-option label="韩语" value="ko" />
+        </el-select>
+      </div>
+    </div>
 
     <!-- 文件列表 -->
     <div v-if="fileList.length" class="file-list">
@@ -70,12 +88,20 @@
         <div class="button-group">
           <el-button @click="handleClose">取消</el-button>
           <el-button
-            type="primary"
-            :disabled="!fileList.length"
+            plain
+            :disabled="!fileList.length || isUploading"
             :loading="isUploading"
-            @click="handleUpload"
+            @click.prevent="handleUploadOnly"
           >
-            {{ isUploading ? '上传中...' : '开始上传' }}
+            {{ isUploading ? '上传中...' : '仅上传' }}
+          </el-button>
+          <el-button
+            type="primary"
+            :disabled="!fileList.length || isUploading"
+            :loading="isUploading"
+            @click.prevent="handleUploadAndRecognize"
+          >
+            {{ isUploading ? '上传中...' : '上传后识别' }}
           </el-button>
         </div>
       </div>
@@ -87,7 +113,7 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, Upload } from '@element-plus/icons-vue'
-import * as asrApi from '@/api/modules/asr'
+import { uploadAudio, getRecognizeProgress } from '@/api/modules/asr'
 
 // 定义属性和事件
 const props = defineProps({
@@ -108,6 +134,7 @@ const dialogVisible = computed({
 const uploadRef = ref(null)
 const fileList = ref([])
 const isUploading = ref(false)
+const language = ref('auto')
 
 // 计算属性
 const totalSize = computed(() => {
@@ -135,8 +162,9 @@ const formatFileSize = (bytes) => {
 
 const beforeUpload = (file) => {
   // 检查文件类型
-  const allowedTypes = ['audio/wav', 'audio/mp3', 'audio/flac', 'audio/ogg']
-  if (!allowedTypes.includes(file.type)) {
+  const allowedExtensions = ['.wav', '.mp3', '.flac', '.ogg']
+  const extension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'))
+  if (!allowedExtensions.includes(extension)) {
     ElMessage.error('不支持的文件格式')
     return false
   }
@@ -152,81 +180,134 @@ const beforeUpload = (file) => {
 }
 
 const handleFileChange = (file) => {
-  console.log('File changed:', file)
+  if (file.status === 'ready') {
+    console.log('File changed:', file)
+    // 确保文件被添加到列表中
+    const exists = fileList.value.some(f => f.uid === file.uid)
+    if (!exists) {
+      fileList.value.push(file)
+    }
+  }
 }
 
 const handleFileRemove = (file) => {
-  console.log('File removed:', file)
+  console.log('Removing file:', file)
+  const index = fileList.value.findIndex(item => item.uid === file.uid)
+  if (index > -1) {
+    fileList.value.splice(index, 1)
+  }
 }
 
-const handleUpload = async () => {
+const handleUploadOnly = async () => {
+  console.log('handleUploadOnly clicked')
+  if (!fileList.value.length) {
+    ElMessage.warning('请先选择要上传的文件')
+    return
+  }
+  if (isUploading.value) {
+    ElMessage.warning('文件正在上传中，请稍候')
+    return
+  }
+  await handleUpload('upload')
+}
+
+const handleUploadAndRecognize = async () => {
+  console.log('handleUploadAndRecognize clicked')
+  if (!fileList.value.length) {
+    ElMessage.warning('请先选择要上传的文件')
+    return
+  }
+  if (isUploading.value) {
+    ElMessage.warning('文件正在上传中，请稍候')
+    return
+  }
+  await handleUpload('recognize')
+}
+
+const handleUpload = async (action) => {
   if (!fileList.value.length) return
 
   isUploading.value = true
-  try {
-    // 并行上传所有文件
-    await Promise.all(fileList.value.map(async file => {
+  const uploadPromises = fileList.value.map(async (file) => {
+    try {
       file.status = 'uploading'
       file.percentage = 0
-
-      const onProgress = progressEvent => {
-        if (progressEvent.total) {
-          file.percentage = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+      
+      // 创建上传选项
+      const uploadOptions = {
+        action,
+        language: language.value,
+        onProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            file.percentage = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          }
         }
       }
 
-      try {
-        const res = await asrApi.uploadAudio(file.raw, {
-          language: options.value.language,
-          hotwordLibraries: options.value.hotwordLibraries,
-          onProgress
-        })
+      console.log('Uploading file:', file.name, 'with options:', uploadOptions)
+      
+      const response = await uploadAudio(file, uploadOptions)
+      console.log('Upload response:', response)
 
+      if (response.code === 200) {
         file.status = 'success'
-        file.taskId = res.taskId
-        file.fileId = res.fileId
-
-        // 开始轮询转写进度
-        startProgressPolling(file)
-      } catch (error) {
-        file.status = 'error'
-        file.error = error.message || '上传失败'
-        throw error
+        file.percentage = 100
+        
+        // 如果是识别操作，开始轮询进度
+        if (action === 'recognize' && response.data && response.data.id) {
+          await pollRecognizeProgress(response.data.id)
+        }
+        
+        return response.data
+      } else {
+        throw new Error(response.message || '上传失败')
       }
-    }))
+    } catch (error) {
+      console.error('Upload error for file:', file.name, error)
+      file.status = 'error'
+      throw error
+    }
+  })
 
-    ElMessage.success('文件上传成功')
-    emit('upload-success', fileList.value)
+  try {
+    const results = await Promise.all(uploadPromises)
+    console.log('All uploads completed:', results)
+    ElMessage.success(action === 'recognize' ? '文件上传并识别成功' : '文件上传成功')
+    emit('upload-success', {
+      files: results,
+      options: { action, language: language.value }
+    })
     handleClose()
   } catch (error) {
     console.error('Upload error:', error)
-    ElMessage.error('部分文件上传失败')
+    ElMessage.error(action === 'recognize' ? '部分文件上传或识别失败' : '部分文件上传失败')
     emit('upload-error', error)
   } finally {
     isUploading.value = false
   }
 }
 
-// 轮询转写进度
-const startProgressPolling = async (file) => {
-  const checkProgress = async () => {
-    try {
-      const res = await asrApi.getProgress(file.taskId)
-      file.transcriptionProgress = res.progress
-      file.transcriptionStatus = res.status
+// 轮询识别进度
+const pollRecognizeProgress = async (fileId) => {
+  try {
+    console.log('Polling progress for file:', fileId)
+    const response = await getRecognizeProgress(fileId)
+    console.log('Progress response:', response)
 
-      if (res.progress < 100) {
-        setTimeout(checkProgress, 2000)
-      } else {
-        file.transcriptionStatus = 'completed'
+    if (response.code === 200) {
+      const progress = response.data.progress
+      if (progress < 100) {
+        // 每2秒轮询一次
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        await pollRecognizeProgress(fileId)
       }
-    } catch (error) {
-      console.error('Failed to check progress:', error)
-      file.transcriptionStatus = 'error'
+    } else {
+      throw new Error(response.message || '获取识别进度失败')
     }
+  } catch (error) {
+    console.error('Get progress error:', error)
+    throw error
   }
-
-  await checkProgress()
 }
 
 const handleClose = () => {
@@ -234,12 +315,6 @@ const handleClose = () => {
   isUploading.value = false
   dialogVisible.value = false
 }
-
-// 组件状态
-const options = ref({
-  language: 'auto',
-  hotwordLibraries: []
-})
 </script>
 
 <style scoped>
@@ -271,7 +346,7 @@ const options = ref({
 
 .file-list {
   margin-top: 20px;
-  max-height: 300px;
+  max-height: 200px;
   overflow-y: auto;
 }
 
@@ -333,5 +408,22 @@ const options = ref({
 
 :deep(.el-progress-bar__inner) {
   transition: width 0.2s ease;
+}
+
+.upload-options {
+  margin-top: 20px;
+  padding: 16px;
+  background-color: var(--el-fill-color-light);
+  border-radius: 4px;
+}
+
+.option-item {
+  display: flex;
+  align-items: center;
+}
+
+.option-label {
+  width: 100px;
+  color: var(--el-text-color-regular);
 }
 </style> 

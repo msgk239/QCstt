@@ -3,47 +3,56 @@ import request from '../request'
 // 上传音频文件
 export function uploadAudio(file, options = {}) {
   const formData = new FormData()
-  formData.append('file', file)
+  formData.append('file', file.raw)
   
-  if (options.language) {
-    formData.append('language', options.language)
+  // 添加选项
+  const uploadOptions = {
+    action: options.action || 'upload',
+    language: options.language || 'auto'
   }
-
-  if (options.hotwordLibraries) {
-    formData.append('hotwordLibraries', JSON.stringify(options.hotwordLibraries))
-  }
-
-  const metadata = {
-    originalName: file.name,
-    size: file.size,
-    type: file.type,
-    lastModified: file.lastModified
-  }
-  formData.append('metadata', JSON.stringify(metadata))
+  formData.append('options', JSON.stringify(uploadOptions))
 
   return request({
-    url: '/api/v1/asr/upload',
+    url: '/api/files/upload',
     method: 'post',
     data: formData,
     headers: {
       'Content-Type': 'multipart/form-data'
     },
-    onUploadProgress: options.onProgress
+    onUploadProgress: options.onProgress,
+    timeout: 600000
   })
 }
 
-// 获取转写进度
-export function getProgress(taskId) {
+// 获取文件列表
+export function getFileList(params) {
   return request({
-    url: '/api/v1/asr/progress/' + taskId,
-    method: 'get'
+    url: '/api/files',
+    method: 'get',
+    params
   })
 }
 
 // 获取支持的语言列表
 export function getSupportedLanguages() {
   return request({
-    url: '/api/v1/asr/languages',
+    url: '/api/languages',
+    method: 'get'
+  })
+}
+
+// 获取文件进度
+export function getFileProgress(fileId) {
+  return request({
+    url: `/api/files/${fileId}/progress`,
+    method: 'get'
+  })
+}
+
+// 获取识别进度
+export function getRecognizeProgress(taskId) {
+  return request({
+    url: `/api/files/${taskId}/progress`,
     method: 'get'
   })
 }
@@ -154,5 +163,13 @@ export function batchImportHotwords(libraryId, file) {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
+  })
+}
+
+// 删除文件
+export function deleteFile(fileId) {
+  return request({
+    url: `/api/files/${fileId}`,
+    method: 'delete'
   })
 } 

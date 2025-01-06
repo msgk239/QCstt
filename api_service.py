@@ -1,4 +1,8 @@
 # api_service.py
+import os
+import json
+import shutil
+from datetime import datetime
 from model_service import model  # 这里导入的是初始化好的模型实例
 from funasr.utils.postprocess_utils import rich_transcription_postprocess
 
@@ -12,6 +16,24 @@ class APIService:
         {"code": "ko", "name": "韩语"}
     ]
     
+    def __init__(self):
+        # 使用项目根目录作为基准
+        current_dir = os.path.dirname(os.path.abspath(__file__))  # 当前文件所在目录
+        project_root = current_dir  # api_service.py 所在的目录就是项目根目录
+        
+        # 构建存储路径
+        self.storage_root = os.path.join(project_root, 'storage')
+        self.uploads_dir = os.path.join(self.storage_root, 'uploads', 'audio')
+        self.trash_dir = os.path.join(self.storage_root, 'trash')
+        
+        # 创建目录时打印路径和权限信息
+        for dir_path in [self.uploads_dir, self.trash_dir]:
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+                print(f"Created directory: {dir_path}")
+            except Exception as e:
+                print(f"Error creating directory {dir_path}: {str(e)}")
+    
     # 新增获取语言列表的方法
     def get_languages(self):
         return {
@@ -19,6 +41,138 @@ class APIService:
             "message": "success",
             "data": self.SUPPORTED_LANGUAGES
         }
+    
+    def save_uploaded_file(self, file_content, filename, options=None):
+        """保存上传的文件"""
+        try:
+            # 生成带时间戳的文件名（精确到秒）
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            new_filename = f"{timestamp}_{filename}"
+            
+            # 直接保存到 audio 目录下
+            file_path = os.path.join(self.uploads_dir, new_filename)
+            print(f"Saving file to: {file_path}")
+            
+            # 保存文件
+            with open(file_path, 'wb') as f:
+                f.write(file_content)
+            
+            print(f"File saved successfully: {file_path}")
+            
+            # 创建文件记录
+            file_info = {
+                'id': timestamp,  # 使用时间戳作为ID
+                'name': filename, # 保存原始文件名
+                'size': len(file_content),
+                'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'status': '待识别' if options and options.get('action') == 'recognize' else '已上传',
+                'path': file_path,
+                'options': options
+            }
+            
+            return {
+                "code": 200,
+                "message": "success",
+                "data": file_info
+            }
+            
+        except Exception as e:
+            return {
+                "code": 500,
+                "message": f"保存文件失败: {str(e)}"
+            }
+    
+    def get_file_list(self, page=1, page_size=20, query=None):
+        """获取文件列表"""
+        try:
+            files = []
+            # 直接读取 audio 目录下的所有文件
+            if os.path.exists(self.uploads_dir):
+                for filename in os.listdir(self.uploads_dir):
+                    if query and query.lower() not in filename.lower():
+                        continue
+                    
+                    full_path = os.path.join(self.uploads_dir, filename)
+                    if os.path.isfile(full_path):  # 确保是文件而不是目录
+                        # 从文件名中提取时间戳和原始文件名
+                        # 文件名格式：YYYYMMDD_HHMMSS_原始文件名
+                        try:
+                            timestamp = filename[:15]  # YYYYMMDD_HHMMSS
+                            original_name = filename[16:]  # 原始文件名
+                            stat = os.stat(full_path)
+                            
+                            files.append({
+                                'id': timestamp,
+                                'name': original_name,
+                                'size': stat.st_size,
+                                'date': datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S'),
+                                'status': '已上传',
+                                'path': full_path
+                            })
+                        except Exception as e:
+                            print(f"Error parsing filename {filename}: {str(e)}")
+                            continue
+            
+            # 按日期倒序排序
+            files.sort(key=lambda x: x['date'], reverse=True)
+            
+            # 分页
+            total = len(files)
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            
+            return {
+                "code": 200,
+                "message": "success",
+                "data": {
+                    "items": files[start_idx:end_idx],
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size
+                }
+            }
+            
+        except Exception as e:
+            print(f"Get file list error: {str(e)}")  # 添加错误日志
+            return {
+                "code": 500,
+                "message": f"获取文件列表失败: {str(e)}"
+            }
+    
+    def delete_file(self, file_id):
+        """删除文件（移动到回收站）"""
+        try:
+            date_dirs = os.listdir(self.uploads_dir)
+            file_path = None
+            
+            # 查找文件
+            for date_dir in date_dirs:
+                possible_path = os.path.join(self.uploads_dir, date_dir, file_id)
+                if os.path.exists(possible_path):
+                    file_path = possible_path
+                    break
+            
+            if not file_path:
+                return {
+                    "code": 404,
+                    "message": "文件不存在"
+                }
+            
+            # 移动到回收站
+            trash_path = os.path.join(self.trash_dir, datetime.now().strftime('%Y%m%d'), file_id)
+            os.makedirs(os.path.dirname(trash_path), exist_ok=True)
+            shutil.move(file_path, trash_path)
+            
+            return {
+                "code": 200,
+                "message": "success"
+            }
+            
+        except Exception as e:
+            return {
+                "code": 500,
+                "message": f"删除文件失败: {str(e)}"
+            }
     
     def process_audio(self, audio_file, language="auto"):
         # 1. 使用已正确配置的model进行识别

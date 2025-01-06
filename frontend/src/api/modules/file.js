@@ -9,6 +9,23 @@ export function getFileList(params) {
   })
 }
 
+// 上传文件
+export function uploadFile(file, options = {}) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('options', JSON.stringify(options))
+
+  return request({
+    url: '/api/v1/files/upload',
+    method: 'post',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    },
+    onUploadProgress: options.onProgress
+  })
+}
+
 // 获取文件详情
 export function getFileDetail(id) {
   return request({
