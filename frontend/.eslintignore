@@ -1,0 +1,22 @@
+# 构建目录
+dist/
+
+# 第三方依赖
+node_modules/
+
+# 自动生成的文件
+auto-imports.d.ts
+components.d.ts
+
+# 静态资源
+public/
+src/assets/
+
+# 压缩文件
+*.min.js
+*.min.css
+
+# 配置文件
+vite.config.js
+.eslintrc.js
+.prettierrc.js 

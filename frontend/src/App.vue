@@ -1,45 +1,68 @@
 <template>
-  <el-config-provider namespace="ep">
-    <div class="app">
+  <el-config-provider :locale="zhCn">
+    <div class="app-container">
       <el-container>
-        <el-header>
-          <h1>SenseVoice ASR</h1>
+        <el-header height="60px">
+          <app-header v-model:collapse="isCollapse" />
         </el-header>
-        <el-main>
-          <audio-recognizer />
-        </el-main>
-        <el-footer>
-          <p>© 2024 SenseVoice. All rights reserved.</p>
-        </el-footer>
+        <el-container>
+          <el-aside :width="isCollapse ? '64px' : '200px'">
+            <app-sidebar :collapse="isCollapse" />
+          </el-aside>
+          <el-main>
+            <router-view></router-view>
+          </el-main>
+        </el-container>
       </el-container>
     </div>
   </el-config-provider>
 </template>
 
 <script setup>
-import { ElConfigProvider } from 'element-plus'
-import AudioRecognizer from '@/components/AudioRecognizer.vue'
+import { ref } from 'vue'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import AppHeader from '@/components/layout/AppHeader.vue'
+import AppSidebar from '@/components/layout/AppSidebar.vue'
+
+const isCollapse = ref(false)
 </script>
 
 <style>
-.app {
-  min-height: 100vh;
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#app {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.app-container {
+  height: 100%;
+}
+
+.el-container {
+  height: 100%;
 }
 
 .el-header {
-  text-align: center;
-  line-height: 60px;
-  background-color: #409EFF;
-  color: white;
+  border-bottom: 1px solid var(--el-border-color-light);
+  background-color: #fff;
+  padding: 0;
+}
+
+.el-aside {
+  background-color: var(--el-bg-color-page);
+  border-right: 1px solid var(--el-border-color-light);
+  transition: width 0.3s;
 }
 
 .el-main {
-  background-color: #f5f7fa;
-}
-
-.el-footer {
-  text-align: center;
-  color: #909399;
+  background-color: var(--el-bg-color);
   padding: 20px;
 }
-</style> 
+</style>

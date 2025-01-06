@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <!-- 麦克风图标 -->
+    <g transform="translate(60,40)">
+        <!-- 麦克风主体 -->
+        <rect x="25" y="0" width="30" height="80" rx="15" fill="#409EFF"/>
+        <!-- 麦克风底座 -->
+        <path d="M0 70 L80 70 L80 90 L45 90 L45 110 L35 110 L35 90 L0 90 Z" fill="#409EFF"/>
+        <!-- 声波效果 -->
+        <path d="M15 40 Q0 40 0 60" stroke="#409EFF" stroke-width="4" fill="none"/>
+        <path d="M85 40 Q100 40 100 60" stroke="#409EFF" stroke-width="4" fill="none"/>
+        <path d="M25 30 Q0 30 0 60" stroke="#409EFF" stroke-width="4" fill="none" opacity="0.7"/>
+        <path d="M75 30 Q100 30 100 60" stroke="#409EFF" stroke-width="4" fill="none" opacity="0.7"/>
+    </g>
+    <!-- 文字 -->
+    <text x="100" y="180" text-anchor="middle" font-size="24" font-weight="bold" fill="#409EFF">SenseVoice</text>
+</svg> 
