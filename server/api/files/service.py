@@ -328,6 +328,105 @@ class FileService:
                 "code": 500,
                 "message": f"清空回收站失败: {str(e)}"
             }
+    
+    def get_audio_file(self, file_id):
+        """获取音频文件内容"""
+        try:
+            # 在 audio 目录下查找文件
+            file_found = None
+            for filename in os.listdir(self.audio_dir):
+                if filename.startswith(file_id):
+                    file_found = filename
+                    break
+            
+            if not file_found:
+                return {
+                    "code": 404,
+                    "message": "文件不存在"
+                }
+            
+            # 获取文件路径
+            file_path = os.path.join(self.audio_dir, file_found)
+            
+            # 读取文件内容
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+            
+            # 获取文件MIME类型
+            file_extension = os.path.splitext(file_found)[1].lower()
+            mime_types = {
+                '.mp3': 'audio/mpeg',
+                '.wav': 'audio/wav',
+                '.ogg': 'audio/ogg',
+                '.flac': 'audio/flac'
+            }
+            content_type = mime_types.get(file_extension, 'application/octet-stream')
+            
+            return {
+                "code": 200,
+                "message": "success",
+                "data": {
+                    "content": file_content,
+                    "content_type": content_type,
+                    "filename": file_found[16:]  # 去掉时间戳前缀
+                }
+            }
+            
+        except Exception as e:
+            print(f"Get audio file error: {str(e)}")
+            return {
+                "code": 500,
+                "message": f"获取音频文件失败: {str(e)}"
+            }
+    
+    def rename_file(self, file_id, new_name):
+        """重命名文件"""
+        try:
+            # 在 audio 目录下查找文件
+            file_found = None
+            for filename in os.listdir(self.audio_dir):
+                if filename.startswith(file_id):
+                    file_found = filename
+                    break
+            
+            if not file_found:
+                return {
+                    "code": 404,
+                    "message": "文件不存在"
+                }
+            
+            # 构建新的文件名(保持时间戳前缀不变)
+            new_filename = f"{file_id}_{new_name}"
+            
+            # 源文件和目标文件路径
+            old_path = os.path.join(self.audio_dir, file_found)
+            new_path = os.path.join(self.audio_dir, new_filename)
+            
+            # 检查新文件名是否已存在
+            if os.path.exists(new_path):
+                return {
+                    "code": 400,
+                    "message": "文件名已存在"
+                }
+            
+            # 重命名文件
+            os.rename(old_path, new_path)
+            
+            return {
+                "code": 200,
+                "message": "success",
+                "data": {
+                    "id": file_id,
+                    "name": new_name
+                }
+            }
+            
+        except Exception as e:
+            print(f"Rename file error: {str(e)}")
+            return {
+                "code": 500,
+                "message": f"重命名文件失败: {str(e)}"
+            }
 
 # 创建全局实例
 file_service = FileService()

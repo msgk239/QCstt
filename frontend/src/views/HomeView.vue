@@ -17,7 +17,7 @@
           <el-input
             v-model="searchQuery"
             placeholder="搜索文件..."
-            prefix-icon="Search"
+            :prefix-icon="Search"
             clearable
             class="search-input"
           />
@@ -52,8 +52,23 @@
       >
         <el-table-column prop="name" label="文件名" min-width="200">
           <template #default="{ row }">
-            <el-icon><Document /></el-icon>
-            <span class="filename">{{ row.name }}</span>
+            <div class="file-name-cell">
+              <el-icon><Document /></el-icon>
+              <audio :ref="'audio-' + row.id" :src="'/api/v1/files/' + row.id + '/audio'" @ended="handleAudioEnded(row)" hidden></audio>
+              <div v-if="row.isRenaming" class="rename-input">
+                <el-input
+                  v-model="row.newName"
+                  size="small"
+                  @blur="handleRenameConfirm(row)"
+                  @keyup.enter="handleRenameConfirm(row)"
+                  @keyup.esc="handleRenameCancel(row)"
+                />
+              </div>
+              <span v-else class="filename" @click="handlePlay(row)" :title="'点击播放: ' + row.name">
+                {{ row.name }}
+                <el-icon v-if="row.isPlaying"><VideoPlay /></el-icon>
+              </span>
+            </div>
           </template>
         </el-table-column>
         <el-table-column prop="size" label="大小" width="120">
@@ -74,9 +89,38 @@
           </template>
         </el-table-column>
         <el-table-column prop="date" label="上传时间" width="180" />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="250" fixed="right">
           <template #default="{ row }">
             <el-button-group>
+              <el-tooltip content="播放/暂停" placement="top">
+                <el-button 
+                  type="primary" 
+                  link
+                  @click="handlePlay(row)"
+                >
+                  <el-icon>
+                    <component :is="row.isPlaying ? 'VideoPause' : 'VideoPlay'" />
+                  </el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="重命名" placement="top">
+                <el-button 
+                  type="primary" 
+                  link
+                  @click="handleRename(row)"
+                >
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="下载" placement="top">
+                <el-button 
+                  type="primary" 
+                  link
+                  @click="handleExport(row)"
+                >
+                  <el-icon><Download /></el-icon>
+                </el-button>
+              </el-tooltip>
               <el-button 
                 type="primary" 
                 link 
@@ -84,9 +128,6 @@
                 @click="startRecognition(row)"
               >
                 开始识别
-              </el-button>
-              <el-button type="primary" link>
-                <el-icon><Download /></el-icon>
               </el-button>
               <el-button type="danger" link @click="handleDeleteFile(row)">
                 <el-icon><Delete /></el-icon>
@@ -170,7 +211,9 @@ import {
   Search,
   Filter,
   List,
-  Grid
+  Grid,
+  VideoPlay,
+  VideoPause
 } from '@element-plus/icons-vue'
 
 // 视图模式
@@ -184,6 +227,7 @@ const pageSize = ref(20)
 // 文件列表状态
 const fileList = ref([])
 const loading = ref(false)
+const totalFiles = ref(0)
 
 // 上传对话框
 const uploadDialogVisible = ref(false)
@@ -199,7 +243,12 @@ const fetchFileList = async () => {
     })
     
     if (response.code === 200) {
-      fileList.value = response.data.items
+      fileList.value = response.data.items.map(item => ({
+        ...item,
+        isPlaying: false,
+        isRenaming: false,
+        newName: item.name
+      }))
       totalFiles.value = response.data.total
     } else {
       ElMessage.error('获取文件列表失败')
@@ -222,18 +271,19 @@ const filteredFiles = computed(() => {
   return fileList.value
 })
 
-const totalFiles = ref(0) // 改为 ref，因为要从后端获取总数
-
+// 显示上传对话框
 const showUploadDialog = () => {
   uploadDialogVisible.value = true
 }
 
+// 上传成功回调
 const handleUploadSuccess = ({ files, options }) => {
   console.log('Upload success:', { files, options })
   ElMessage.success('文件上传成功')
   fetchFileList() // 刷新文件列表
 }
 
+// 上传失败回调
 const handleUploadError = (error) => {
   console.error('Upload error:', error)
   ElMessage.error('文件上传失败')
@@ -273,12 +323,78 @@ const startRecognition = async (file) => {
   ElMessage.info('识别功能尚未实现')
 }
 
-// 初始化
-onMounted(() => {
-  fetchFileList()
-})
+// 音频播放相关
+const handlePlay = (file) => {
+  const audio = document.querySelector(`#audio-${file.id}`)
+  if (file.isPlaying) {
+    audio.pause()
+    file.isPlaying = false
+  } else {
+    // 先停止其他正在播放的音频
+    fileList.value.forEach(f => {
+      if (f.id !== file.id && f.isPlaying) {
+        const otherAudio = document.querySelector(`#audio-${f.id}`)
+        otherAudio?.pause()
+        f.isPlaying = false
+      }
+    })
+    audio.play()
+    file.isPlaying = true
+  }
+}
 
-// 添加文件大小格式化函数
+const handleAudioEnded = (file) => {
+  file.isPlaying = false
+}
+
+// 重命名相关
+const handleRename = (file) => {
+  file.isRenaming = true
+  file.newName = file.name
+}
+
+const handleRenameConfirm = async (file) => {
+  if (file.newName && file.newName !== file.name) {
+    try {
+      const response = await asrApi.renameFile(file.id, file.newName)
+      if (response.code === 200) {
+        file.name = file.newName
+        ElMessage.success('重命名成功')
+      } else {
+        ElMessage.error('重命名失败')
+      }
+    } catch (error) {
+      console.error('Rename error:', error)
+      ElMessage.error('重命名失败')
+    }
+  }
+  file.isRenaming = false
+}
+
+const handleRenameCancel = (file) => {
+  file.isRenaming = false
+}
+
+// 导出相关
+const handleExport = async (file) => {
+  try {
+    const response = await fetch(`/api/v1/files/${file.id}/audio`)
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = file.name
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Export error:', error)
+    ElMessage.error('导出失败')
+  }
+}
+
+// 格式化文件大小
 const formatFileSize = (bytes) => {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -287,7 +403,7 @@ const formatFileSize = (bytes) => {
   return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i]
 }
 
-// 添加状态类型判断函数
+// 获取状态类型
 const getStatusType = (status) => {
   switch (status) {
     case '已上传':
@@ -300,6 +416,11 @@ const getStatusType = (status) => {
       return 'info'
   }
 }
+
+// 初始化
+onMounted(() => {
+  fetchFileList()
+})
 </script>
 
 <style scoped>
@@ -386,5 +507,43 @@ const getStatusType = (status) => {
 /* 工具栏按钮图标间距 */
 .el-button .el-icon {
   margin-right: 4px;
+}
+
+.file-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filename {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.3s;
+  
+  &:hover {
+    color: var(--el-color-primary);
+    background-color: var(--el-fill-color-light);
+  }
+}
+
+.playing-icon {
+  font-size: 14px;
+  color: var(--el-color-primary);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+.rename-input {
+  flex: 1;
+  margin-right: 8px;
 }
 </style>

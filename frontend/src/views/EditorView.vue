@@ -197,7 +197,7 @@ const formatTime = (seconds) => {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
   const s = Math.floor(seconds % 60)
-  return \`\${h > 0 ? h + ':' : ''}\${m.toString().padStart(2, '0')}:\${s.toString().padStart(2, '0')}\`
+  return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
 const initWaveSurfer = () => {
@@ -230,7 +230,7 @@ const initWaveSurfer = () => {
   })
 
   // 加载音频文件
-  wavesurfer.value.load(\`/api/v1/files/\${route.params.id}/audio\`)
+  wavesurfer.value.load(`/api/v1/files/${route.params.id}/audio`)
 }
 
 const togglePlay = () => {
@@ -267,7 +267,7 @@ const updateActiveSegment = () => {
     segment => time >= segment.start && time <= segment.end
   )
   if (activeSegment) {
-    const element = document.querySelector(\`[data-segment-id="\${activeSegment.id}"]\`)
+    const element = document.querySelector(`[data-segment-id="${activeSegment.id}"]`)
     element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 }
@@ -350,21 +350,9 @@ const handleExport = async (format) => {
   }
 }
 
-// 生命周期
-onMounted(async () => {
-  try {
-    // 获取文件信息
-    file.value = await fileApi.getFileDetail(route.params.id)
-    segments.value = file.value.segments || []
-    speakers.value = file.value.speakers || []
-    
-    // 初始化音频播放器
-    initWaveSurfer()
-  } catch (error) {
-    console.error('Failed to load file:', error)
-    ElMessage.error('加载文件失败')
-    router.push('/')
-  }
+// 生命周期钩子
+onMounted(() => {
+  initWaveSurfer()
 })
 
 onUnmounted(() => {
@@ -410,40 +398,46 @@ onUnmounted(() => {
 
 .main-content {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .audio-player {
+  background: var(--el-bg-color-page);
+  border-radius: 8px;
   padding: 16px;
-  border-bottom: 1px solid var(--el-border-color-light);
+  margin-bottom: 16px;
 }
 
 .player-controls {
   margin-top: 16px;
   display: flex;
+  justify-content: center;
   align-items: center;
   gap: 16px;
 }
 
 .time-display {
-  color: var(--el-text-color-secondary);
   font-family: monospace;
+  color: var(--el-text-color-regular);
 }
 
 .transcript {
-  flex: 1;
+  background: var(--el-bg-color-page);
+  border-radius: 8px;
   padding: 16px;
-  overflow-y: auto;
 }
 
 .segment {
   margin-bottom: 16px;
-  padding: 12px;
-  border-radius: 8px;
-  background-color: var(--el-bg-color-page);
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
   transition: background-color 0.3s;
+}
+
+.segment:hover {
+  background-color: var(--el-fill-color-light);
 }
 
 .segment.active {
@@ -458,35 +452,34 @@ onUnmounted(() => {
 }
 
 .speaker-name {
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  font-weight: 500;
 }
 
 .segment-time {
   color: var(--el-text-color-secondary);
-  font-size: 14px;
+  font-family: monospace;
 }
 
 .segment-text {
   padding: 8px;
+  border: 1px solid var(--el-border-color);
   border-radius: 4px;
-  background-color: var(--el-bg-color);
   min-height: 24px;
   line-height: 1.5;
-  outline: none;
 }
 
 .segment-text:focus {
-  background-color: var(--el-color-primary-light-9);
+  outline: none;
+  border-color: var(--el-color-primary);
 }
 
 .speaker-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .speaker-item {

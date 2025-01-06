@@ -33,6 +33,29 @@ export function getFileList(params) {
   })
 }
 
+// 删除文件
+export function deleteFile(fileId) {
+  return request({
+    url: `/api/files/${fileId}`,
+    method: 'delete'
+  })
+}
+
+// 重命名文件
+export function renameFile(fileId, newName) {
+  const formData = new FormData()
+  formData.append('new_name', newName)
+  
+  return request({
+    url: `/api/files/${fileId}/rename`,
+    method: 'put',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
 // 获取支持的语言列表
 export function getSupportedLanguages() {
   return request({
@@ -163,13 +186,5 @@ export function batchImportHotwords(libraryId, file) {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
-  })
-}
-
-// 删除文件
-export function deleteFile(fileId) {
-  return request({
-    url: `/api/files/${fileId}`,
-    method: 'delete'
   })
 } 

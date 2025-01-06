@@ -7,6 +7,7 @@ from typing import Optional
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 # 本地模块
 from .files.service import file_service
@@ -108,6 +109,31 @@ async def permanently_delete_file(file_id: str):
 @app.delete("/api/trash")
 async def clear_trash():
     return file_service.clear_trash()
+
+# 获取音频文件
+@app.get("/api/v1/files/{file_id}/audio")
+async def get_audio_file(file_id: str):
+    result = file_service.get_audio_file(file_id)
+    if result["code"] != 200:
+        return result
+    
+    # 从结果中获取文件内容和类型
+    file_data = result["data"]
+    return Response(
+        content=file_data["content"],
+        media_type=file_data["content_type"],
+        headers={
+            "Content-Disposition": f'attachment; filename="{file_data["filename"]}"'
+        }
+    )
+
+# 重命名文件
+@app.put("/api/files/{file_id}/rename")
+async def rename_file(
+    file_id: str,
+    new_name: str = Form(...)  # 使用Form字段接收新文件名
+):
+    return file_service.rename_file(file_id, new_name)
 
 if __name__ == "__main__":
     uvicorn.run("server.api.app:app", host="0.0.0.0", port=8010, reload=True) 
