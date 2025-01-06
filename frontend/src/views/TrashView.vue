@@ -8,6 +8,18 @@
         <el-button type="primary" :disabled="!selectedFiles.length" @click="handleBatchRestore">
           <el-icon><RefreshLeft /></el-icon>恢复文件
         </el-button>
+        
+        <el-input
+          v-model="searchQuery"
+          placeholder="搜索文件..."
+          clearable
+          @input="handleSearch"
+          class="search-input"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
       </div>
       <div class="toolbar-right">
         <el-button type="danger" @click="handleClearTrash">
@@ -77,9 +89,9 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Document, Delete, RefreshLeft } from '@element-plus/icons-vue'
+import { Document, Delete, RefreshLeft, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import * as fileApi from '@/api/modules/file'
+import * as trashApi from '@/api/modules/trash'
 
 // 状态
 const loading = ref(false)
@@ -88,6 +100,7 @@ const selectedFiles = ref([])
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const searchQuery = ref('')
 
 // 对话框
 const dialogVisible = ref(false)
@@ -99,13 +112,20 @@ const dialogCallback = ref(null)
 const fetchFiles = async () => {
   loading.value = true
   try {
-    const res = await fileApi.getFileList({
+    const res = await trashApi.getTrashList({
       page: currentPage.value,
-      pageSize: pageSize.value,
-      status: 'deleted'
+      page_size: pageSize.value,
+      query: searchQuery.value || undefined
     })
-    files.value = res.items
-    total.value = res.total
+    if (res.code === 200) {
+      files.value = res.data.items.map(file => ({
+        ...file,
+        duration: '计算中...'
+      }))
+      total.value = res.data.total
+    } else {
+      ElMessage.error(res.message || '获取文件列表失败')
+    }
   } catch (error) {
     console.error('Failed to fetch files:', error)
     ElMessage.error('获取文件列表失败')
@@ -148,9 +168,13 @@ const handleRestore = (file) => {
     `确定要恢复文件 "${file.name}" 吗？`,
     async () => {
       try {
-        await fileApi.restoreFile(file.id)
-        ElMessage.success('文件已恢复')
-        fetchFiles()
+        const res = await trashApi.restoreFile(file.id)
+        if (res.code === 200) {
+          ElMessage.success('文件已恢复')
+          fetchFiles()
+        } else {
+          ElMessage.error(res.message || '恢复文件失败')
+        }
       } catch (error) {
         console.error('Failed to restore file:', error)
         ElMessage.error('恢复文件失败')
@@ -165,9 +189,13 @@ const handleDelete = (file) => {
     `文件 "${file.name}" 将被永久删除，无法恢复，是否继续？`,
     async () => {
       try {
-        await fileApi.permanentlyDeleteFile(file.id)
-        ElMessage.success('文件已永久删除')
-        fetchFiles()
+        const res = await trashApi.permanentlyDeleteFile(file.id)
+        if (res.code === 200) {
+          ElMessage.success('文件已永久删除')
+          fetchFiles()
+        } else {
+          ElMessage.error(res.message || '删除文件失败')
+        }
       } catch (error) {
         console.error('Failed to delete file:', error)
         ElMessage.error('删除文件失败')
@@ -184,11 +212,14 @@ const handleBatchRestore = () => {
     `确定要恢复选中的 ${selectedFiles.value.length} 个文件吗？`,
     async () => {
       try {
-        await Promise.all(
-          selectedFiles.value.map(file => fileApi.restoreFile(file.id))
-        )
-        ElMessage.success('文件已恢复')
-        fetchFiles()
+        const promises = selectedFiles.value.map(file => trashApi.restoreFile(file.id))
+        const results = await Promise.all(promises)
+        if (results.every(res => res.code === 200)) {
+          ElMessage.success('文件已恢复')
+          fetchFiles()
+        } else {
+          ElMessage.warning('部分文件恢复失败')
+        }
       } catch (error) {
         console.error('Failed to restore files:', error)
         ElMessage.error('恢复文件失败')
@@ -205,11 +236,14 @@ const handleBatchDelete = () => {
     `选中的 ${selectedFiles.value.length} 个文件将被永久删除，无法恢复，是否继续？`,
     async () => {
       try {
-        await Promise.all(
-          selectedFiles.value.map(file => fileApi.permanentlyDeleteFile(file.id))
-        )
-        ElMessage.success('文件已永久删除')
-        fetchFiles()
+        const promises = selectedFiles.value.map(file => trashApi.permanentlyDeleteFile(file.id))
+        const results = await Promise.all(promises)
+        if (results.every(res => res.code === 200)) {
+          ElMessage.success('文件已永久删除')
+          fetchFiles()
+        } else {
+          ElMessage.warning('部分文件删除失败')
+        }
       } catch (error) {
         console.error('Failed to delete files:', error)
         ElMessage.error('删除文件失败')
@@ -226,17 +260,24 @@ const handleClearTrash = () => {
     '回收站中的所有文件将被永久删除，无法恢复，是否继续？',
     async () => {
       try {
-        await Promise.all(
-          files.value.map(file => fileApi.permanentlyDeleteFile(file.id))
-        )
-        ElMessage.success('回收站已清空')
-        fetchFiles()
+        const res = await trashApi.clearTrash()
+        if (res.code === 200) {
+          ElMessage.success('回收站已清空')
+          fetchFiles()
+        } else {
+          ElMessage.error(res.message || '清空回收站失败')
+        }
       } catch (error) {
         console.error('Failed to clear trash:', error)
         ElMessage.error('清空回收站失败')
       }
     }
   )
+}
+
+const handleSearch = () => {
+  currentPage.value = 1
+  fetchFiles()
 }
 
 // 生命周期
@@ -260,6 +301,12 @@ onMounted(() => {
 .toolbar-left {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.search-input {
+  width: 300px;
+  margin-left: 16px;
 }
 
 .filename {

@@ -78,5 +78,29 @@ async def recognize_audio(
     result = api_service.process_audio(contents, language)
     return result
 
+# 获取回收站文件列表
+@app.get("/api/trash")
+async def get_trash_files(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    query: str = Query(None)
+):
+    return api_service.get_trash_list(page, page_size, query)
+
+# 从回收站恢复文件
+@app.post("/api/trash/{file_id}/restore")
+async def restore_file(file_id: str):
+    return api_service.restore_file(file_id)
+
+# 永久删除文件
+@app.delete("/api/trash/{file_id}")
+async def permanently_delete_file(file_id: str):
+    return api_service.permanently_delete_file(file_id)
+
+# 清空回收站
+@app.delete("/api/trash")
+async def clear_trash():
+    return api_service.clear_trash()
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8010, reload=True) 
