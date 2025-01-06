@@ -18,12 +18,12 @@
       :on-remove="handleFileRemove"
       :before-upload="beforeUpload"
       :file-list="fileList"
-      accept=".wav,.mp3,.flac,.ogg"
+      accept="audio/*"
     >
       <el-icon class="upload-icon"><Upload /></el-icon>
       <div class="upload-text">
         <h3>将文件拖到此处或点击上传</h3>
-        <p>支持 WAV、MP3、FLAC、OGG 格式，单个文件不超过 50MB</p>
+        <p>支持所有常见音频格式，单个文件不超过 50MB</p>
       </div>
     </el-upload>
 
@@ -80,11 +80,6 @@
     <!-- 底部按钮 -->
     <template #footer>
       <div class="dialog-footer">
-        <div class="upload-info" v-if="fileList.length">
-          <span>共 {{ fileList.length }} 个文件</span>
-          <span>总大小：{{ totalSize }}</span>
-          <span>预计用时：{{ estimatedTime }}</span>
-        </div>
         <div class="button-group">
           <el-button @click="handleClose">取消</el-button>
           <el-button
@@ -161,14 +156,6 @@ const formatFileSize = (bytes) => {
 }
 
 const beforeUpload = (file) => {
-  // 检查文件类型
-  const allowedExtensions = ['.wav', '.mp3', '.flac', '.ogg']
-  const extension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'))
-  if (!allowedExtensions.includes(extension)) {
-    ElMessage.error('不支持的文件格式')
-    return false
-  }
-
   // 检查文件大小（50MB）
   const maxSize = 50 * 1024 * 1024
   if (file.size > maxSize) {
@@ -357,7 +344,8 @@ const handleClose = () => {
   padding: 8px 12px;
   border-radius: 4px;
   margin-bottom: 8px;
-  background-color: var(--el-fill-color-light);
+  background-color: var(--el-fill-color-darker);
+  color: var(--el-text-color-primary);
 }
 
 .file-info {

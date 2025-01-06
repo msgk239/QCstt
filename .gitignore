@@ -67,3 +67,7 @@ SenseVoice/
 SenseVoice/**
 FunASR/
 FunASR/** 
+
+# Storage directory
+storage/
+storage/** 
