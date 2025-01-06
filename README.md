@@ -638,45 +638,66 @@ pyinstaller --name SenseVoice --add-data "frontend/dist;frontend/dist" --add-dat
 ``` 
 
 ## 项目结构
-后端用py，前端是js也就是vue，后端不用管，已经配置好。
-项目采用以下目录结构:
+后端用 Python FastAPI，前端是 Vue 3。项目采用以下目录结构:
 
 ```
-frontend/src/
-├── api/                    // API 接口
-│   ├── index.ts           // API 统一导出
-│   ├── request.ts         // Axios 配置
-│   └── modules/           
-│       ├── file.ts        // 文件相关接口
-│       └── asr.ts         // 语音识别接口
-│
-├── components/            // 组件
-│   ├── layout/           // 布局组件
-│   │   ├── AppHeader.vue    // 顶部标题栏
-│   │   └── AppSidebar.vue   // 左侧导航栏
-│   │
-│   ├── file/             // 文件相关组件
-│   │   ├── FileList.vue     // 列表视图
-│   │   ├── FileGrid.vue     // 网格视图
-│   │   ├── FileUpload.vue   // 文件上传
-│   │   └── FileActions.vue  // 文件操作按钮组
-│   │
-│   └── common/           // 通用组件
-│       ├── SearchBar.vue    // 搜索框
-│       └── FilterPanel.vue  // 筛选面板
-│
-├── views/                // 页面
-│   ├── HomeView.vue     // 主页(文件列表)
-│   ├── TrashView.vue    // 回收站
-│   └── EditorView.vue   // 编辑器页面
-│
-├── stores/              // 状态管理
-│   └── fileStore.ts     // 文件相关状态
-│
-├── router/              // 路由
-│   └── index.ts         // 路由配置
-│
-└── App.vue             // 根组件
+y2w/                           # 项目根目录
+├── server/                    # 后端服务
+│   └── api/                  # API 模块
+│       ├── __init__.py       # 包标识（空文件）
+│       ├── app.py            # FastAPI 应用主文件
+│       ├── files/            # 文件处理模块
+│       │   ├── __init__.py   # 包标识（空文件）
+│       │   └── service.py    # 文件服务实现
+│       ├── speech/           # 语音处理模块
+│       │   ├── __init__.py   # 包标识（空文件）
+│       │   ├── models.py     # 模型定义
+│       │   └── recognize.py  # 语音识别实现
+│       └── trash/            # 回收站模块
+│           └── __init__.py   # 包标识（空文件）
+├── storage/                  # 存储目录
+│   ├── uploads/             # 上传文件目录
+│   │   └── audio/          # 音频文件目录
+│   └── trash/              # 回收站目录
+└── frontend/                # 前端项目
+    └── src/
+        ├── api/            # API 接口
+        ├── components/     # 组件
+        ├── views/         # 页面
+        └── stores/        # 状态管理
+```
+
+### 导入规范
+同包内模块使用相对导入（如 `from .files import service`），外部包使用绝对导入（如 `import os`）。
+
+### 运行方式
+
+1. 开发环境运行（推荐）：
+```bash
+# 在项目根目录下运行
+uvicorn server.api.app:app --host 0.0.0.0 --port 8010 --reload
+```
+
+2. 或者使用 Python 模块方式：
+```bash
+# 在项目根目录下运行
+python -m server.api.app
+```
+
+注意：不要直接运行 Python 文件，这会导致相对导入错误：
+```bash
+# ❌ 错误：不要直接运行 Python 文件
+python server/api/app.py
+```
+
+### 路径处理
+所有文件路径操作都使用 `os.path` 处理，确保跨平台兼容：
+```python
+# ✅ 推荐：使用 os.path.join 拼接路径
+file_path = os.path.join(self.audio_dir, filename)
+
+# ❌ 不推荐：直接拼接字符串
+file_path = self.audio_dir + "/" + filename
 ```
 
 ### 目录说明
