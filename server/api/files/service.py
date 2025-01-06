@@ -4,6 +4,7 @@ import json
 import shutil
 from datetime import datetime
 from typing import Optional, List, Dict
+from pydub import AudioSegment
 
 class FileService:
     """文件服务类，处理文件的上传、删除、恢复等操作"""
@@ -74,12 +75,14 @@ class FileService:
                     
                     full_path = os.path.join(self.audio_dir, filename)
                     if os.path.isfile(full_path):  # 确保是文件而不是目录
-                        # 从文件名中提取时间戳和原始文件名
-                        # 文件名格式：YYYYMMDD_HHMMSS_原始文件名
                         try:
                             timestamp = filename[:15]  # YYYYMMDD_HHMMSS
                             original_name = filename[16:]  # 原始文件名
                             stat = os.stat(full_path)
+                            
+                            # 获取音频时长
+                            duration = self.get_audio_duration(full_path)
+                            duration_str = f"{int(duration//60)}:{int(duration%60):02d}" if duration else "未知"
                             
                             files.append({
                                 'id': timestamp,
@@ -87,7 +90,8 @@ class FileService:
                                 'size': stat.st_size,
                                 'date': datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S'),
                                 'status': '已上传',
-                                'path': full_path
+                                'path': full_path,
+                                'duration': duration_str
                             })
                         except Exception as e:
                             print(f"Error parsing filename {filename}: {str(e)}")
@@ -113,7 +117,7 @@ class FileService:
             }
             
         except Exception as e:
-            print(f"Get file list error: {str(e)}")  # 添加错误日志
+            print(f"Get file list error: {str(e)}")
             return {
                 "code": 500,
                 "message": f"获取文件列表失败: {str(e)}"
@@ -161,27 +165,37 @@ class FileService:
                 "message": f"删除文件失败: {str(e)}"
             }
     
+    def get_audio_duration(self, file_path: str) -> Optional[float]:
+        """获取音频文件时长（秒）"""
+        try:
+            audio = AudioSegment.from_file(file_path)
+            return len(audio) / 1000.0
+        except Exception as e:
+            print(f"Error getting duration for {file_path}: {e}")
+            return None
+    
     def get_trash_list(self, page=1, page_size=20, query=None):
         """获取回收站文件列表"""
         try:
             files = []
-            print(f"Checking trash directory: {self.trash_dir}")  # 添加调试日志
+            print(f"Checking trash directory: {self.trash_dir}")
             
-            # 直接读取回收站目录下的所有文件
             if os.path.exists(self.trash_dir):
-                print(f"Trash directory exists, contents: {os.listdir(self.trash_dir)}")  # 添加调试日志
+                print(f"Trash directory exists, contents: {os.listdir(self.trash_dir)}")
                 for filename in os.listdir(self.trash_dir):
                     if query and query.lower() not in filename.lower():
                         continue
                     
                     full_path = os.path.join(self.trash_dir, filename)
-                    if os.path.isfile(full_path):  # 确保是文件而不是目录
-                        # 从文件名中提取时间戳和原始文件名
-                        # 文件名格式：YYYYMMDD_HHMMSS_原始文件名
+                    if os.path.isfile(full_path):
                         try:
-                            timestamp = filename[:15]  # YYYYMMDD_HHMMSS
-                            original_name = filename[16:]  # 原始文件名
+                            timestamp = filename[:15]
+                            original_name = filename[16:]
                             stat = os.stat(full_path)
+                            
+                            # 获取音频时长
+                            duration = self.get_audio_duration(full_path)
+                            duration_str = f"{int(duration//60)}:{int(duration%60):02d}" if duration else "未知"
                             
                             files.append({
                                 'id': timestamp,
@@ -189,23 +203,22 @@ class FileService:
                                 'size': stat.st_size,
                                 'date': datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S'),
                                 'delete_date': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
-                                'path': full_path
+                                'path': full_path,
+                                'duration': duration_str
                             })
                         except Exception as e:
                             print(f"Error parsing filename {filename}: {str(e)}")
                             continue
             else:
-                print("Trash directory does not exist!")  # 添加调试日志
+                print("Trash directory does not exist!")
             
-            # 按删除日期倒序排序
             files.sort(key=lambda x: x['delete_date'], reverse=True)
             
-            # 分页
             total = len(files)
             start_idx = (page - 1) * page_size
             end_idx = start_idx + page_size
             
-            print(f"Found {total} files in trash")  # 添加调试日志
+            print(f"Found {total} files in trash")
             
             return {
                 "code": 200,
@@ -219,7 +232,7 @@ class FileService:
             }
             
         except Exception as e:
-            print(f"Get trash list error: {str(e)}")  # 添加错误日志
+            print(f"Get trash list error: {str(e)}")
             return {
                 "code": 500,
                 "message": f"获取回收站列表失败: {str(e)}"

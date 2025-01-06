@@ -40,8 +40,17 @@
           <span class="filename">{{ row.name }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="duration" label="时长" width="120" />
-      <el-table-column prop="date" label="删除日期" width="180" />
+      <el-table-column prop="size" label="大小" width="120">
+        <template #default="{ row }">
+          {{ formatFileSize(row.size) }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="duration" label="时长" width="100">
+        <template #default="{ row }">
+          <el-tag size="small" type="info">{{ row.duration || '未知' }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="delete_date" label="删除时间" width="180" />
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button-group>
@@ -88,10 +97,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onActivated, watch } from 'vue'
 import { Document, Delete, RefreshLeft, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as trashApi from '@/api/modules/trash'
+import { formatFileSize } from '@/utils/format'
+import { useRoute } from 'vue-router'
 
 // 状态
 const loading = ref(false)
@@ -134,8 +145,7 @@ const fetchFiles = async () => {
     if (res.code === 200) {
       console.log('Trash items before mapping:', res.data.items)
       files.value = res.data.items.map(file => ({
-        ...file,
-        duration: '计算中...'
+        ...file
       }))
       console.log('Trash items after mapping:', files.value)
       total.value = res.data.total
@@ -298,10 +308,26 @@ const handleSearch = () => {
   fetchFiles()
 }
 
-// 生命周期
+// 生命周期钩子
 onMounted(() => {
+  console.log('TrashView mounted')
   fetchFiles()
 })
+
+// 当组件被 keep-alive 激活时也刷新列表
+onActivated(() => {
+  console.log('TrashView activated')
+  fetchFiles()
+})
+
+// 添加路由变化监听
+const route = useRoute()
+watch(() => route.path, (newPath) => {
+  console.log('Route changed to:', newPath)
+  if (newPath === '/trash') {
+    fetchFiles()
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>

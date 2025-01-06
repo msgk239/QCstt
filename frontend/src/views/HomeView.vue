@@ -61,6 +61,11 @@
             {{ formatFileSize(row.size) }}
           </template>
         </el-table-column>
+        <el-table-column prop="duration" label="时长" width="100">
+          <template #default="{ row }">
+            <el-tag size="small" type="info">{{ row.duration || '未知' }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)">
@@ -104,8 +109,8 @@
           </div>
           <h4 class="file-name">{{ file.name }}</h4>
           <div class="file-info">
-            <span>{{ file.duration }}</span>
-            <el-tag size="small" :type="file.status === '已完成' ? 'success' : 'warning'">
+            <el-tag size="small" type="info">{{ file.duration || '未知' }}</el-tag>
+            <el-tag size="small" :type="getStatusType(file.status)">
               {{ file.status }}
             </el-tag>
           </div>
@@ -194,10 +199,7 @@ const fetchFileList = async () => {
     })
     
     if (response.code === 200) {
-      fileList.value = response.data.items.map(file => ({
-        ...file,
-        duration: '计算中...' // TODO: 添加音频时长计算
-      }))
+      fileList.value = response.data.items
       totalFiles.value = response.data.total
     } else {
       ElMessage.error('获取文件列表失败')
