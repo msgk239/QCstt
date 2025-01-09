@@ -12,7 +12,7 @@ export function getFileList(params) {
 // 获取单个文件详情
 export function getFile(id) {
   return request({
-    url: '/api/v1/files/' + id.split('_')[0],
+    url: `/api/v1/files/${id}`,
     method: 'get'
   })
 }
@@ -88,15 +88,35 @@ export function exportFile(id, format) {
 // 添加新方法：格式化文件数据
 export function formatFileData(response) {
   const { data } = response
+  console.log('Raw API data:', data)
+  
+  if (data.transcripts) {
+    const { original, metadata } = data.transcripts
+    
+    // 从 original.json 中获取数据
+    const recognitionData = original || {}
+    
+    return {
+      id: data.id,
+      name: data.name,
+      duration: recognitionData.duration || 0,
+      date: new Date(metadata?.created_at).toLocaleDateString(),
+      status: metadata?.status || '未识别',
+      segments: recognitionData.segments || [],  // 直接使用原始格式
+      speakers: recognitionData.speakers || [],  // 直接使用原始格式
+      fullText: recognitionData.full_text || ''
+    }
+  }
+  
   return {
     id: data.id,
     name: data.name,
-    duration: data.recognition_result?.duration || 0,
+    duration: 0,
     date: new Date().toLocaleDateString(),
-    status: data.status,
-    segments: data.recognition_result?.segments || [],
-    speakers: data.recognition_result?.speakers || [],
-    fullText: data.recognition_result?.full_text || ''
+    status: '未识别',
+    segments: [],
+    speakers: [],
+    fullText: ''
   }
 }
 
@@ -106,5 +126,21 @@ export function getAudioFile(fileId) {
     url: `/api/v1/files/${fileId}/audio`,
     method: 'get',
     responseType: 'blob'
+  })
+}
+
+// 开始识别
+export function startRecognition(fileId) {
+  return request({
+    url: `/api/v1/asr/recognize/${fileId}`,
+    method: 'post'
+  })
+}
+
+// 获取识别进度
+export function getRecognitionProgress(fileId) {
+  return request({
+    url: `/api/v1/asr/progress/${fileId}`,
+    method: 'get'
   })
 }

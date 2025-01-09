@@ -1,138 +1,137 @@
 <template>
-  <div class="transcript" ref="transcriptRef">
-    <div
-      v-for="(segment, index) in segments"
-      :key="index"
-      class="segment"
-      :class="{ active: isSegmentActive(segment) }"
-      @click="seekTo(segment.start)"
-    >
-      <div class="segment-header">
-        <el-dropdown trigger="click" @command="handleSpeakerChange($event, segment)">
-          <span class="speaker-name" :style="{ color: getSpeakerColor(segment.speaker) }">
-            {{ segment.speaker }}
-            <el-icon><Edit /></el-icon>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="speaker in speakers"
-                :key="speaker.id"
-                :command="speaker.id"
-              >
-                {{ speaker.name }}
-              </el-dropdown-item>
-              <el-dropdown-item divided command="new">
-                <el-icon><Plus /></el-icon>添加新说话人
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <span class="segment-time">{{ formatTime(segment.start) }}</span>
+  <div class="transcript">
+    <!-- 转写内容段落列表 -->
+    <div class="segments">
+      <div 
+        v-for="segment in segments" 
+        :key="segment.id"
+        class="segment"
+        :class="{ 'is-playing': isSegmentPlaying(segment) }"
+      >
+        <!-- 说话人信息 -->
+        <div class="segment-header">
+          <el-select 
+            v-model="segment.speaker"
+            size="small"
+            @change="(val) => handleSpeakerChange(val, segment)"
+          >
+            <el-option
+              v-for="speaker in speakers"
+              :key="speaker.id"
+              :label="speaker.name"
+              :value="speaker.id"
+            />
+            <el-option key="new" label="+ 添加说话人" value="new" />
+          </el-select>
+          <span class="time">{{ formatTime(segment.start_time) }}</span>
+        </div>
+
+        <!-- 转写文本 -->
+        <div 
+          class="segment-content"
+          contenteditable="true"
+          @input="(e) => handleContentChange(e, segment)"
+          v-html="segment.text"
+        ></div>
       </div>
-      <div
-        class="segment-text"
-        contenteditable
-        @input="handleSegmentInput($event, segment)"
-        @blur="handleSegmentBlur($event, segment)"
-        v-html="segment.text"
-      ></div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed } from 'vue'
 
-// 状态
-const segments = ref([])
-const speakers = ref([])
+const props = defineProps({
+  segments: {
+    type: Array,
+    required: true
+  },
+  speakers: {
+    type: Array,
+    required: true
+  },
+  currentTime: {
+    type: Number,
+    default: 0
+  }
+})
 
-// 方法
-const isSegmentActive = (segment) => {
-  // 判断段落是否激活
+const emit = defineEmits(['segment-update', 'speaker-change'])
+
+// 判断当前段落是否正在播放
+const isSegmentPlaying = (segment) => {
+  return props.currentTime >= segment.start_time && 
+         props.currentTime <= segment.end_time
 }
 
-const seekTo = (time) => {
-  // 跳转到指定时间
-}
-
-const handleSpeakerChange = (speakerId, segment) => {
-  // 处理说话人变更
-}
-
-const getSpeakerColor = (speakerId) => {
-  // 获取说话人颜色
-}
-
-const handleSegmentInput = (event, segment) => {
-  // 处理段落输入
-}
-
-const handleSegmentBlur = (event, segment) => {
-  // 处理段落失去焦点
-}
-
+// 格式化时间
 const formatTime = (seconds) => {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = Math.floor(seconds % 60)
-  return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  if (!seconds) return '00:00'
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+// 处理说话人变更
+const handleSpeakerChange = (speakerId, segment) => {
+  emit('speaker-change', speakerId, segment)
+}
+
+// 处理内容编辑
+const handleContentChange = (event, segment) => {
+  const updatedSegment = {
+    ...segment,
+    text: event.target.innerHTML
+  }
+  emit('segment-update', updatedSegment)
 }
 </script>
 
 <style scoped>
 .transcript {
-  background: var(--el-bg-color-page);
-  border-radius: 8px;
-  padding: 16px;
+  padding: 20px;
+}
+
+.segments {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .segment {
-  margin-bottom: 16px;
-  padding: 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
 }
 
-.segment:hover {
-  background-color: var(--el-fill-color-light);
-}
-
-.segment.active {
-  background-color: var(--el-color-primary-light-9);
+.segment.is-playing {
+  background: #f5f7fa;
+  border-color: var(--el-color-primary);
 }
 
 .segment-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 8px;
 }
 
-.speaker-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: 500;
+.time {
+  color: #666;
+  font-size: 12px;
 }
 
-.segment-time {
-  color: var(--el-text-color-secondary);
-  font-family: monospace;
-}
-
-.segment-text {
-  padding: 8px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 4px;
-  min-height: 24px;
-  line-height: 1.5;
-}
-
-.segment-text:focus {
+.segment-content {
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 1.6em;
   outline: none;
-  border-color: var(--el-color-primary);
+  padding: 4px;
+}
+
+.segment-content:focus {
+  background: #f5f7fa;
+  border-radius: 4px;
 }
 </style> 

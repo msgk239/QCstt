@@ -4,6 +4,10 @@ from .operations import FileOperations
 from .trash import TrashManager
 import json
 import os
+from ..speech.storage import transcript_manager
+from ..utils import get_file_path
+from ..speech.recognize import speech_service  # 导入 SpeechService
+from typing import Dict  # 添加这一行以导入 Dict
 
 class FileService:
     """文件服务主类"""
@@ -12,6 +16,7 @@ class FileService:
         self.metadata = MetadataManager()
         self.operations = FileOperations()
         self.trash = TrashManager()
+        self.uploads_dir = config.uploads_dir
     
     def save_uploaded_file(self, file_content, filename, options=None):
         return self.operations.save_uploaded_file(file_content, filename, options)
@@ -86,6 +91,41 @@ class FileService:
                 "code": 500,
                 "message": f"获取文件详情失败: {str(e)}"
             }
+    
+    def get_file(self, file_id: str) -> dict:
+        """获取文件信息"""
+        try:
+            file_path = get_file_path(self.uploads_dir, file_id)
+            if not os.path.exists(file_path):
+                return {"code": 404, "message": "文件不存在"}
+                
+            file_info = transcript_manager.get_file_info(file_id)
+            
+            return {
+                "code": 200,
+                "message": "success",
+                "data": file_info
+            }
+            
+        except Exception as e:
+            print(f"Get file error: {str(e)}")
+            return {"code": 500, "message": f"获取文件失败: {str(e)}"}
+    
+    def save_recognition_result(self, file_id: str, result: dict):
+        """保存识别结果"""
+        return transcript_manager.save_result(file_id, result)
+    
+    def get_recognition_result(self, file_id: str) -> dict:
+        """获取识别结果"""
+        return transcript_manager.get_file_info(file_id)
+    
+    def process_audio(self, audio_file: bytes, language: str = "auto") -> Dict:
+        """处理音频文件，进行语音识别"""
+        return speech_service.process_audio(audio_file, language)
+    
+    def get_supported_languages(self) -> Dict:
+        """获取支持的语言列表"""
+        return speech_service.get_languages()
 
 # 创建全局实例
 file_service = FileService()

@@ -3,10 +3,31 @@
     <!-- 顶部标题和工具栏 -->
     <div class="editor-header">
       <h2>{{ getOriginalFilename(route.params.id) || '编辑转写结果' }}</h2>
-      <Toolbar 
-        :file="file"
-        @save="handleSave"
+      <div class="header-tools">
+        <ExportToolbar />
+        <ShareToolbar />
+        <StyleTemplateToolbar />
+        <div class="divider"></div>
+        <AutoSaveToolbar
+          v-model:autoSave="autoSaveEnabled"
+          v-model:saveInterval="autoSaveInterval"
+          v-model:maxVersions="maxVersions"
+          :saving="saving"
+          :lastSaveTime="lastSaveTime"
+        />
+        <VersionHistoryToolbar />
+      </div>
+    </div>
+
+    <!-- 编辑工具栏 -->
+    <div class="edit-toolbar">
+      <UndoRedoToolbar />
+      <EditToolbar 
+        @format-apply="applyFormat"
+        @note-add="addNote"
+        @timestamp-insert="insertTimestamp"
       />
+      <NoteToolbar />
     </div>
 
     <!-- 主要内容区 -->
@@ -44,7 +65,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getFile, formatFileData, getAudioFile } from '@/api/modules/file'
@@ -53,8 +74,7 @@ import { useFileStore } from '@/stores/file'
 // 获取 store 实例
 const fileStore = useFileStore()
 
-// 导入拆分的组件
-import Toolbar from './EditorComponents/Toolbar.vue'
+// 导入所有组件
 import AudioPlayer from './EditorComponents/AudioPlayer.vue'
 import Transcript from './EditorComponents/Transcript.vue'
 import EditToolbar from './EditorComponents/EditToolbar.vue'
@@ -62,6 +82,13 @@ import ReplaceDialog from './EditorComponents/ReplaceDialog.vue'
 import HotwordsDialog from './EditorComponents/HotwordsDialog.vue'
 import SpeedMenuDialog from './EditorComponents/SpeedMenuDialog.vue'
 import SpeakerManagerDialog from './EditorComponents/SpeakerManagerDialog.vue'
+import AutoSaveToolbar from './EditorComponents/AutoSaveToolbar.vue'
+import ExportToolbar from './EditorComponents/ExportToolbar.vue'
+import NoteToolbar from './EditorComponents/NoteToolbar.vue'
+import ShareToolbar from './EditorComponents/ShareToolbar.vue'
+import StyleTemplateToolbar from './EditorComponents/StyleTemplateToolbar.vue'
+import UndoRedoToolbar from './EditorComponents/UndoRedoToolbar.vue'
+import VersionHistoryToolbar from './EditorComponents/VersionHistoryToolbar.vue'
 
 // 路由
 const route = useRoute()
@@ -87,6 +114,14 @@ const playbackRate = ref(1)
 
 // 音频相关
 const audio = ref(new Audio())
+
+// 添加自动保存相关的状态
+const autoSaveEnabled = ref(true)
+const autoSaveInterval = ref(5)
+const maxVersions = ref(10)
+const lastSaveTime = ref(null)
+// 添加定时器变量
+let autoSaveTimer = null
 
 // 初始化音频
 const initAudio = async () => {
@@ -121,6 +156,7 @@ const handleSave = async () => {
       segments: segments.value,
       speakers: speakers.value
     })
+    lastSaveTime.value = new Date()
     ElMessage.success('保存成功')
   } catch (error) {
     console.error('保存失败:', error)
@@ -171,25 +207,39 @@ const getOriginalFilename = (fullname) => {
   return fullname.split('_').slice(2).join('_')
 }
 
-// 添加自动保存
-let autoSaveTimer = null
+// 修改自动保存逻辑
 const startAutoSave = () => {
-  autoSaveTimer = setInterval(handleSave, 60000) // 每分钟自动保存
+  if (autoSaveEnabled.value) {
+    // 先清除已存在的定时器
+    if (autoSaveTimer) {
+      clearInterval(autoSaveTimer)
+    }
+    autoSaveTimer = setInterval(handleSave, autoSaveInterval.value * 60 * 1000)
+  }
+}
+
+// 监听自动保存设置变化
+watch([autoSaveEnabled, autoSaveInterval], () => {
+  if (autoSaveTimer) {
+    clearInterval(autoSaveTimer)
+  }
+  startAutoSave()
+})
+
+// 提取加载文件数据的方法
+const loadFileData = async () => {
+  const response = await getFile(route.params.id)
+  const formattedData = formatFileData(response)
+  file.value = formattedData
+  segments.value = formattedData.segments
+  speakers.value = formattedData.speakers
 }
 
 // 生命周期钩子
 onMounted(async () => {
   try {
-    const response = await getFile(route.params.id)
-    const formattedData = formatFileData(response)
-    file.value = formattedData
-    segments.value = formattedData.segments
-    speakers.value = formattedData.speakers
-    
-    // 初始化音频
+    await loadFileData()
     await initAudio()
-    
-    console.log('Formatted data:', formattedData)
   } catch (error) {
     console.error('Failed to load file:', error)
     ElMessage.error('加载失败')
@@ -231,6 +281,7 @@ onUnmounted(() => {
   margin: 0;
   font-size: 18px;
   color: #333;
+  flex-shrink: 0;  /* 防止标题被挤压 */
 }
 
 .main-content {
@@ -250,6 +301,28 @@ onUnmounted(() => {
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
   z-index: 100;
   padding: 8px 24px;
+}
+
+.header-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.edit-toolbar {
+  padding: 8px 24px;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.divider {
+  width: 1px;
+  height: 24px;
+  background-color: #dcdfe6;
+  margin: 0 8px;
 }
 </style>
 
