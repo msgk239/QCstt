@@ -27,19 +27,6 @@
           <el-button type="primary" @click="showUploadDialog">
             <el-icon><Plus /></el-icon>上传文件
           </el-button>
-          
-          <el-dropdown>
-            <el-button>
-              <el-icon><Filter /></el-icon>筛选
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item>全部文件</el-dropdown-item>
-                <el-dropdown-item>最近添加</el-dropdown-item>
-                <el-dropdown-item>最近修改</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
         </div>
       </div>
 
@@ -54,7 +41,6 @@
           <template #default="{ row }">
             <div class="file-name-cell">
               <el-icon><Document /></el-icon>
-              <audio :ref="'audio-' + row.id" :src="'/api/v1/files/' + row.id + '/audio'" @ended="handleAudioEnded(row)" hidden></audio>
               <div v-if="row.isRenaming" class="rename-input">
                 <el-input
                   v-model="row.newName"
@@ -64,9 +50,8 @@
                   @keyup.esc="handleRenameCancel(row)"
                 />
               </div>
-              <span v-else class="filename" @click="handlePlay(row)" :title="'点击播放: ' + row.name">
+              <span v-else class="filename" :title="row.name">
                 {{ row.name }}
-                <el-icon v-if="row.isPlaying"><VideoPlay /></el-icon>
               </span>
             </div>
           </template>
@@ -78,7 +63,7 @@
         </el-table-column>
         <el-table-column prop="duration" label="时长" width="100">
           <template #default="{ row }">
-            <el-tag size="small" type="info">{{ row.duration || '未知' }}</el-tag>
+            <el-tag size="small" type="info">{{ formatDuration(row.duration) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
@@ -89,20 +74,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="date" label="上传时间" width="180" />
-        <el-table-column label="操作" width="250" fixed="right">
+        <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
             <el-button-group>
-              <el-tooltip content="播放/暂停" placement="top">
-                <el-button 
-                  type="primary" 
-                  link
-                  @click="handlePlay(row)"
-                >
-                  <el-icon>
-                    <component :is="row.isPlaying ? 'VideoPause' : 'VideoPlay'" />
-                  </el-icon>
-                </el-button>
-              </el-tooltip>
               <el-tooltip content="重命名" placement="top">
                 <el-button 
                   type="primary" 
@@ -112,15 +86,23 @@
                   <el-icon><Edit /></el-icon>
                 </el-button>
               </el-tooltip>
-              <el-tooltip content="下载" placement="top">
-                <el-button 
-                  type="primary" 
-                  link
-                  @click="handleExport(row)"
-                >
-                  <el-icon><Download /></el-icon>
+              
+              <el-dropdown trigger="click">
+                <el-button type="primary" link>
+                  <el-icon><More /></el-icon>
                 </el-button>
-              </el-tooltip>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item @click="handleCopyPath(row)">
+                      <el-icon><DocumentCopy /></el-icon>复制文件路径
+                    </el-dropdown-item>
+                    <el-dropdown-item @click="handleShowPath(row)">
+                      <el-icon><FolderOpened /></el-icon>查看文件位置
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+
               <el-button 
                 type="primary" 
                 link 
@@ -150,7 +132,7 @@
           </div>
           <h4 class="file-name">{{ file.name }}</h4>
           <div class="file-info">
-            <el-tag size="small" type="info">{{ file.duration || '未知' }}</el-tag>
+            <el-tag size="small" type="info">{{ formatDuration(file.duration) }}</el-tag>
             <el-tag size="small" :type="getStatusType(file.status)">
               {{ file.status }}
             </el-tag>
@@ -205,7 +187,6 @@ import FileUpload from '@/components/file/FileUpload.vue'
 import {
   Document,
   Edit,
-  Download,
   Delete,
   Plus,
   Search,
@@ -213,7 +194,10 @@ import {
   List,
   Grid,
   VideoPlay,
-  VideoPause
+  VideoPause,
+  FolderOpened,
+  DocumentCopy,
+  More
 } from '@element-plus/icons-vue'
 
 // 视图模式
@@ -235,27 +219,27 @@ const uploadDialogVisible = ref(false)
 // 获取文件列表
 const fetchFileList = async () => {
   try {
+    console.time('获取文件列表')
     loading.value = true
     const response = await asrApi.getFileList({
       page: currentPage.value,
       page_size: pageSize.value,
       query: searchQuery.value
     })
+    console.timeEnd('获取文件列表')
     
+    console.time('渲染文件列表')
     if (response.code === 200) {
       fileList.value = response.data.items.map(item => ({
         ...item,
-        isPlaying: false,
         isRenaming: false,
         newName: item.name
       }))
       totalFiles.value = response.data.total
-    } else {
-      ElMessage.error('获取文件列表失败')
     }
+    console.timeEnd('渲染文件列表')
   } catch (error) {
     console.error('Fetch file list error:', error)
-    ElMessage.error('获取文件列表失败')
   } finally {
     loading.value = false
   }
@@ -323,30 +307,6 @@ const startRecognition = async (file) => {
   ElMessage.info('识别功能尚未实现')
 }
 
-// 音频播放相关
-const handlePlay = (file) => {
-  const audio = document.querySelector(`#audio-${file.id}`)
-  if (file.isPlaying) {
-    audio.pause()
-    file.isPlaying = false
-  } else {
-    // 先停止其他正在播放的音频
-    fileList.value.forEach(f => {
-      if (f.id !== file.id && f.isPlaying) {
-        const otherAudio = document.querySelector(`#audio-${f.id}`)
-        otherAudio?.pause()
-        f.isPlaying = false
-      }
-    })
-    audio.play()
-    file.isPlaying = true
-  }
-}
-
-const handleAudioEnded = (file) => {
-  file.isPlaying = false
-}
-
 // 重命名相关
 const handleRename = (file) => {
   file.isRenaming = true
@@ -375,22 +335,29 @@ const handleRenameCancel = (file) => {
   file.isRenaming = false
 }
 
-// 导出相关
-const handleExport = async (file) => {
+// 修改导出为另存为函数
+const handleSaveAs = async (file) => {
   try {
     const response = await fetch(`/api/v1/files/${file.id}/audio`)
     const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
+    
+    // 创建一个隐藏的 <a> 元素用于触发"另存为"对话框
     const link = document.createElement('a')
     link.href = url
-    link.download = file.name
+    link.download = file.name  // 使用原始文件名
+    link.style.display = 'none'
     document.body.appendChild(link)
+    
+    // 触发点击事件，打开"另存为"对话框
     link.click()
+    
+    // 清理
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
   } catch (error) {
-    console.error('Export error:', error)
-    ElMessage.error('导出失败')
+    console.error('另存为失败:', error)
+    ElMessage.error('另存为失败，请重试')
   }
 }
 
@@ -415,6 +382,23 @@ const getStatusType = (status) => {
     default:
       return 'info'
   }
+}
+
+// 格式化时长显示
+const formatDuration = (duration) => {
+  if (!duration || duration === '未知') return '未知'
+  
+  // 解析分钟和秒
+  const [minutes, seconds] = duration.split(':').map(Number)
+  const totalMinutes = minutes
+  
+  if (totalMinutes >= 60) {
+    const hours = Math.floor(totalMinutes / 60)
+    const remainingMinutes = totalMinutes % 60
+    return `${hours}:${remainingMinutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+  }
+  
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
 // 初始化

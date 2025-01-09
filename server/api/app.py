@@ -2,6 +2,7 @@
 import json
 import os
 from typing import Optional
+import time
 
 # 第三方库
 import uvicorn
@@ -18,7 +19,7 @@ app = FastAPI()
 # 配置 CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vue dev server 默认端口
+    allow_origins=["http://localhost:5173"],  # Vite 开发服务器默认端口
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -69,7 +70,10 @@ async def get_files(
     page_size: int = Query(20, ge=1, le=100),
     query: str = Query(None)
 ):
-    return file_service.get_file_list(page, page_size, query)
+    start = time.time()
+    result = file_service.get_file_list(page, page_size, query)
+    print(f"API响应时间: {time.time() - start:.2f}秒")
+    return result
 
 # 删除文件
 @app.delete("/api/files/{file_id}")
@@ -110,23 +114,6 @@ async def permanently_delete_file(file_id: str):
 async def clear_trash():
     return file_service.clear_trash()
 
-# 获取音频文件
-@app.get("/api/v1/files/{file_id}/audio")
-async def get_audio_file(file_id: str):
-    result = file_service.get_audio_file(file_id)
-    if result["code"] != 200:
-        return result
-    
-    # 从结果中获取文件内容和类型
-    file_data = result["data"]
-    return Response(
-        content=file_data["content"],
-        media_type=file_data["content_type"],
-        headers={
-            "Content-Disposition": f'attachment; filename="{file_data["filename"]}"'
-        }
-    )
-
 # 重命名文件
 @app.put("/api/files/{file_id}/rename")
 async def rename_file(
@@ -134,6 +121,14 @@ async def rename_file(
     new_name: str = Form(...)  # 使用Form字段接收新文件名
 ):
     return file_service.rename_file(file_id, new_name)
+
+# 添加获取文件路径的接口
+@app.get("/api/files/{file_id}/path")
+async def get_file_path(file_id: str):
+    print(f"Getting path for file: {file_id}")  # 添加日志
+    result = file_service.get_file_path(file_id)
+    print(f"Path result: {result}")  # 添加日志
+    return result  # FastAPI 会自动处理 JSON 序列化
 
 if __name__ == "__main__":
     uvicorn.run("server.api.app:app", host="0.0.0.0", port=8010, reload=True) 

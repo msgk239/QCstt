@@ -2,8 +2,15 @@
 
 基于 FastAPI 和 Vue 3 开发的语音识别系统，支持多语言识别和多种音频格式。
 本系统完全保护用户隐私，所有处理均在本地完成。
+计划使用 PyInstaller 打包成单个可执行文件，后续可能使用 WebView2（Windows 自带的浏览器组件）增强文件系统访问能力。
+
+
+
+
+
 需要改py中的FunASR\funasr\auto\auto_model.py
 D:\python3.12.8\Lib\site-packages\funasr\auto\auto_model.py
+
 
 
 
