@@ -245,5 +245,17 @@ async def get_audio_file(file_id: str):
             "message": f"获取音频文件失败: {str(e)}"
         }
 
+# 添加保存转写结果的接口
+@app.put("/api/v1/files/{file_id}/transcript")
+async def save_transcript(file_id: str, data: dict):
+    try:
+        result = transcript_manager.save_transcript(file_id, data)
+        return result
+    except Exception as e:
+        return {
+            "code": 500,
+            "message": f"保存失败: {str(e)}"
+        }
+
 if __name__ == "__main__":
     uvicorn.run("server.api.app:app", host="0.0.0.0", port=8010, reload=True) 

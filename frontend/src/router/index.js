@@ -1,43 +1,22 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import HomeView from '@/views/HomeView.vue'
+import EditorView from '@/views/EditorView.vue'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
       name: 'home',
-      component: () => import('@/views/HomeView.vue'),
-      meta: {
-        title: '文件列表'
-      }
+      component: HomeView
     },
     {
-      path: '/trash',
-      name: 'trash',
-      component: () => import('@/views/TrashView.vue'),
-      meta: {
-        title: '回收站'
-      }
-    },
-    {
+      // 编辑页面使用独立路由，不继承主布局
       path: '/editor/:id',
       name: 'editor',
-      component: () => import('@/views/EditorView.vue'),
-      meta: {
-        title: '编辑器'
-      },
-      beforeEnter: (to, from, next) => {
-        console.log('Editor route guard:', to.params)
-        next()
-      }
+      component: EditorView
     }
   ]
-})
-
-// 路由标题
-router.beforeEach((to, from, next) => {
-  document.title = to.meta.title + ' - 潜催语音转文字系统'
-  next()
 })
 
 export default router 

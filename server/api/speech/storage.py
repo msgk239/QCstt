@@ -42,5 +42,28 @@ class TranscriptManager:
             print(f"Save recognition result error: {str(e)}")
             return {"code": 500, "message": f"保存识别结果失败: {str(e)}"}
 
+    def save_transcript(self, file_id: str, data: dict):
+        """保存转写结果"""
+        try:
+            file_dir = os.path.join(self.transcripts_dir, file_id)
+            os.makedirs(file_dir, exist_ok=True)
+            
+            # 保存最新版本
+            current_path = os.path.join(file_dir, "current.json")
+            with open(current_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            
+            # 更新元数据
+            metadata = self._load_metadata(file_id)
+            metadata["version_count"] += 1
+            metadata["last_modified"] = datetime.now().isoformat()
+            self._save_metadata(file_id, metadata)
+            
+            return {"code": 200, "message": "success"}
+            
+        except Exception as e:
+            print(f"Save transcript error: {str(e)}")
+            return {"code": 500, "message": f"保存转写结果失败: {str(e)}"}
+
 # 创建全局实例
 transcript_manager = TranscriptManager()

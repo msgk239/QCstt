@@ -12,7 +12,7 @@ export function getFileList(params) {
 // 获取单个文件详情
 export function getFile(id) {
   return request({
-    url: '/api/v1/files/' + id,
+    url: '/api/v1/files/' + id.split('_')[0],
     method: 'get'
   })
 }
@@ -50,10 +50,10 @@ export function deleteFile(id) {
   })
 }
 
-// 更新文件
-export function updateFile(id, data) {
+// 更新文件内容
+export function updateFile(fileId, data) {
   return request({
-    url: '/api/v1/files/' + id,
+    url: `/api/v1/files/${fileId}/transcript`,
     method: 'put',
     data
   })
@@ -83,4 +83,28 @@ export function exportFile(id, format) {
     params: { format },
     responseType: 'blob'
   })
-} 
+}
+
+// 添加新方法：格式化文件数据
+export function formatFileData(response) {
+  const { data } = response
+  return {
+    id: data.id,
+    name: data.name,
+    duration: data.recognition_result?.duration || 0,
+    date: new Date().toLocaleDateString(),
+    status: data.status,
+    segments: data.recognition_result?.segments || [],
+    speakers: data.recognition_result?.speakers || [],
+    fullText: data.recognition_result?.full_text || ''
+  }
+}
+
+// 获取音频文件
+export function getAudioFile(fileId) {
+  return request({
+    url: `/api/v1/files/${fileId}/audio`,
+    method: 'get',
+    responseType: 'blob'
+  })
+}

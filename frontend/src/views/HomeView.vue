@@ -321,22 +321,9 @@ const startRecognition = async (file) => {
       console.log('Attempting to navigate to editor...')
       // 使用简单的路由跳转方式
       try {
-        // 使用 replace 而不是 push，避免浏览器历史堆栈问题
-        await router.replace({
+        await router.push({
           name: 'editor',
-          params: { id: file.id },
-          // 使用 query 传递数据，而不是 state
-          query: {
-            duration: response.data.duration,
-            language: response.data.language,
-            fullText: response.data.full_text,
-            segments: encodeURIComponent(JSON.stringify(response.data.segments)),
-            speakers: encodeURIComponent(JSON.stringify(response.data.speakers.map(spk => ({
-              ...spk,
-              originalName: spk.name,
-              color: '#' + Math.floor(Math.random()*16777215).toString(16)
-            }))))
-          }
+          params: { id: file.id + '_' + file.name }
         })
         console.log('Navigation successful')
       } catch (navError) {

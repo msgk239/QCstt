@@ -1,26 +1,16 @@
 <template>
   <div class="editor-view">
-    <!-- 顶部工具栏 -->
-    <Toolbar 
-      :file="file"
-      @save="handleSave"
-    />
+    <!-- 顶部标题和工具栏 -->
+    <div class="editor-header">
+      <h2>{{ getOriginalFilename(route.params.id) || '编辑转写结果' }}</h2>
+      <Toolbar 
+        :file="file"
+        @save="handleSave"
+      />
+    </div>
 
     <!-- 主要内容区 -->
     <div class="main-content">
-      <!-- 音频播放器 -->
-      <AudioPlayer 
-        ref="audioPlayerRef"
-        :currentTime="currentTime"
-        :duration="duration"
-        :playing="playing"
-        :playbackRate="playbackRate"
-        @play="togglePlay"
-        @seek="seekTo"
-        @speed-change="handleSpeedChange"
-      />
-
-      <!-- 转写内容 -->
       <Transcript 
         ref="transcriptRef"
         :segments="segments"
@@ -31,12 +21,19 @@
       />
     </div>
 
-    <!-- 文本编辑工具栏 -->
-    <EditToolbar 
-      @format-apply="applyFormat"
-      @note-add="addNote"
-      @timestamp-insert="insertTimestamp"
-    />
+    <!-- 底部固定播放器 -->
+    <div class="player-container">
+      <AudioPlayer 
+        ref="audioPlayerRef"
+        :currentTime="currentTime"
+        :duration="duration"
+        :playing="playing"
+        :playbackRate="playbackRate"
+        @play="togglePlay"
+        @seek="seekTo"
+        @speed-change="handleSpeedChange"
+      />
+    </div>
 
     <!-- 对话框组件 -->
     <ReplaceDialog v-model="replaceDialogVisible" />
@@ -50,7 +47,11 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import * as fileApi from '@/api/modules/file'
+import { getFile, formatFileData, getAudioFile } from '@/api/modules/file'
+import { useFileStore } from '@/stores/file'
+
+// 获取 store 实例
+const fileStore = useFileStore()
 
 // 导入拆分的组件
 import Toolbar from './EditorComponents/Toolbar.vue'
@@ -84,16 +85,45 @@ const currentTime = ref(0)
 const duration = ref(0)
 const playbackRate = ref(1)
 
+// 音频相关
+const audio = ref(new Audio())
+
+// 初始化音频
+const initAudio = async () => {
+  try {
+    const response = await getAudioFile(route.params.id)
+    const audioUrl = URL.createObjectURL(response.data)
+    audio.value.src = audioUrl
+    
+    // 设置音频事件监听
+    audio.value.addEventListener('loadedmetadata', () => {
+      duration.value = audio.value.duration
+    })
+    
+    audio.value.addEventListener('timeupdate', () => {
+      currentTime.value = audio.value.currentTime
+    })
+    
+    audio.value.addEventListener('ended', () => {
+      playing.value = false
+    })
+  } catch (error) {
+    console.error('加载音频失败:', error)
+    ElMessage.error('音频加载失败')
+  }
+}
+
 // 方法
 const handleSave = async () => {
   saving.value = true
   try {
-    await fileApi.updateFile(route.params.id, {
-      segments: segments.value
+    await fileStore.saveFile(route.params.id, {
+      segments: segments.value,
+      speakers: speakers.value
     })
     ElMessage.success('保存成功')
   } catch (error) {
-    console.error('Failed to save:', error)
+    console.error('保存失败:', error)
     ElMessage.error('保存失败')
   } finally {
     saving.value = false
@@ -115,44 +145,111 @@ const handleSpeakerChange = (speakerId, segment) => {
   segment.speaker = speakerId
 }
 
+// 播放控制方法
 const togglePlay = () => {
-  audioPlayerRef.value?.togglePlay()
+  if (playing.value) {
+    audio.value.pause()
+  } else {
+    audio.value.play()
+  }
+  playing.value = !playing.value
 }
 
 const seekTo = (time) => {
-  audioPlayerRef.value?.seekTo(time)
+  audio.value.currentTime = time
 }
 
 const handleSpeedChange = (speed) => {
   playbackRate.value = speed
-  audioPlayerRef.value?.setPlaybackRate(speed)
+  audio.value.playbackRate = speed
+}
+
+// 从完整文件名中提取原始文件名
+const getOriginalFilename = (fullname) => {
+  if (!fullname) return ''
+  // 移除时间戳前缀 (20250109_141133_)
+  return fullname.split('_').slice(2).join('_')
+}
+
+// 添加自动保存
+let autoSaveTimer = null
+const startAutoSave = () => {
+  autoSaveTimer = setInterval(handleSave, 60000) // 每分钟自动保存
 }
 
 // 生命周期钩子
 onMounted(async () => {
   try {
-    const response = await fileApi.getFile(route.params.id)
-    file.value = response.data
-    segments.value = response.data.segments
-    speakers.value = response.data.speakers
+    const response = await getFile(route.params.id)
+    const formattedData = formatFileData(response)
+    file.value = formattedData
+    segments.value = formattedData.segments
+    speakers.value = formattedData.speakers
+    
+    // 初始化音频
+    await initAudio()
+    
+    console.log('Formatted data:', formattedData)
   } catch (error) {
     console.error('Failed to load file:', error)
     ElMessage.error('加载失败')
   }
+  startAutoSave()
+})
+
+onUnmounted(() => {
+  if(autoSaveTimer) {
+    clearInterval(autoSaveTimer)
+  }
+  // 清理音频资源
+  if (audio.value.src) {
+    URL.revokeObjectURL(audio.value.src)
+  }
+  audio.value = null
 })
 </script>
 
 <style scoped>
 .editor-view {
-  height: 100%;
+  height: 100vh;
+  width: 100%;
   display: flex;
   flex-direction: column;
+  background: #fff;
+}
+
+.editor-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.editor-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
 }
 
 .main-content {
   flex: 1;
-  padding: 16px;
+  padding: 24px;
   overflow-y: auto;
+  /* 留出播放器的空间 */
+  padding-bottom: 80px;
+}
+
+.player-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  padding: 8px 24px;
 }
 </style>
 
