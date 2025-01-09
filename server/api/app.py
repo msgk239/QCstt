@@ -13,6 +13,7 @@ from fastapi.responses import Response, FileResponse
 # 本地模块
 from .files.service import file_service
 from .speech.recognize import speech_service
+from .speech.storage import transcript_manager
 
 app = FastAPI()
 
@@ -74,6 +75,31 @@ async def get_files(
     result = file_service.get_file_list(page, page_size, query)
     print(f"API响应时间: {time.time() - start:.2f}秒")
     return result
+
+# 获取单个文件详情
+@app.get("/api/v1/files/{file_id}")
+async def get_file(file_id: str):
+    try:
+        # 获取文件路径
+        file_info = file_service.get_file_path(file_id)
+        if file_info["code"] != 200:
+            return file_info
+            
+        # 获取识别结果
+        result = file_service.get_file_detail(file_id)
+        if result["code"] == 200:
+            result["data"].update({
+                "path": file_info["data"]["path"],
+                "filename": file_info["data"]["filename"]
+            })
+        
+        return result
+    except Exception as e:
+        print(f"Get file detail error: {str(e)}")
+        return {
+            "code": 500,
+            "message": f"获取文件详情失败: {str(e)}"
+        }
 
 # 删除文件
 @app.delete("/api/files/{file_id}")
@@ -145,14 +171,21 @@ async def start_recognition(file_id: str):
         with open(file_path, "rb") as f:
             audio_content = f.read()
             
-        # 调用语音识别服务
-        result = speech_service.process_audio(audio_content)
+        # 调用语音识别服务时传入 file_id
+        recognition_result = speech_service.process_audio(
+            audio_content,
+            language="auto"
+        )
         
-        if result["code"] == 200:
-            # 更新文件状态为"已完成"
+        # 如果识别成功，更新文件状态
+        if recognition_result["code"] == 200:
             file_service.update_file_status(file_id, "已完成")
             
-        return result
+        # 再保存结果
+        if recognition_result["code"] == 200:
+            transcript_manager.save_result(file_id, recognition_result)
+        
+        return recognition_result
         
     except Exception as e:
         print(f"Recognition error: {str(e)}")

@@ -9,6 +9,14 @@ export function getFileList(params) {
   })
 }
 
+// 获取单个文件详情
+export function getFile(id) {
+  return request({
+    url: '/api/v1/files/' + id,
+    method: 'get'
+  })
+}
+
 // 上传文件
 export function uploadFile(file, options = {}) {
   const formData = new FormData()

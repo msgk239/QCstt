@@ -25,6 +25,10 @@ const router = createRouter({
       component: () => import('@/views/EditorView.vue'),
       meta: {
         title: '编辑器'
+      },
+      beforeEnter: (to, from, next) => {
+        console.log('Editor route guard:', to.params)
+        next()
       }
     }
   ]

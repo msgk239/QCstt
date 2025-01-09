@@ -49,8 +49,8 @@ service.interceptors.response.use(
 
     const res = response.data
     if (res.code !== 200) {
-      ElMessage.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message || '请求失败'))
+      // 返回错误响应而不是抛出错误，让调用方处理具体的错误信息
+      return res
     }
     return res
   },
@@ -62,7 +62,7 @@ service.interceptors.response.use(
       // 服务器返回了错误状态码
       const status = error.response.status
       const data = error.response.data
-      message = data.message || `请求失败(${status})`
+      message = (data && data.message) || `请求失败(${status})`
       console.error('Server error:', {
         status,
         data,
@@ -78,8 +78,11 @@ service.interceptors.response.use(
       console.error('Request config error:', error.message)
     }
     
-    ElMessage.error(message)
-    return Promise.reject(error)
+    // 让调用方处理错误消息的显示
+    return Promise.reject({
+      code: error.response?.status || 500,
+      message: message
+    })
   }
 )
 

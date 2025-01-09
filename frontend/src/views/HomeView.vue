@@ -184,20 +184,6 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as asrApi from '@/api/modules/asr'
 import FileUpload from '@/components/file/FileUpload.vue'
-import {
-  Document,
-  Edit,
-  Delete,
-  Plus,
-  Search,
-  List,
-  Grid,
-  VideoPlay,
-  VideoPause,
-  FolderOpened,
-  DocumentCopy,
-  More
-} from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -234,10 +220,12 @@ const fetchFileList = async () => {
     if (response.code === 200) {
       fileList.value = response.data.items.map(item => ({
         ...item,
+        id: item.id || item.file_id,
         isRenaming: false,
         newName: item.name
       }))
       totalFiles.value = response.data.total
+      console.log('File list with IDs:', fileList.value)
     }
     console.timeEnd('渲染文件列表')
   } catch (error) {
@@ -307,6 +295,14 @@ const handleDeleteFile = async (file) => {
 // 开始识别
 const startRecognition = async (file) => {
   try {
+    console.log('Starting recognition for file:', file)
+    // 检查 file.id 是否存在
+    if (!file || !file.id) {
+      console.error('Invalid file object:', file)
+      ElMessage.error('文件ID不存在')
+      return
+    }
+    
     // 显示加载中状态
     ElMessage({
       message: '正在开始识别...',
@@ -315,30 +311,44 @@ const startRecognition = async (file) => {
     
     // 调用识别API
     const response = await asrApi.startRecognition(file.id)
+    console.log('Recognition API response:', response)
     
     if (response.code === 200) {
       // 更新文件状态
       file.status = '已完成'
       ElMessage.success('识别完成')
       
-      // 跳转到编辑器页面
-      router.push({
-        path: `/editor/${file.id}`,
-        params: { 
-          // 可以传递一些初始数据
-          state: {
-            segments: response.data.segments,
-            speakers: response.data.speakers,
-            duration: response.data.duration
+      console.log('Attempting to navigate to editor...')
+      // 使用简单的路由跳转方式
+      try {
+        // 使用 replace 而不是 push，避免浏览器历史堆栈问题
+        await router.replace({
+          name: 'editor',
+          params: { id: file.id },
+          // 使用 query 传递数据，而不是 state
+          query: {
+            duration: response.data.duration,
+            language: response.data.language,
+            fullText: response.data.full_text,
+            segments: encodeURIComponent(JSON.stringify(response.data.segments)),
+            speakers: encodeURIComponent(JSON.stringify(response.data.speakers.map(spk => ({
+              ...spk,
+              originalName: spk.name,
+              color: '#' + Math.floor(Math.random()*16777215).toString(16)
+            }))))
           }
-        }
-      })
+        })
+        console.log('Navigation successful')
+      } catch (navError) {
+        console.error('Navigation failed:', navError)
+        ElMessage.error('跳转失败：' + navError.message)
+      }
     } else {
       ElMessage.error(response.message || '开始识别失败')
     }
   } catch (error) {
     console.error('Recognition error:', error)
-    ElMessage.error('开始识别失败，请重试')
+    ElMessage.error(error.message || '开始识别失败，请重试')
   }
 }
 

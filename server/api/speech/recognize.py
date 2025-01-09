@@ -1,5 +1,8 @@
 from datetime import datetime
 from typing import List, Dict, Optional
+import os
+import json
+import shutil
 from funasr.utils.postprocess_utils import rich_transcription_postprocess
 from .models import model
 
@@ -16,7 +19,9 @@ class SpeechService:
     ]
     
     def __init__(self):
-        pass
+        # 设置转写结果存储根目录
+        self.transcripts_dir = os.path.join("storage", "transcripts")
+        os.makedirs(self.transcripts_dir, exist_ok=True)
     
     def get_languages(self) -> Dict:
         """获取支持的语言列表"""
@@ -71,8 +76,8 @@ class SpeechService:
             }
             speakers_data.append(speaker_data)
         
-        # 3. 返回飞书妙记风格的API响应
-        return {
+        # 3. 构建识别结果
+        recognition_result = {
             "code": 200,
             "message": "success",
             "data": {
@@ -93,6 +98,8 @@ class SpeechService:
                 }
             }
         }
+        
+        return recognition_result
 
 # 创建全局实例
 speech_service = SpeechService()
