@@ -51,7 +51,7 @@
                 />
               </div>
               <span v-else class="filename" :title="row.name">
-                {{ row.name }}
+                {{ formatDisplayName(row.name) }}
               </span>
             </div>
           </template>
@@ -166,6 +166,11 @@
           :total="totalFiles"
           :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next"
+          :pager-count="7"
+          prev-text="上一页"
+          next-text="下一页"
+          :sizes-text="'条/页'"
+          :total-text="'共 {total} 条'"
         />
       </div>
     </div>
@@ -185,6 +190,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import * as asrApi from '@/api/modules/asr'
 import FileUpload from '@/components/file/FileUpload.vue'
 import { useRouter } from 'vue-router'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+
+// 设置 Element Plus 的语言为中文
+const locale = zhCn
 
 const router = useRouter()
 
@@ -221,6 +230,7 @@ const fetchFileList = async () => {
       fileList.value = response.data.items.map(item => ({
         ...item,
         id: item.id || item.file_id,
+        name: item.name,  // 使用完整文件名
         isRenaming: false,
         newName: item.name
       }))
@@ -253,7 +263,6 @@ const showUploadDialog = () => {
 // 上传成功回调
 const handleUploadSuccess = ({ files, options }) => {
   console.log('Upload success:', { files, options })
-  ElMessage.success('文件上传成功')
   fetchFileList() // 刷新文件列表
 }
 
@@ -296,41 +305,66 @@ const handleDeleteFile = async (file) => {
 const startRecognition = async (file) => {
   try {
     console.log('Starting recognition for file:', file)
-    // 检查 file.id 是否存在
+    // 使用 file.id 而不是 file.name
     if (!file || !file.id) {
       console.error('Invalid file object:', file)
       ElMessage.error('文件ID不存在')
       return
     }
     
+    // 使用正确的文件ID
+    const fileId = file.id  // 修改这里，使用 file.id 而不是 file.name
+    console.log('Using file ID:', fileId)
+    
     // 显示加载中状态
-    ElMessage({
+    const loading = ElMessage({
       message: '正在开始识别...',
-      type: 'info'
+      type: 'info',
+      duration: 0
     })
     
     // 调用识别API
-    const response = await asrApi.startRecognition(file.id)
+    const response = await asrApi.startRecognition(fileId)
     console.log('Recognition API response:', response)
     
     if (response.code === 200) {
-      // 更新文件状态
-      file.status = '已完成'
-      ElMessage.success('识别完成')
+      loading.close()
       
-      console.log('Attempting to navigate to editor...')
-      // 使用简单的路由跳转方式
-      try {
-        await router.push({
-          name: 'editor',
-          params: { id: file.id + '_' + file.name }
-        })
-        console.log('Navigation successful')
-      } catch (navError) {
-        console.error('Navigation failed:', navError)
-        ElMessage.error('跳转失败：' + navError.message)
+      // 等待识别结果
+      const checkResult = async () => {
+        const fileInfo = await asrApi.getFileInfo(fileId)
+        console.log('File info:', fileInfo)
+        
+        if (fileInfo.code === 200) {
+          if (fileInfo.data.status === '已完成') {
+            ElMessage.success('识别完成')
+            // 导航到编辑器
+            try {
+              await router.push({
+                name: 'editor',
+                params: { id: fileId }
+              })
+              console.log('Navigation successful')
+            } catch (navError) {
+              console.error('Navigation failed:', navError)
+              ElMessage.error('跳转失败：' + navError.message)
+            }
+          } else if (fileInfo.data.status === '未识别') {
+            // 继续等待
+            setTimeout(checkResult, 1000)
+          } else {
+            ElMessage.warning(`当前状态: ${fileInfo.data.status}`)
+          }
+        } else {
+          ElMessage.error(fileInfo.message || '获取文件状态失败')
+        }
       }
+      
+      // 开始检查结果
+      checkResult()
+      
     } else {
+      loading.close()
       ElMessage.error(response.message || '开始识别失败')
     }
   } catch (error) {
@@ -431,6 +465,13 @@ const formatDuration = (duration) => {
   }
   
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+// 添加文件名格式化函数
+const formatDisplayName = (fullName) => {
+  // 从完整文件名(timestamp_name.wav)中提取实际文件名(name.wav)
+  const match = fullName.match(/\d{8}_\d{6}_(.+)/)
+  return match ? match[1] : fullName
 }
 
 // 初始化

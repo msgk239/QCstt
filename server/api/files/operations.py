@@ -1,6 +1,11 @@
 import os
 from datetime import datetime
-from pydub import AudioSegment
+try:
+    from pydub import AudioSegment
+except ImportError:
+    print("Warning: pydub not installed. Audio duration detection will be disabled.")
+    AudioSegment = None
+
 from typing import Optional, List, Dict
 from .config import config
 from .metadata import MetadataManager
@@ -14,43 +19,60 @@ class FileOperations:
     def get_audio_duration(self, file_path: str) -> Optional[float]:
         """获取音频文件时长"""
         try:
+            if AudioSegment is None:
+                print("Warning: pydub not available")
+                return None
+                
             audio = AudioSegment.from_file(file_path)
             return len(audio) / 1000.0
         except Exception as e:
             print(f"Error getting duration for {file_path}: {e}")
             return None
     
-    def save_uploaded_file(self, file_content, filename, options=None):
+    def save_uploaded_file(self, file_content, file_id, options=None):
         """保存上传的文件"""
         try:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            new_filename = f"{timestamp}_{filename}"
-            file_path = os.path.join(self.config.audio_dir, new_filename)
+            # 使用配置的音频目录
+            file_path = os.path.join(self.config.audio_dir, file_id)
             
+            # 保存文件
             with open(file_path, 'wb') as f:
                 f.write(file_content)
             
+            # 获取音频时长
             duration = self.get_audio_duration(file_path)
-            self.metadata.update(new_filename, {
+            
+            # 获取文件信息
+            file_info = {
+                'id': file_id.rsplit('.', 1)[0],  # 去掉扩展名
+                'name': file_id,
+                'size': len(file_content),
+                'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'status': '已上传',
+                'path': file_path,
                 'duration': duration,
-                'duration_str': f"{int(duration//60)}:{int(duration%60):02d}" if duration else "未知"
+                'duration_str': f"{int(duration//60)}:{int(duration%60):02d}" if duration else "未知",
+                'options': options
+            }
+            
+            # 保存元数据
+            self.metadata.update(file_id, {
+                'duration': duration,
+                'duration_str': file_info['duration_str']
             })
             
             return {
-                "code": 200,
-                "message": "success",
-                "data": {
-                    'id': timestamp,
-                    'name': filename,
-                    'size': len(file_content),
-                    'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'status': '待识别' if options and options.get('action') == 'recognize' else '已上传',
-                    'path': file_path,
-                    'options': options
-                }
+                'code': 200,
+                'message': 'success',
+                'data': file_info
             }
+            
         except Exception as e:
-            return {"code": 500, "message": f"保存文件失败: {str(e)}"} 
+            print(f"Save file error: {str(e)}")
+            return {
+                'code': 500,
+                'message': f'保存文件失败: {str(e)}'
+            }
     
     def get_file_list(self, page=1, page_size=20, query=None) -> Dict:
         """获取文件列表"""

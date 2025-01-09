@@ -2,7 +2,7 @@
   <div class="editor-view">
     <!-- 顶部标题和工具栏 -->
     <div class="editor-header">
-      <h2>{{ getOriginalFilename(route.params.id) || '编辑转写结果' }}</h2>
+      <h1>{{ formatDisplayName(fileName) }}</h1>
       <div class="header-tools">
         <ExportToolbar />
         <ShareToolbar />
@@ -257,6 +257,11 @@ onUnmounted(() => {
   }
   audio.value = null
 })
+
+const formatDisplayName = (fullName) => {
+  const match = fullName.match(/\d{8}_\d{6}_(.+)/)
+  return match ? match[1] : fullName
+}
 </script>
 
 <style scoped>

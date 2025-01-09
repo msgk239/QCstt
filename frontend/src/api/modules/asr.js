@@ -5,10 +5,11 @@ export function uploadAudio(file, options = {}) {
   const formData = new FormData()
   formData.append('file', file.raw)
   
-  // 添加选项
+  // 添加选项，包含原始文件名
   const uploadOptions = {
     action: options.action || 'upload',
-    language: options.language || 'auto'
+    language: options.language || 'auto',
+    original_filename: file.name  // 添加原始文件名
   }
   formData.append('options', JSON.stringify(uploadOptions))
 
@@ -18,9 +19,7 @@ export function uploadAudio(file, options = {}) {
     data: formData,
     headers: {
       'Content-Type': 'multipart/form-data'
-    },
-    onUploadProgress: options.onProgress,
-    timeout: 600000
+    }
   })
 }
 
@@ -42,16 +41,17 @@ export function deleteFile(fileId) {
 }
 
 // 重命名文件
-export function renameFile(fileId, newName) {
-  const formData = new FormData()
-  formData.append('new_name', newName)
+export const renameFile = async (fileId, newName) => {
+  // fileId 是 timestamp_name.wav 格式
+  // newName 是用户输入的新文件名，需要保持原有的时间戳前缀
+  const timestamp = fileId.split('_').slice(0, 2).join('_')
+  const fullNewName = `${timestamp}_${newName}`
   
   return request({
-    url: `/api/files/${fileId}/rename`,
-    method: 'put',
-    data: formData,
-    headers: {
-      'Content-Type': 'multipart/form-data'
+    url: `/api/v1/files/${fileId}/rename`,
+    method: 'post',
+    data: {
+      new_name: fullNewName
     }
   })
 }
@@ -189,18 +189,32 @@ export function batchImportHotwords(libraryId, file) {
   })
 }
 
-// 添加开始识别的API
+// 开始识别
 export const startRecognition = async (fileId) => {
   return request({
-    url: `/api/v1/asr/recognize/${fileId}`,
-    method: 'POST'
+    url: `/api/asr/recognize`,
+    method: 'post',
+    data: {
+      file_id: fileId
+    }
   })
 }
 
-// 添加获取识别进度的API (后续可能需要)
+// 获取文件信息
+export const getFileInfo = async (fileId) => {
+  return request({
+    url: `/api/files/${fileId}`,
+    method: 'get'
+  })
+}
+
+// 添加获取识别进度的API
 export const getRecognitionProgress = async (fileId) => {
   return request({
-    url: `/api/v1/asr/progress/${fileId}`,
-    method: 'GET'
+    url: `/api/v1/asr/progress`,
+    method: 'GET',
+    params: {
+      file_id: fileId
+    }
   })
 } 

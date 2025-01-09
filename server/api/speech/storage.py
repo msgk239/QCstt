@@ -1,24 +1,24 @@
 from datetime import datetime
-import json
-import os  # 确保导入 os 模块
+import os
 from ..files.config import config
-from ..utils import get_file_path, update_file_status
+from ..utils import get_transcript_dir, safe_read_json, safe_write_json
 
 class TranscriptManager:
-    """识别结果管理类"""
+    """转写结果存储模块"""
     def __init__(self):
         self.transcripts_dir = config.transcripts_dir
         
-    def save_result(self, file_id: str, result: dict):
+    def save_result(self, file_id: str, result: dict) -> bool:
         """保存识别结果"""
         try:
-            file_dir = os.path.join(self.transcripts_dir, file_id)
-            os.makedirs(file_dir, exist_ok=True)
+            file_dir = get_transcript_dir(self.transcripts_dir, file_id)
             
+            # 保存原始识别结果
             original_path = os.path.join(file_dir, "original.json")
-            with open(original_path, "w", encoding="utf-8") as f:
-                json.dump(result, f, ensure_ascii=False, indent=2)
+            if not safe_write_json(original_path, result):
+                return False
             
+            # 保存元数据
             metadata = {
                 "created_at": datetime.now().isoformat(),
                 "last_modified": datetime.now().isoformat(),
@@ -27,70 +27,78 @@ class TranscriptManager:
                 "status": "已完成"
             }
             metadata_path = os.path.join(file_dir, "metadata.json")
-            with open(metadata_path, "w", encoding="utf-8") as f:
-                json.dump(metadata, f, ensure_ascii=False, indent=2)
-            
-            # 更新文件状态
-            update_file_status(file_service, file_id, "已完成")
-            
-            return {"code": 200, "message": "success"}
+            return safe_write_json(metadata_path, metadata)
             
         except Exception as e:
             print(f"Save recognition result error: {str(e)}")
-            return {"code": 500, "message": f"保存识别结果失败: {str(e)}"}
+            return False
 
-    def get_file_info(self, file_id: str) -> dict:
-        """获取文件信息，包括转写结果"""
-        file_dir = os.path.join(self.transcripts_dir, file_id)
+    def get_transcript(self, file_id: str) -> dict:
+        """获取转写结果"""
+        file_dir = get_transcript_dir(self.transcripts_dir, file_id)
+        print(f"\n=== 开始获取转写结果 ===")
+        print(f"文件ID: {file_id}")
+        print(f"转写目录: {file_dir}")
+        result = {}
         
-        transcripts = {}
-        if os.path.exists(file_dir):
-            print(f"Found transcript directory: {file_dir}")  # 添加调试日志
-            
-            original_path = os.path.join(file_dir, "original.json")
-            if os.path.exists(original_path):
-                print(f"Reading original.json from: {original_path}")  # 添加调试日志
-                with open(original_path, "r", encoding="utf-8") as f:
-                    original_data = json.load(f)
-                    transcripts["original"] = original_data["data"]  # 直接获取 data 部分
-                    print(f"Original data: {transcripts['original']}")  # 输出原始数据
-                
-            else:
-                print(f"original.json not found at: {original_path}")  # 添加调试日志
-                
-            metadata_path = os.path.join(file_dir, "metadata.json")
-            if os.path.exists(metadata_path):
-                print(f"Reading metadata.json from: {metadata_path}")  # 添加调试日志
-                with open(metadata_path, "r", encoding="utf-8") as f:
-                    transcripts["metadata"] = json.load(f)
-                    print(f"Metadata: {transcripts['metadata']}")  # 输出元数据
-                
-            else:
-                print(f"metadata.json not found at: {metadata_path}")  # 添加调试日志
-                
-            current_path = os.path.join(file_dir, "current.json")
-            if os.path.exists(current_path):
-                print(f"Reading current.json from: {current_path}")  # 添加调试日志
-                with open(current_path, "r", encoding="utf-8") as f:
-                    transcripts["current"] = json.load(f)
-                    print(f"Current data: {transcripts['current']}")  # 输出当前数据
-                
-            else:
-                print(f"current.json not found at: {current_path}")  # 添加调试日志
-        
-        uploads_dir = config.uploads_dir
-        
-        result = {
-            "id": file_id,
-            "name": os.path.basename(file_id),
-            "path": get_file_path(uploads_dir, file_id),
-            "status": transcripts.get("metadata", {}).get("status", "未识别") if transcripts else "未识别",
-            "transcripts": transcripts if transcripts else None,
-            "recognition_result": None
+        # 读取所有相关文件
+        file_types = {
+            "original": "original.json",
+            "metadata": "metadata.json",
+            "current": "current.json"
         }
         
-        print(f"Returning file info: {result}")  # 添加调试日志
-        return result
+        for key, filename in file_types.items():
+            file_path = os.path.join(file_dir, filename)
+            print(f"\n检查文件: {file_path}")
+            print(f"文件是否存在: {os.path.exists(file_path)}")
+            
+            data = safe_read_json(file_path)
+            if data:
+                print(f"成功读取 {key} 数据")
+                # 如果是original文件，尝试处理可能的嵌套结构
+                if key == "original" and isinstance(data, dict):
+                    print(f"Original数据结构: {type(data)}")
+                    # 如果有data字段，直接使用其内容
+                    if "data" in data:
+                        result[key] = data["data"]
+                        print("使用data字段内容")
+                    # 否则使用整个数据
+                    else:
+                        result[key] = data
+                        print("使用完整数据")
+                else:
+                    result[key] = data
+                print(f"最终 {key} 数据: {result[key]}")
+            else:
+                print(f"未找到 {key} 数据")
+                
+        print(f"\n=== 转写结果获取完成 ===")
+        print(f"最终结果: {result}")
+        return result if result else None
+
+    def delete_transcript(self, file_id: str) -> bool:
+        """删除转写结果"""
+        try:
+            file_dir = os.path.join(self.transcripts_dir, file_id)
+            if os.path.exists(file_dir):
+                import shutil
+                shutil.rmtree(file_dir)
+            return True
+        except Exception as e:
+            print(f"Delete transcript error: {str(e)}")
+            return False
+
+    def get_metadata(self, file_id: str) -> dict:
+        """获取转写元数据"""
+        file_dir = get_transcript_dir(self.transcripts_dir, file_id)
+        metadata_path = os.path.join(file_dir, "metadata.json")
+        print(f"\n=== 获取元数据 ===")
+        print(f"元数据路径: {metadata_path}")
+        print(f"文件是否存在: {os.path.exists(metadata_path)}")
+        metadata = safe_read_json(metadata_path)
+        print(f"元数据内容: {metadata}")
+        return metadata
 
 # 创建全局实例
 transcript_manager = TranscriptManager()
