@@ -20,7 +20,7 @@
       :file-list="fileList"
       accept="audio/*"
     >
-      <el-icon class="upload-icon"><Upload /></el-icon>
+      <el-icon class="upload-icon"><UploadFilled /></el-icon>
       <div class="upload-text">
         <h3>将文件拖到此处或点击上传</h3>
         <p>支持所有常见音频格式，单个文件不超过 50MB</p>
@@ -107,7 +107,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Upload } from '@element-plus/icons-vue'
+import { Document, UploadFilled } from '@element-plus/icons-vue'
 import { uploadAudio, getRecognizeProgress } from '@/api/modules/asr'
 
 // 定义属性和事件

@@ -8,7 +8,7 @@ import time
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
 
 # 本地模块
 from .files.service import file_service
@@ -129,6 +129,88 @@ async def get_file_path(file_id: str):
     result = file_service.get_file_path(file_id)
     print(f"Path result: {result}")  # 添加日志
     return result  # FastAPI 会自动处理 JSON 序列化
+
+# 添加开始识别的路由
+@app.post("/api/v1/asr/recognize/{file_id}")
+async def start_recognition(file_id: str):
+    try:
+        # 获取文件路径
+        file_info = file_service.get_file_path(file_id)
+        if file_info["code"] != 200:
+            return file_info
+            
+        file_path = file_info["data"]["path"]
+        
+        # 读取音频文件
+        with open(file_path, "rb") as f:
+            audio_content = f.read()
+            
+        # 调用语音识别服务
+        result = speech_service.process_audio(audio_content)
+        
+        if result["code"] == 200:
+            # 更新文件状态为"已完成"
+            file_service.update_file_status(file_id, "已完成")
+            
+        return result
+        
+    except Exception as e:
+        print(f"Recognition error: {str(e)}")
+        return {
+            "code": 500,
+            "message": f"识别失败: {str(e)}"
+        }
+
+# 添加获取识别进度的路由
+@app.get("/api/v1/asr/progress/{file_id}")
+async def get_recognition_progress(file_id: str):
+    try:
+        # TODO: 实现进度查询逻辑
+        return {
+            "code": 200,
+            "message": "success",
+            "data": {
+                "progress": 100,  # 临时返回100%
+                "status": "completed"
+            }
+        }
+    except Exception as e:
+        return {
+            "code": 500,
+            "message": f"获取进度失败: {str(e)}"
+        }
+
+# 添加获取音频文件的接口
+@app.get("/api/v1/files/{file_id}/audio")
+async def get_audio_file(file_id: str):
+    try:
+        # 获取文件路径
+        file_info = file_service.get_file_path(file_id)
+        if file_info["code"] != 200:
+            return file_info
+            
+        file_path = file_info["data"]["path"]
+        
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            return {
+                "code": 404,
+                "message": "文件不存在"
+            }
+            
+        # 返回音频文件
+        return FileResponse(
+            path=file_path,
+            filename=file_info["data"]["filename"],
+            media_type="audio/wav"  # 根据实际文件类型设置
+        )
+        
+    except Exception as e:
+        print(f"Get audio file error: {str(e)}")
+        return {
+            "code": 500,
+            "message": f"获取音频文件失败: {str(e)}"
+        }
 
 if __name__ == "__main__":
     uvicorn.run("server.api.app:app", host="0.0.0.0", port=8010, reload=True) 

@@ -190,7 +190,6 @@ import {
   Delete,
   Plus,
   Search,
-  Filter,
   List,
   Grid,
   VideoPlay,
@@ -199,6 +198,9 @@ import {
   DocumentCopy,
   More
 } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 // 视图模式
 const viewMode = ref('list')
@@ -304,7 +306,40 @@ const handleDeleteFile = async (file) => {
 
 // 开始识别
 const startRecognition = async (file) => {
-  ElMessage.info('识别功能尚未实现')
+  try {
+    // 显示加载中状态
+    ElMessage({
+      message: '正在开始识别...',
+      type: 'info'
+    })
+    
+    // 调用识别API
+    const response = await asrApi.startRecognition(file.id)
+    
+    if (response.code === 200) {
+      // 更新文件状态
+      file.status = '已完成'
+      ElMessage.success('识别完成')
+      
+      // 跳转到编辑器页面
+      router.push({
+        path: `/editor/${file.id}`,
+        params: { 
+          // 可以传递一些初始数据
+          state: {
+            segments: response.data.segments,
+            speakers: response.data.speakers,
+            duration: response.data.duration
+          }
+        }
+      })
+    } else {
+      ElMessage.error(response.message || '开始识别失败')
+    }
+  } catch (error) {
+    console.error('Recognition error:', error)
+    ElMessage.error('开始识别失败，请重试')
+  }
 }
 
 // 重命名相关

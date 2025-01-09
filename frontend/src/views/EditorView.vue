@@ -149,16 +149,16 @@ import WaveSurfer from 'wavesurfer.js'
 import {
   ArrowLeft,
   ArrowDown,
-  Save,
   Download,
   Edit,
   Delete,
   Plus,
-  PlaybackSpeed,
-  Previous,
-  Next,
-  Play,
-  Pause
+  CaretRight as Play,
+  VideoPause as Pause,
+  DArrowLeft as Previous,
+  DArrowRight as Next,
+  Timer as PlaybackSpeed,
+  Document as Save
 } from '@element-plus/icons-vue'
 import * as fileApi from '@/api/modules/file'
 

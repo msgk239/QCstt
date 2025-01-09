@@ -422,6 +422,47 @@ class FileService:
                 "code": 500,
                 "message": f"获取文件路径失败: {str(e)}"
             }
+    
+    def update_file_status(self, file_id: str, status: str) -> dict:
+        """更新文件状态
+        
+        Args:
+            file_id: 文件ID
+            status: 新状态
+        
+        Returns:
+            包含更新结果的字典
+        """
+        try:
+            file_found = None
+            for filename in os.listdir(self.audio_dir):
+                if filename.startswith(file_id):
+                    file_found = filename
+                    break
+            
+            if not file_found:
+                return {
+                    "code": 404,
+                    "message": "文件不存在"
+                }
+            
+            # 更新元数据中的状态
+            if file_found in self.metadata:
+                self.metadata[file_found]["status"] = status
+                self._save_metadata()
+            
+            return {
+                "code": 200,
+                "message": "success",
+                "data": {"status": status}
+            }
+            
+        except Exception as e:
+            print(f"Update status error: {str(e)}")
+            return {
+                "code": 500,
+                "message": f"更新状态失败: {str(e)}"
+            }
 
 # 创建全局实例
 file_service = FileService()

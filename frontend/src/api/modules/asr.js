@@ -187,4 +187,20 @@ export function batchImportHotwords(libraryId, file) {
       'Content-Type': 'multipart/form-data'
     }
   })
+}
+
+// 添加开始识别的API
+export const startRecognition = async (fileId) => {
+  return request({
+    url: `/api/v1/asr/recognize/${fileId}`,
+    method: 'POST'
+  })
+}
+
+// 添加获取识别进度的API (后续可能需要)
+export const getRecognitionProgress = async (fileId) => {
+  return request({
+    url: `/api/v1/asr/progress/${fileId}`,
+    method: 'GET'
+  })
 } 
