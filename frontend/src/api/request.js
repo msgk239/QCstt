@@ -20,6 +20,11 @@ service.interceptors.request.use(
       delete config.headers['Content-Type']
     }
     
+    // 检查请求方法是否正确
+    if (!config.method) {
+      config.method = 'get'  // 默认使用 GET 方法
+    }
+    
     // 添加详细的请求日志
     console.log('Request config:', {
       url: config.url,
@@ -31,7 +36,6 @@ service.interceptors.request.use(
     return config
   },
   error => {
-    console.error('Request error:', error)
     return Promise.reject(error)
   }
 )
@@ -39,9 +43,6 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   response => {
-    // 添加详细的响应日志
-    console.log('Response data:', response.data)
-    
     // 如果是二进制数据（如文件下载），直接返回
     if (response.config.responseType === 'blob') {
       return response
@@ -55,7 +56,6 @@ service.interceptors.response.use(
     return res
   },
   error => {
-    console.error('Response error:', error)
     // 详细的错误信息处理
     let message = '网络错误'
     if (error.response) {
@@ -63,19 +63,12 @@ service.interceptors.response.use(
       const status = error.response.status
       const data = error.response.data
       message = (data && data.message) || `请求失败(${status})`
-      console.error('Server error:', {
-        status,
-        data,
-        config: error.config
-      })
     } else if (error.request) {
       // 请求发出但没有收到响应
       message = '服务器无响应'
-      console.error('No response:', error.request)
     } else {
       // 请求配置出错
       message = error.message
-      console.error('Request config error:', error.message)
     }
     
     // 让调用方处理错误消息的显示

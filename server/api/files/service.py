@@ -200,20 +200,16 @@ class FileService:
     def process_audio(self, audio_file: bytes, language: str = "auto") -> Dict:
         """处理音频文件，进行语音识别"""
         try:
-            print(f"\n=== 开始处理音频文件 ===")
             # 调用语音识别服务
             result = speech_service.process_audio(audio_file, language)
-            print(f"识别结果: {result}")
             
             if result.get("code") == 200:
                 # 保存识别结果
                 file_id = result.get("data", {}).get("file_id")
                 if file_id:
                     save_result = self.save_recognition_result(file_id, result)
-                    print(f"保存结果: {save_result}")
                     return save_result
                 else:
-                    print("未找到file_id")
                     return {
                         "code": 400,
                         "message": "识别结果中缺少file_id"
@@ -222,7 +218,6 @@ class FileService:
             return result
             
         except Exception as e:
-            print(f"Process audio error: {str(e)}")
             return {
                 "code": 500,
                 "message": f"处理音频失败: {str(e)}"
@@ -239,6 +234,36 @@ class FileService:
             "speech_type": file.speech_type,  # 单独返回语音类型
             # ...
         }
+    
+    def start_recognition(self, file_id: str) -> Dict:
+        """开始语音识别"""
+        try:
+            # 获取文件路径
+            file_info = self.get_file_path(file_id)
+            if file_info["code"] != 200:
+                return file_info
+                
+            file_path = file_info["data"]["path"]
+            
+            # 读取音频文件
+            with open(file_path, "rb") as f:
+                audio_content = f.read()
+            
+            # 调用语音识别服务
+            result = speech_service.process_audio(audio_content, "auto")
+            
+            # 如果识别成功，更新文件状态和保存结果
+            if result["code"] == 200:
+                self.update_file_status(file_id, "已完成")
+                transcript_manager.save_result(file_id, result)
+            
+            return result
+            
+        except Exception as e:
+            return {
+                "code": 500,
+                "message": f"识别失败: {str(e)}"
+            }
 
 # 创建全局实例
 file_service = FileService()

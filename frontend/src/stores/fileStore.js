@@ -5,39 +5,49 @@ import { ElMessage } from 'element-plus'
 
 export const useFileStore = defineStore('file', () => {
   // 状态
-  const files = ref([])
+  const fileList = ref([])
   const currentPage = ref(1)
   const pageSize = ref(20)
-  const total = ref(0)
+  const totalFiles = ref(0)
   const loading = ref(false)
   const searchQuery = ref('')
   const sortBy = ref('date')
   const sortOrder = ref('desc')
   const viewMode = ref('list')
+  const currentFile = ref(null)
+  const saving = ref(false)
+  const lastSaveTime = ref(null)
 
   // 计算属性
   const filteredFiles = computed(() => {
-    return files.value.filter(file =>
+    return fileList.value.filter(file =>
       file.name.toLowerCase().includes(searchQuery.value.toLowerCase())
     )
   })
 
   // 方法
-  const fetchFiles = async () => {
+  const fetchFileList = async (params = {}) => {
     loading.value = true
     try {
       const res = await fileApi.getFileList({
-        page: currentPage.value,
-        pageSize: pageSize.value,
-        query: searchQuery.value,
-        sortBy: sortBy.value,
-        sortOrder: sortOrder.value
+        page: params.page || currentPage.value,
+        page_size: params.page_size || pageSize.value,
+        query: params.query || searchQuery.value,
+        sort_by: params.sort_by || sortBy.value,
+        sort_order: params.sort_order || sortOrder.value
       })
-      files.value = res.items
-      total.value = res.total
+      
+      if (res.code === 200) {
+        fileList.value = res.data.items
+        totalFiles.value = res.data.total
+        currentPage.value = params.page || currentPage.value
+        pageSize.value = params.page_size || pageSize.value
+      } else {
+        throw new Error(res.message || '获取文件列表失败')
+      }
     } catch (error) {
       console.error('Failed to fetch files:', error)
-      ElMessage.error('获取文件列表失败')
+      ElMessage.error(error.message || '获取文件列表失败')
     } finally {
       loading.value = false
     }
@@ -45,41 +55,43 @@ export const useFileStore = defineStore('file', () => {
 
   const deleteFile = async (id) => {
     try {
-      await fileApi.deleteFile(id)
-      ElMessage.success('文件已移至回收站')
-      await fetchFiles()
+      const res = await fileApi.deleteFile(id)
+      if (res.code === 200) {
+        await fetchFileList()
+        return res
+      }
+      throw new Error(res.message || '删除文件失败')
     } catch (error) {
       console.error('Failed to delete file:', error)
-      ElMessage.error('删除文件失败')
+      throw error
     }
   }
 
-  const updateFile = async (id, data) => {
+  const renameFile = async (id, newName) => {
     try {
-      await fileApi.updateFile(id, data)
-      ElMessage.success('文件信息已更新')
-      await fetchFiles()
+      const res = await fileApi.renameFile(id, newName)
+      if (res.code === 200) {
+        await fetchFileList()
+        return res
+      }
+      throw new Error(res.message || '重命名文件失败')
     } catch (error) {
-      console.error('Failed to update file:', error)
-      ElMessage.error('更新文件失败')
+      console.error('Failed to rename file:', error)
+      throw error
     }
   }
 
-  const exportFile = async (id, format) => {
+  const saveFile = async (fileId, data) => {
+    saving.value = true
     try {
-      const blob = await fileApi.exportFile(id, format)
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'export.' + format
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      ElMessage.success('文件导出成功')
-    } catch (error) {
-      console.error('Failed to export file:', error)
-      ElMessage.error('文件导出失败')
+      const result = await fileApi.updateFile(fileId, data)
+      if (result.code === 200) {
+        lastSaveTime.value = new Date()
+        return result
+      }
+      throw new Error(result.message || '保存文件失败')
+    } finally {
+      saving.value = false
     }
   }
 
@@ -100,22 +112,25 @@ export const useFileStore = defineStore('file', () => {
 
   return {
     // 状态
-    files,
+    fileList,
     currentPage,
     pageSize,
-    total,
+    totalFiles,
     loading,
     searchQuery,
     sortBy,
     sortOrder,
     viewMode,
+    currentFile,
+    saving,
+    lastSaveTime,
     // 计算属性
     filteredFiles,
     // 方法
-    fetchFiles,
+    fetchFileList,
     deleteFile,
-    updateFile,
-    exportFile,
+    renameFile,
+    saveFile,
     saveViewMode
   }
 }) 

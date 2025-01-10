@@ -9,6 +9,7 @@ except ImportError:
 from typing import Optional, List, Dict
 from .config import config
 from .metadata import MetadataManager
+from fastapi.responses import JSONResponse
 
 class FileOperations:
     """文件操作类"""
@@ -29,11 +30,33 @@ class FileOperations:
             print(f"Error getting duration for {file_path}: {e}")
             return None
     
-    def save_uploaded_file(self, file_content, file_id, options=None):
+    def generate_target_filename(self, original_filename: str) -> tuple:
+        """生成目标文件名，并返回相关的文件名信息
+        
+        Returns:
+            tuple: (
+                target_filename,  # 完整的目标文件名（带时间戳和扩展名）
+                cleaned_name,     # 清理后的显示名称（不带扩展名）
+                cleaned_full_name,# 清理后的完整文件名（带扩展名）
+                ext              # 文件扩展名（带点号）
+            )
+        """
+        name, ext = os.path.splitext(original_filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        cleaned_name = self.sanitize_filename(name)
+        cleaned_full_name = f"{cleaned_name}{ext}"
+        target_filename = f"{timestamp}_{cleaned_name}{ext}"
+        return target_filename, cleaned_name, cleaned_full_name, ext
+
+    def save_uploaded_file(self, file_content, options):
         """保存上传的文件"""
         try:
+            # 生成目标文件名和清理后的显示名称
+            original_filename = options['original_filename']
+            target_filename, cleaned_display_name, cleaned_full_name, ext = self.generate_target_filename(original_filename)
+            
             # 使用配置的音频目录
-            file_path = os.path.join(self.config.audio_dir, file_id)
+            file_path = os.path.join(self.config.audio_dir, target_filename)
             
             # 保存文件
             with open(file_path, 'wb') as f:
@@ -42,10 +65,14 @@ class FileOperations:
             # 获取音频时长
             duration = self.get_audio_duration(file_path)
             
-            # 获取文件信息
+            # 保存文件元数据
             file_info = {
-                'id': file_id.rsplit('.', 1)[0],  # 去掉扩展名
-                'name': file_id,
+                'id': target_filename,
+                'original_name': original_filename,
+                'display_name': cleaned_display_name,
+                'display_full_name': cleaned_full_name,
+                'storage_name': target_filename,
+                'extension': ext,
                 'size': len(file_content),
                 'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'status': '已上传',
@@ -56,7 +83,7 @@ class FileOperations:
             }
             
             # 保存元数据
-            self.metadata.update(file_id, {
+            self.metadata.update(target_filename, {
                 'duration': duration,
                 'duration_str': file_info['duration_str']
             })
@@ -219,4 +246,18 @@ class FileOperations:
             
         except Exception as e:
             print(f"Update status error: {str(e)}")
-            return {"code": 500, "message": f"更新状态失败: {str(e)}"} 
+            return {"code": 500, "message": f"更新状态失败: {str(e)}"}
+    
+    def start_recognition(self):
+        try:
+            # 实现识别启动逻辑
+            return {
+                'code': 200,
+                'message': 'Recognition started',
+                'data': {'status': 'success'}
+            }
+        except Exception as e:
+            return {
+                'code': 500,
+                'message': f'Recognition failed: {str(e)}'
+            } 

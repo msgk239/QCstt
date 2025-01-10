@@ -108,7 +108,8 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, UploadFilled } from '@element-plus/icons-vue'
-import { uploadAudio, getRecognizeProgress } from '@/api/modules/asr'
+import { startRecognition, getRecognizeProgress } from '@/api/modules/asr'
+import { uploadFile } from '@/api/modules/file'
 
 // 定义属性和事件
 const props = defineProps({
@@ -220,7 +221,7 @@ const handleUpload = async (action) => {
       file.status = 'uploading'
       file.percentage = 0
       
-      // 创建上传选项
+      // 按照规范构造上传选项
       const uploadOptions = {
         action,
         language: language.value,
@@ -233,7 +234,7 @@ const handleUpload = async (action) => {
 
       console.log('Uploading file:', file.name, 'with options:', uploadOptions)
       
-      const response = await uploadAudio(file, uploadOptions)
+      const response = await uploadFile(file, uploadOptions)
       console.log('Upload response:', response)
 
       if (response.code === 200) {

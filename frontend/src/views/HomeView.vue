@@ -81,7 +81,7 @@
                 <el-button 
                   type="primary" 
                   link
-                  @click="handleRename(row)"
+                  @click="handleRenameStart(row)"
                 >
                   <el-icon><Edit /></el-icon>
                 </el-button>
@@ -99,6 +99,9 @@
                     <el-dropdown-item @click="handleShowPath(row)">
                       <el-icon><FolderOpened /></el-icon>查看文件位置
                     </el-dropdown-item>
+                    <el-dropdown-item @click="handleExport(row)">
+                      <el-icon><Download /></el-icon>导出文件
+                    </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -111,7 +114,12 @@
               >
                 开始识别
               </el-button>
-              <el-button type="danger" link @click="handleDeleteFile(row)">
+              <el-button 
+                type="danger" 
+                link 
+                :loading="loadingStates.delete"
+                @click="handleDeleteFile(row)"
+              >
                 <el-icon><Delete /></el-icon>
               </el-button>
             </el-button-group>
@@ -139,6 +147,15 @@
           </div>
           <div class="file-actions">
             <el-button-group>
+              <el-tooltip content="重命名" placement="top">
+                <el-button 
+                  type="primary" 
+                  link
+                  @click="handleRenameStart(file)"
+                >
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
               <el-button 
                 type="primary" 
                 link 
@@ -147,10 +164,19 @@
               >
                 开始识别
               </el-button>
-              <el-button type="primary" link>
+              <el-button 
+                type="primary" 
+                link
+                @click="handleExport(file)"
+              >
                 <el-icon><Download /></el-icon>
               </el-button>
-              <el-button type="danger" link @click="handleDeleteFile(file)">
+              <el-button 
+                type="danger" 
+                link 
+                :loading="loadingStates.delete"
+                @click="handleDeleteFile(file)"
+              >
                 <el-icon><Delete /></el-icon>
               </el-button>
             </el-button-group>
@@ -185,98 +211,95 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as asrApi from '@/api/modules/asr'
 import FileUpload from '@/components/file/FileUpload.vue'
 import { useRouter } from 'vue-router'
+import { useFileStore } from '@/stores/fileStore'
+import { storeToRefs } from 'pinia'
+import { debounce } from 'lodash-es'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
 // 设置 Element Plus 的语言为中文
 const locale = zhCn
 
 const router = useRouter()
+const fileStore = useFileStore()
 
-// 视图模式
-const viewMode = ref('list')
+// 从 store 中获取状态
+const { fileList, totalFiles, loading, viewMode, searchQuery, currentPage, pageSize } = storeToRefs(fileStore)
 
-// 搜索和筛选
-const searchQuery = ref('')
-const currentPage = ref(1)
-const pageSize = ref(20)
-
-// 文件列表状态
-const fileList = ref([])
-const loading = ref(false)
-const totalFiles = ref(0)
-
-// 上传对话框
-const uploadDialogVisible = ref(false)
-
-// 获取文件列表
-const fetchFileList = async () => {
-  try {
-    console.time('获取文件列表')
-    loading.value = true
-    const response = await asrApi.getFileList({
-      page: currentPage.value,
-      page_size: pageSize.value,
-      query: searchQuery.value
-    })
-    console.timeEnd('获取文件列表')
-    
-    console.time('渲染文件列表')
-    if (response.code === 200) {
-      fileList.value = response.data.items.map(item => ({
-        ...item,
-        id: item.id || item.file_id,
-        name: item.name,  // 使用完整文件名
-        isRenaming: false,
-        newName: item.name
-      }))
-      totalFiles.value = response.data.total
-      console.log('File list with IDs:', fileList.value)
-    }
-    console.timeEnd('渲染文件列表')
-  } catch (error) {
-    console.error('Fetch file list error:', error)
-  } finally {
-    loading.value = false
-  }
-}
-
-// 监听分页和搜索变化
-watch([currentPage, pageSize, searchQuery], () => {
-  fetchFileList()
+// 视图状态管理
+const viewStates = reactive({
+  uploadDialogVisible: false
 })
 
-// 计算属性
+// 加载状态管理
+const loadingStates = reactive({
+  delete: false,
+  rename: false,
+  recognize: false,
+  export: false
+})
+
+// 获取文件列表的防抖处理
+const debouncedFetchFiles = debounce(() => {
+  fileStore.fetchFileList({
+    page: viewStates.currentPage,
+    page_size: viewStates.pageSize,
+    query: viewStates.searchQuery
+  })
+}, 300)
+
+// 监听分页和搜索变化
+watch(
+  () => [currentPage.value, pageSize.value, searchQuery.value],
+  () => {
+    debouncedFetchFiles()
+  }
+)
+
+// 监听视图模式变化
+watch(viewMode, () => {
+  fileStore.saveViewMode()
+})
+
+// 计算属性：过滤后的文件列表
 const filteredFiles = computed(() => {
-  return fileList.value
+  if (!fileList.value) return []
+  
+  return fileList.value.map(file => ({
+    ...file,
+    displayName: formatDisplayName(file.name),
+    statusType: getStatusType(file.status),
+    formattedSize: formatFileSize(file.size),
+    formattedDuration: formatDuration(file.duration)
+  }))
 })
 
 // 显示上传对话框
 const showUploadDialog = () => {
-  uploadDialogVisible.value = true
+  viewStates.uploadDialogVisible = true
 }
 
-// 上传成功回调
-const handleUploadSuccess = ({ files, options }) => {
+// 上传回调处理
+const handleUploadSuccess = async ({ files, options }) => {
   console.log('Upload success:', { files, options })
-  fetchFileList() // 刷新文件列表
+  await fileStore.fetchFileList()
+  ElMessage.success(`成功上传 ${files.length} 个文件`)
 }
 
-// 上传失败回调
 const handleUploadError = (error) => {
   console.error('Upload error:', error)
-  ElMessage.error('文件上传失败')
+  ElMessage.error(error.message || '文件上传失败')
 }
 
 // 删除文件
 const handleDeleteFile = async (file) => {
   try {
     await ElMessageBox.confirm(
-      '确定要删除该文件吗？',
+      '确定要删除该文件吗？删除后可在回收站恢复',
       '删除确认',
       {
         confirmButtonText: '确定',
@@ -285,198 +308,240 @@ const handleDeleteFile = async (file) => {
       }
     )
     
-    // 调用删除 API
-    const response = await asrApi.deleteFile(file.id)
-    if (response.code === 200) {
-      ElMessage.success('文件已删除')
-      fetchFileList() // 刷新列表
-    } else {
-      ElMessage.error('删除文件失败')
-    }
+    loadingStates.delete = true
+    await fileStore.deleteFile(file.id)
+    ElMessage.success('文件已移至回收站')
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Delete file error:', error)
-      ElMessage.error('删除文件失败')
+      ElMessage.error(error.message || '删除文件失败')
     }
+  } finally {
+    loadingStates.delete = false
   }
 }
 
 // 开始识别
 const startRecognition = async (file) => {
+  if (!file?.id) {
+    ElMessage.error('文件ID不存在')
+    return
+  }
+
   try {
-    console.log('Starting recognition for file:', file)
-    // 使用 file.id 而不是 file.name
-    if (!file || !file.id) {
-      console.error('Invalid file object:', file)
-      ElMessage.error('文件ID不存在')
-      return
-    }
-    
-    // 使用正确的文件ID
-    const fileId = file.id  // 修改这里，使用 file.id 而不是 file.name
-    console.log('Using file ID:', fileId)
-    
-    // 显示加载中状态
-    const loading = ElMessage({
-      message: '正在开始识别...',
-      type: 'info',
-      duration: 0
-    })
-    
-    // 调用识别API
-    const response = await asrApi.startRecognition(fileId)
-    console.log('Recognition API response:', response)
+    loadingStates.recognize = true
+    const response = await asrApi.startRecognition(file.id)
     
     if (response.code === 200) {
-      loading.close()
-      
-      // 等待识别结果
-      const checkResult = async () => {
-        const fileInfo = await asrApi.getFileInfo(fileId)
-        console.log('File info:', fileInfo)
+      // 使用 Promise 和 async/await 优化轮询逻辑
+      const pollRecognitionStatus = async () => {
+        const fileInfo = await asrApi.getFileInfo(file.id)
         
         if (fileInfo.code === 200) {
-          if (fileInfo.data.status === '已完成') {
+          const { status } = fileInfo.data
+          
+          if (status === '已完成') {
             ElMessage.success('识别完成')
-            // 导航到编辑器
-            try {
-              await router.push({
-                name: 'editor',
-                params: { id: fileId }
-              })
-              console.log('Navigation successful')
-            } catch (navError) {
-              console.error('Navigation failed:', navError)
-              ElMessage.error('跳转失败：' + navError.message)
-            }
-          } else if (fileInfo.data.status === '未识别') {
-            // 继续等待
-            setTimeout(checkResult, 1000)
+            await router.push({
+              name: 'editor',
+              params: { id: file.id }
+            })
+            return true
+          } else if (status === '识别中') {
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            return pollRecognitionStatus()
           } else {
-            ElMessage.warning(`当前状态: ${fileInfo.data.status}`)
+            throw new Error(`识别异常：${status}`)
           }
-        } else {
-          ElMessage.error(fileInfo.message || '获取文件状态失败')
         }
+        throw new Error(fileInfo.message || '获取识别状态失败')
       }
       
-      // 开始检查结果
-      checkResult()
-      
+      await pollRecognitionStatus()
     } else {
-      loading.close()
-      ElMessage.error(response.message || '开始识别失败')
+      throw new Error(response.message || '开始识别失败')
     }
   } catch (error) {
     console.error('Recognition error:', error)
-    ElMessage.error(error.message || '开始识别失败，请重试')
+    ElMessage.error(error.message || '识别失败，请重试')
+  } finally {
+    loadingStates.recognize = false
   }
 }
 
-// 重命名相关
-const handleRename = (file) => {
-  file.isRenaming = true
-  file.newName = file.name
-}
-
-const handleRenameConfirm = async (file) => {
-  if (file.newName && file.newName !== file.name) {
-    try {
-      const response = await asrApi.renameFile(file.id, file.newName)
-      if (response.code === 200) {
-        file.name = file.newName
-        ElMessage.success('重命名成功')
-      } else {
-        ElMessage.error('重命名失败')
-      }
-    } catch (error) {
-      console.error('Rename error:', error)
-      ElMessage.error('重命名失败')
-    }
-  }
-  file.isRenaming = false
-}
-
-const handleRenameCancel = (file) => {
-  file.isRenaming = false
-}
-
-// 修改导出为另存为函数
-const handleSaveAs = async (file) => {
+// 重命名处理
+const handleRename = async (file) => {
   try {
+    const { value: newName } = await ElMessageBox.prompt(
+      '请输入新的文件名',
+      '重命名',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        inputValue: formatDisplayName(file.name),
+        inputValidator: (value) => {
+          if (!value.trim()) {
+            return '文件名不能为空'
+          }
+          if (value.includes('/') || value.includes('\\')) {
+            return '文件名不能包含特殊字符'
+          }
+          return true
+        }
+      }
+    )
+    
+    if (newName && newName !== file.name) {
+      loadingStates.rename = true
+      await fileStore.renameFile(file.id, newName)
+      ElMessage.success('重命名成功')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Rename error:', error)
+      ElMessage.error(error.message || '重命名失败')
+    }
+  } finally {
+    loadingStates.rename = false
+  }
+}
+
+// 导出文件
+const handleExport = async (file) => {
+  try {
+    loadingStates.export = true
     const response = await fetch(`/api/v1/files/${file.id}/audio`)
     const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
     
-    // 创建一个隐藏的 <a> 元素用于触发"另存为"对话框
     const link = document.createElement('a')
     link.href = url
-    link.download = file.name  // 使用原始文件名
-    link.style.display = 'none'
+    link.download = formatDisplayName(file.name)
     document.body.appendChild(link)
-    
-    // 触发点击事件，打开"另存为"对话框
     link.click()
-    
-    // 清理
     document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url)
+    }, 100)
   } catch (error) {
-    console.error('另存为失败:', error)
-    ElMessage.error('另存为失败，请重试')
+    console.error('Export error:', error)
+    ElMessage.error('导出失败，请重试')
+  } finally {
+    loadingStates.export = false
   }
 }
 
-// 格式化文件大小
+// 工具函数
 const formatFileSize = (bytes) => {
-  if (bytes === 0) return '0 B'
+  if (!bytes) return '0 B'
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i]
+  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
 }
 
-// 获取状态类型
 const getStatusType = (status) => {
-  switch (status) {
-    case '已上传':
-      return 'info'
-    case '待识别':
-      return 'warning'
-    case '已完成':
-      return 'success'
-    default:
-      return 'info'
+  const statusMap = {
+    '已上传': 'info',
+    '待识别': 'warning',
+    '识别中': 'primary',
+    '已完成': 'success',
+    '失败': 'danger'
   }
+  return statusMap[status] || 'info'
 }
 
-// 格式化时长显示
 const formatDuration = (duration) => {
   if (!duration || duration === '未知') return '未知'
   
-  // 解析分钟和秒
   const [minutes, seconds] = duration.split(':').map(Number)
   const totalMinutes = minutes
   
   if (totalMinutes >= 60) {
     const hours = Math.floor(totalMinutes / 60)
     const remainingMinutes = totalMinutes % 60
-    return `${hours}:${remainingMinutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+    return `${hours}:${String(remainingMinutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
   }
   
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-// 添加文件名格式化函数
 const formatDisplayName = (fullName) => {
-  // 从完整文件名(timestamp_name.wav)中提取实际文件名(name.wav)
   const match = fullName.match(/\d{8}_\d{6}_(.+)/)
   return match ? match[1] : fullName
 }
 
+// 文件路径相关功能
+const handleCopyPath = async (file) => {
+  try {
+    const response = await asrApi.getFilePath(file.id)
+    if (response.code === 200) {
+      const path = response.data.path
+      await navigator.clipboard.writeText(path)
+      ElMessage.success('文件路径已复制到剪贴板')
+    } else {
+      throw new Error(response.message || '获取文件路径失败')
+    }
+  } catch (error) {
+    console.error('Copy path error:', error)
+    ElMessage.error(error.message || '复制文件路径失败')
+  }
+}
+
+const handleShowPath = async (file) => {
+  try {
+    const response = await asrApi.getFilePath(file.id)
+    if (response.code === 200) {
+      const path = response.data.path
+      // 使用 electron 的 shell.showItemInFolder
+      window.electron?.showItemInFolder(path)
+    } else {
+      throw new Error(response.message || '获取文件路径失败')
+    }
+  } catch (error) {
+    console.error('Show path error:', error)
+    ElMessage.error(error.message || '打开文件位置失败')
+  }
+}
+
+// 表格视图中的行内重命名功能
+const handleRenameStart = (file) => {
+  file.isRenaming = true
+  file.newName = formatDisplayName(file.name)
+}
+
+const handleRenameConfirm = async (file) => {
+  try {
+    if (!file.newName?.trim()) {
+      ElMessage.warning('文件名不能为空')
+      return
+    }
+    if (file.newName === formatDisplayName(file.name)) {
+      file.isRenaming = false
+      return
+    }
+
+    loadingStates.rename = true
+    await fileStore.renameFile(file.id, file.newName)
+    ElMessage.success('重命名成功')
+  } catch (error) {
+    console.error('Rename error:', error)
+    ElMessage.error(error.message || '重命名失败')
+  } finally {
+    file.isRenaming = false
+    loadingStates.rename = false
+  }
+}
+
+const handleRenameCancel = (file) => {
+  file.isRenaming = false
+  file.newName = formatDisplayName(file.name)
+}
+
 // 初始化
 onMounted(() => {
-  fetchFileList()
+  debouncedFetchFiles()
 })
 </script>
 
@@ -484,6 +549,8 @@ onMounted(() => {
 .home-view {
   padding: 20px;
   height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .toolbar {
@@ -491,63 +558,64 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
 }
 
 .toolbar-left {
   display: flex;
   gap: 16px;
   align-items: center;
+  flex: 1;
 }
 
 .search-input {
   width: 300px;
+  max-width: 100%;
 }
 
-.toolbar-right {
-  display: flex;
-  gap: 8px;
-}
-
-.hidden-upload {
-  display: inline-block;
+.file-list {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
 }
 
 .grid-view {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 16px;
-  margin-bottom: 16px;
+  padding: 16px;
 }
 
 .file-card {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
 }
 
 .file-icon {
-  margin: 16px 0;
-  color: var(--el-color-primary);
+  margin-bottom: 8px;
 }
 
 .file-name {
   margin: 8px 0;
-  font-size: 14px;
-  color: var(--el-text-color-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: center;
+  word-break: break-word;
 }
 
 .file-info {
   display: flex;
-  justify-content: center;
   gap: 8px;
   margin-bottom: 8px;
-  color: var(--el-text-color-secondary);
 }
 
 .file-actions {
-  border-top: 1px solid var(--el-border-color-lighter);
-  padding-top: 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.file-card:hover .file-actions {
+  opacity: 1;
 }
 
 .pagination {
@@ -556,20 +624,35 @@ onMounted(() => {
   justify-content: center;
 }
 
-/* 表格内的图标和文字间距 */
-.filename {
-  margin-left: 8px;
-}
-
-/* 工具栏按钮图标间距 */
-.el-button .el-icon {
-  margin-right: 4px;
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .toolbar-left {
+    flex-direction: column;
+  }
+  
+  .search-input {
+    width: 100%;
+  }
+  
+  .grid-view {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
 }
 
 .file-name-cell {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.rename-input {
+  flex: 1;
+  margin-right: 8px;
 }
 
 .filename {
@@ -580,27 +663,11 @@ onMounted(() => {
   padding: 4px 8px;
   border-radius: 4px;
   transition: all 0.3s;
-  
-  &:hover {
-    color: var(--el-color-primary);
-    background-color: var(--el-fill-color-light);
-  }
 }
 
-.playing-icon {
-  font-size: 14px;
+.filename:hover {
   color: var(--el-color-primary);
-  animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-  0% { opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { opacity: 0.6; }
-}
-
-.rename-input {
-  flex: 1;
-  margin-right: 8px;
+  background-color: var(--el-fill-color-light);
 }
 </style>
+

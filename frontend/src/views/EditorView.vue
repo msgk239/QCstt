@@ -68,8 +68,8 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getFile, formatFileData, getAudioFile } from '@/api/modules/file'
-import { useFileStore } from '@/stores/file'
+import { getFileDetail, formatFileData, getAudioFile } from '@/api/modules/file'
+import { useFileStore } from '@/stores/fileStore'
 
 // 获取 store 实例
 const fileStore = useFileStore()
@@ -228,7 +228,7 @@ watch([autoSaveEnabled, autoSaveInterval], () => {
 
 // 提取加载文件数据的方法
 const loadFileData = async () => {
-  const response = await getFile(route.params.id)
+  const response = await getFileDetail(route.params.id)
   const formattedData = formatFileData(response)
   file.value = formattedData
   segments.value = formattedData.segments

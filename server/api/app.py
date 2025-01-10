@@ -26,13 +26,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 获取支持的语言列表
-@app.get("/api/languages")
-async def get_languages():
-    return speech_service.get_languages()
+# 1. 文件管理 API
+@app.get("/api/v1/files")
+async def get_files(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    query: str = Query(None)
+):
+    return file_service.get_file_list(page, page_size, query)
 
-# 文件上传接口
-@app.post("/api/files/upload")
+@app.post("/api/v1/files/upload")
 async def upload_file(
     file: UploadFile = File(...),
     options: str = Form(None)
@@ -64,156 +67,20 @@ async def upload_file(
             "message": f"上传失败: {str(e)}"
         }
 
-# 获取文件列表
-@app.get("/api/files")
-async def get_files(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    query: str = Query(None)
-):
-    start = time.time()
-    result = file_service.get_file_list(page, page_size, query)
-    print(f"API响应时间: {time.time() - start:.2f}秒")
-    return result
-
-# 获取单个文件详情
 @app.get("/api/v1/files/{file_id}")
 async def get_file(file_id: str):
-    try:
-        # 获取文件路径
-        file_info = file_service.get_file_path(file_id)
-        if file_info["code"] != 200:
-            return file_info
-            
-        # 获取识别结果
-        result = file_service.get_file_detail(file_id)
-        if result["code"] == 200:
-            result["data"].update({
-                "path": file_info["data"]["path"],
-                "filename": file_info["data"]["filename"]
-            })
-        
-        return result
-    except Exception as e:
-        print(f"Get file detail error: {str(e)}")
-        return {
-            "code": 500,
-            "message": f"获取文件详情失败: {str(e)}"
-        }
+    return file_service.get_file_detail(file_id)
 
-# 删除文件
-@app.delete("/api/files/{file_id}")
+@app.delete("/api/v1/files/{file_id}")
 async def delete_file(file_id: str):
     return file_service.delete_file(file_id)
 
-# 音频识别接口
-@app.post("/api/recognize")
-async def recognize_audio(
-    file: UploadFile = File(...),
-    language: str = "auto"
-):
-    contents = await file.read()
-    result = speech_service.process_audio(contents, language)
-    return result
+@app.put("/api/v1/files/{file_id}")
+async def update_file(file_id: str):
+    # TODO: 实现文件更新
+    pass
 
-# 获取回收站文件列表
-@app.get("/api/trash")
-async def get_trash_files(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    query: str = Query(None)
-):
-    return file_service.get_trash_list(page, page_size, query)
-
-# 从回收站恢复文件
-@app.post("/api/trash/{file_id}/restore")
-async def restore_file(file_id: str):
-    return file_service.restore_file(file_id)
-
-# 永久删除文件
-@app.delete("/api/trash/{file_id}")
-async def permanently_delete_file(file_id: str):
-    return file_service.permanently_delete_file(file_id)
-
-# 清空回收站
-@app.delete("/api/trash")
-async def clear_trash():
-    return file_service.clear_trash()
-
-# 重命名文件
-@app.put("/api/files/{file_id}/rename")
-async def rename_file(
-    file_id: str,
-    new_name: str = Form(...)  # 使用Form字段接收新文件名
-):
-    return file_service.rename_file(file_id, new_name)
-
-# 添加获取文件路径的接口
-@app.get("/api/files/{file_id}/path")
-async def get_file_path(file_id: str):
-    print(f"Getting path for file: {file_id}")  # 添加日志
-    result = file_service.get_file_path(file_id)
-    print(f"Path result: {result}")  # 添加日志
-    return result  # FastAPI 会自动处理 JSON 序列化
-
-# 添加开始识别的路由
-@app.post("/api/v1/asr/recognize/{file_id}")
-async def start_recognition(file_id: str):
-    try:
-        # 获取文件路径
-        file_info = file_service.get_file_path(file_id)
-        if file_info["code"] != 200:
-            return file_info
-            
-        file_path = file_info["data"]["path"]
-        
-        # 读取音频文件
-        with open(file_path, "rb") as f:
-            audio_content = f.read()
-            
-        # 调用语音识别服务时传入 file_id
-        recognition_result = speech_service.process_audio(
-            audio_content,
-            language="auto"
-        )
-        
-        # 如果识别成功，更新文件状态
-        if recognition_result["code"] == 200:
-            file_service.update_file_status(file_id, "已完成")
-            
-        # 再保存结果
-        if recognition_result["code"] == 200:
-            transcript_manager.save_result(file_id, recognition_result)
-        
-        return recognition_result
-        
-    except Exception as e:
-        print(f"Recognition error: {str(e)}")
-        return {
-            "code": 500,
-            "message": f"识别失败: {str(e)}"
-        }
-
-# 添加获取识别进度的路由
-@app.get("/api/v1/asr/progress/{file_id}")
-async def get_recognition_progress(file_id: str):
-    try:
-        # TODO: 实现进度查询逻辑
-        return {
-            "code": 200,
-            "message": "success",
-            "data": {
-                "progress": 100,  # 临时返回100%
-                "status": "completed"
-            }
-        }
-    except Exception as e:
-        return {
-            "code": 500,
-            "message": f"获取进度失败: {str(e)}"
-        }
-
-# 添加获取音频文件的接口
+# 文件资源
 @app.get("/api/v1/files/{file_id}/audio")
 async def get_audio_file(file_id: str):
     try:
@@ -245,17 +112,112 @@ async def get_audio_file(file_id: str):
             "message": f"获取音频文件失败: {str(e)}"
         }
 
-# 添加保存转写结果的接口
+@app.get("/api/v1/files/{file_id}/path")
+async def get_file_path(file_id: str):
+    return file_service.get_file_path(file_id)
+
+@app.put("/api/v1/files/{file_id}/rename")
+async def rename_file(file_id: str, new_name: str = Form(...)):
+    return file_service.rename_file(file_id, new_name)
+
+@app.get("/api/v1/files/{file_id}/transcript")
+async def get_transcript(file_id: str):
+    return file_service.get_recognition_result(file_id)
+
 @app.put("/api/v1/files/{file_id}/transcript")
-async def save_transcript(file_id: str, data: dict):
-    try:
-        result = transcript_manager.save_transcript(file_id, data)
-        return result
-    except Exception as e:
-        return {
-            "code": 500,
-            "message": f"保存失败: {str(e)}"
-        }
+async def update_transcript(file_id: str, data: dict):
+    return file_service.save_recognition_result(file_id, data)
+
+@app.delete("/api/v1/files/{file_id}/transcript")
+async def delete_transcript(file_id: str):
+    # TODO: 实现删除转写结果
+    pass
+
+# 2. 语音识别 API
+@app.post("/api/v1/asr/recognize/{file_id}")
+async def start_recognition(file_id: str):
+    return file_service.start_recognition(file_id)
+
+@app.get("/api/v1/asr/progress/{file_id}")
+async def get_recognition_progress(file_id: str):
+    return file_service.get_recognition_progress(file_id)
+
+# 3. 回收站管理
+@app.get("/api/v1/trash")
+async def get_trash_files(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    query: str = Query(None)
+):
+    return file_service.get_trash_list(page, page_size, query)
+
+@app.post("/api/v1/trash/{file_id}/restore")
+async def restore_file(file_id: str):
+    return file_service.restore_file(file_id)
+
+@app.delete("/api/v1/trash/{file_id}")
+async def permanently_delete_file(file_id: str):
+    return file_service.permanently_delete_file(file_id)
+
+@app.delete("/api/v1/trash")
+async def clear_trash():
+    return file_service.clear_trash()
+
+# 4. 系统设置
+@app.get("/api/v1/system/languages")
+async def get_languages():
+    return speech_service.get_languages()
+
+@app.get("/api/v1/system/status")
+async def get_system_status():
+    # TODO: 实现系统状态获取
+    pass
+
+# 热词管理
+@app.get("/api/v1/asr/hotwords")
+async def get_hotwords():
+    pass
+
+@app.post("/api/v1/asr/hotwords")
+async def add_hotword():
+    pass
+
+@app.put("/api/v1/asr/hotwords/{id}")
+async def update_hotword():
+    pass
+
+@app.delete("/api/v1/asr/hotwords/{id}")
+async def delete_hotword():
+    pass
+
+@app.post("/api/v1/asr/hotwords/batch-import")
+async def batch_import_hotwords():
+    pass
+
+# 热词库管理
+@app.get("/api/v1/asr/hotword-libraries")
+async def get_hotword_libraries():
+    pass
+
+@app.post("/api/v1/asr/hotword-libraries")
+async def create_hotword_library():
+    pass
+
+@app.put("/api/v1/asr/hotword-libraries/{id}")
+async def update_hotword_library():
+    pass
+
+@app.delete("/api/v1/asr/hotword-libraries/{id}")
+async def delete_hotword_library():
+    pass
+
+@app.post("/api/v1/asr/hotword-libraries/import")
+async def import_hotword_library():
+    pass
+
+@app.get("/api/v1/asr/hotword-libraries/{id}/export")
+async def export_hotword_library():
+    pass
 
 if __name__ == "__main__":
     uvicorn.run("server.api.app:app", host="0.0.0.0", port=8010, reload=True) 

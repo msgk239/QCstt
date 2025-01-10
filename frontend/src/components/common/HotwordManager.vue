@@ -175,10 +175,22 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, computed, reactive } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Upload, Download, Edit, Delete } from '@element-plus/icons-vue'
+import {
+  getHotwordLibraries,
+  createHotwordLibrary,
+  importHotwordLibrary,
+  exportHotwordLibrary,
+  deleteHotwordLibrary,
+  getHotwords,
+  addHotword,
+  deleteHotword,
+  batchAddHotwords
+} from '@/api/modules/hotword'
 
+// Props 和 Emits
 const props = defineProps({
   visible: {
     type: Boolean,
@@ -188,38 +200,288 @@ const props = defineProps({
 
 const emit = defineEmits(['update:visible'])
 
-// 状态
+// 加载状态管理
+const loadingStates = reactive({
+  libraries: false,
+  hotwords: false,
+  creating: false,
+  importing: false,
+  exporting: false,
+  deleting: false,
+  adding: false,
+  batchImporting: false
+})
+
+// 基础状态
 const dialogVisible = ref(false)
 const libraryDialogVisible = ref(false)
 const hotwordDialogVisible = ref(false)
-const libraries = ref([
-  { id: 1, name: '默认热词库' },
-  { id: 2, name: '医疗术语库' },
-  { id: 3, name: 'IT术语库' },
-  { id: 4, name: '金融术语库' }
-])
-const enabledLibraries = ref([1, 2])
-const categories = ref([
-  {
-    id: 1,
-    name: '专业术语',
-    words: [
-      { id: 1, text: 'OpenAI' },
-      { id: 2, text: 'ChatGPT' }
-    ]
-  },
-  {
-    id: 2,
-    name: '人名地名',
-    words: [
-      { id: 3, text: '张三' },
-      { id: 4, text: '北京' }
-    ]
+const libraries = ref([])
+const enabledLibraries = ref([])
+const categories = ref([])
+
+// 初始化数据
+const initData = async () => {
+  try {
+    loadingStates.libraries = true
+    const res = await getHotwordLibraries()
+    if (res.code === 200) {
+      libraries.value = res.data
+    } else {
+      throw new Error(res.message || '获取热词库列表失败')
+    }
+  } catch (error) {
+    console.error('Failed to fetch libraries:', error)
+    ElMessage.error(error.message || '获取热词库列表失败')
+  } finally {
+    loadingStates.libraries = false
   }
-])
+}
+
+// 创建热词库
+const handleCreateLibrary = async () => {
+  if (!editingLibrary.value.name.trim()) {
+    ElMessage.warning('请输入热词库名称')
+    return
+  }
+
+  try {
+    loadingStates.creating = true
+    const data = {
+      name: editingLibrary.value.name,
+      description: editingLibrary.value.description || ''
+    }
+    const res = await createHotwordLibrary(data)
+    if (res.code === 200) {
+      ElMessage.success('创建成功')
+      libraryDialogVisible.value = false
+      await initData()
+    } else {
+      throw new Error(res.message || '创建热词库失败')
+    }
+  } catch (error) {
+    console.error('Failed to create library:', error)
+    ElMessage.error(error.message || '创建热词库失败')
+  } finally {
+    loadingStates.creating = false
+  }
+}
+
+// 导入热词库
+const handleImportLibrary = async (file) => {
+  // 文件类型检查
+  const allowedTypes = ['.json', '.txt']
+  const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+  if (!allowedTypes.includes(fileExt)) {
+    ElMessage.error(`仅支持 ${allowedTypes.join('/')} 格式文件`)
+    return
+  }
+
+  try {
+    loadingStates.importing = true
+    const res = await importHotwordLibrary(file.raw)
+    if (res.code === 200) {
+      ElMessage.success(`导入成功，共 ${res.data.word_count} 个热词`)
+      await initData()
+    } else {
+      throw new Error(res.message || '导入热词库失败')
+    }
+  } catch (error) {
+    console.error('Failed to import library:', error)
+    ElMessage.error(error.message || '导入热词库失败')
+  } finally {
+    loadingStates.importing = false
+  }
+}
+
+// 删除热词库
+const handleDeleteLibrary = async (libraryId) => {
+  try {
+    await ElMessageBox.confirm('确定要删除该热词库吗？', '提示', {
+      type: 'warning'
+    })
+    
+    loadingStates.deleting = true
+    const res = await deleteHotwordLibrary(libraryId)
+    if (res.code === 200) {
+      ElMessage.success('删除成功')
+      // 如果删除的是当前启用的热词库，清空选择
+      if (enabledLibraries.value.includes(libraryId)) {
+        enabledLibraries.value = enabledLibraries.value.filter(id => id !== libraryId)
+      }
+      await initData()
+    } else {
+      throw new Error(res.message || '删除热词库失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Failed to delete library:', error)
+      ElMessage.error(error.message || '删除热词库失败')
+    }
+  } finally {
+    loadingStates.deleting = false
+  }
+}
+
+// 获取热词列表
+const fetchHotwords = async (libraryId) => {
+  try {
+    loadingStates.hotwords = true
+    const res = await getHotwords(libraryId)
+    if (res.code === 200) {
+      // 按分类组织热词
+      const wordsByCategory = {}
+      res.data.forEach(word => {
+        if (!wordsByCategory[word.category]) {
+          wordsByCategory[word.category] = []
+        }
+        wordsByCategory[word.category].push(word)
+      })
+      
+      categories.value = Object.entries(wordsByCategory).map(([name, words]) => ({
+        id: name,
+        name,
+        words: words.sort((a, b) => a.text.localeCompare(b.text))
+      })).sort((a, b) => a.name.localeCompare(b.name))
+    } else {
+      throw new Error(res.message || '获取热词列表失败')
+    }
+  } catch (error) {
+    console.error('Failed to fetch hotwords:', error)
+    ElMessage.error(error.message || '获取热词列表失败')
+  } finally {
+    loadingStates.hotwords = false
+  }
+}
+
+// 添加热词
+const handleAddHotword = async () => {
+  if (!editingHotword.value.text.trim()) {
+    ElMessage.warning('请输入热词')
+    return
+  }
+  if (!editingHotword.value.categoryId) {
+    ElMessage.warning('请选择分类')
+    return
+  }
+  if (!enabledLibraries.value.length) {
+    ElMessage.warning('请先选择热词库')
+    return
+  }
+
+  try {
+    loadingStates.adding = true
+    const libraryId = enabledLibraries.value[0]
+    const data = {
+      text: editingHotword.value.text.trim(),
+      category: editingHotword.value.categoryId
+    }
+    const res = await addHotword(libraryId, data)
+    if (res.code === 200) {
+      ElMessage.success('添加成功')
+      hotwordDialogVisible.value = false
+      await fetchHotwords(libraryId)
+    } else {
+      throw new Error(res.message || '添加热词失败')
+    }
+  } catch (error) {
+    console.error('Failed to add hotword:', error)
+    ElMessage.error(error.message || '添加热词失败')
+  } finally {
+    loadingStates.adding = false
+  }
+}
+
+// 删除热词
+const handleDeleteHotword = async (wordId) => {
+  try {
+    await ElMessageBox.confirm('确定要删除该热词吗？', '提示', {
+      type: 'warning'
+    })
+    
+    loadingStates.deleting = true
+    const res = await deleteHotword(wordId)
+    if (res.code === 200) {
+      ElMessage.success('删除成功')
+      if (enabledLibraries.value.length) {
+        await fetchHotwords(enabledLibraries.value[0])
+      }
+    } else {
+      throw new Error(res.message || '删除热词失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Failed to delete hotword:', error)
+      ElMessage.error(error.message || '删除热词失败')
+    }
+  } finally {
+    loadingStates.deleting = false
+  }
+}
+
+// 批量导入热词
+const handleBatchImport = async (file) => {
+  // 文件类型检查
+  if (!file.name.endsWith('.txt')) {
+    ElMessage.error('请上传 txt 文件')
+    return
+  }
+  if (!enabledLibraries.value.length) {
+    ElMessage.warning('请先选择热词库')
+    return
+  }
+
+  try {
+    loadingStates.batchImporting = true
+    const text = await file.text()
+    const words = text.split('\n')
+      .map(line => line.trim())
+      .filter(line => line)
+      .map(text => ({
+        text,
+        category: '导入'
+      }))
+
+    if (words.length === 0) {
+      ElMessage.warning('文件内容为空')
+      return
+    }
+
+    const libraryId = enabledLibraries.value[0]
+    const res = await batchAddHotwords(libraryId, words)
+    if (res.code === 200) {
+      ElMessage.success(`导入成功，成功 ${res.data.success_count} 个，失败 ${res.data.fail_count} 个`)
+      await fetchHotwords(libraryId)
+    } else {
+      throw new Error(res.message || '批量导入失败')
+    }
+  } catch (error) {
+    console.error('Failed to batch import:', error)
+    ElMessage.error(error.message || '批量导入失败')
+  } finally {
+    loadingStates.batchImporting = false
+  }
+}
+
+// 监听对话框显示
+watch(() => props.visible, (val) => {
+  dialogVisible.value = val
+  if (val) {
+    initData()
+  }
+})
+
+// 监听选中的热词库变化
+watch(enabledLibraries, (val) => {
+  if (val.length) {
+    fetchHotwords(val[0])
+  } else {
+    categories.value = []
+  }
+})
 
 // 编辑状态
-const editingLibrary = ref({ name: '' })
+const editingLibrary = ref({ name: '', description: '' })
 const editingHotword = ref({ categoryId: null, text: '' })
 
 // 计算属性
@@ -237,83 +499,6 @@ const priorityText = computed(() => {
     .filter(Boolean)
     .join(' > ')
 })
-
-// 监听对话框可见性
-watch(() => props.visible, (val) => {
-  dialogVisible.value = val
-})
-
-watch(dialogVisible, (val) => {
-  emit('update:visible', val)
-})
-
-// 热词库相关方法
-const handleCreateLibrary = () => {
-  editingLibrary.value = { name: '' }
-  libraryDialogVisible.value = true
-}
-
-const handleImportLibrary = (file) => {
-  // TODO: 实现导入逻辑
-  ElMessage.success('导入成功')
-}
-
-const handleExportLibrary = () => {
-  // TODO: 实现导出逻辑
-  ElMessage.success('导出成功')
-}
-
-const handleSaveLibrary = () => {
-  if (!editingLibrary.value.name) {
-    ElMessage.warning('请输入热词库名称')
-    return
-  }
-
-  // TODO: 实现保存逻辑
-  libraryDialogVisible.value = false
-  ElMessage.success('保存成功')
-}
-
-// 热词相关方法
-const handleAddHotword = () => {
-  editingHotword.value = {
-    categoryId: categories.value[0]?.id,
-    text: ''
-  }
-  hotwordDialogVisible.value = true
-}
-
-const handleEditHotword = (word) => {
-  const category = categories.value.find(c =>
-    c.words.some(w => w.id === word.id)
-  )
-  editingHotword.value = {
-    ...word,
-    categoryId: category?.id
-  }
-  hotwordDialogVisible.value = true
-}
-
-const handleDeleteHotword = (word) => {
-  // TODO: 实现删除逻辑
-  ElMessage.success('删除成功')
-}
-
-const handleSaveHotword = () => {
-  if (!editingHotword.value.categoryId || !editingHotword.value.text) {
-    ElMessage.warning('请填写完整信息')
-    return
-  }
-
-  // TODO: 实现保存逻辑
-  hotwordDialogVisible.value = false
-  ElMessage.success('保存成功')
-}
-
-const handleBatchImport = (file) => {
-  // TODO: 实现批量导入逻辑
-  ElMessage.success('导入成功')
-}
 
 // 分类相关方法
 const handleEditCategory = (category) => {
