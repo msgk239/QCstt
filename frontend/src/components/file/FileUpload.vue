@@ -51,6 +51,7 @@
           <el-icon><Document /></el-icon>
           <span class="file-name">{{ file.name }}</span>
           <span class="file-size">{{ formatFileSize(file.size) }}</span>
+          <span class="file-duration">{{ file.duration || '00:00' }}</span>
         </div>
         <div class="file-progress">
           <el-progress
@@ -110,6 +111,11 @@ import { ElMessage } from 'element-plus'
 import { Document, UploadFilled } from '@element-plus/icons-vue'
 import { startRecognition, getRecognizeProgress } from '@/api/modules/asr'
 import { uploadFile } from '@/api/modules/file'
+import { useFileStore } from '@/stores/fileStore'
+import { formatDuration } from '@/utils/format'
+
+// 获取 store
+const fileStore = useFileStore()
 
 // 定义属性和事件
 const props = defineProps({
@@ -170,6 +176,14 @@ const beforeUpload = (file) => {
 const handleFileChange = (file) => {
   if (file.status === 'ready') {
     console.log('File changed:', file)
+    // 获取音频时长
+    const audio = new Audio()
+    audio.src = URL.createObjectURL(file.raw)
+    audio.onloadedmetadata = () => {
+      file.duration = formatDuration(audio.duration)
+      URL.revokeObjectURL(audio.src)
+    }
+    
     // 确保文件被添加到列表中
     const exists = fileList.value.some(f => f.uid === file.uid)
     if (!exists) {
@@ -214,53 +228,30 @@ const handleUploadAndRecognize = async () => {
 
 const handleUpload = async (action) => {
   if (!fileList.value.length) return
-
+  
   isUploading.value = true
-  const uploadPromises = fileList.value.map(async (file) => {
-    try {
-      file.status = 'uploading'
-      file.percentage = 0
-      
-      // 按照规范构造上传选项
-      const uploadOptions = {
+  
+  try {
+    // 使用 fileStore.uploadFiles 方法
+    const results = await fileStore.uploadFiles(
+      fileList.value.map(file => file.raw),  // 传入原始文件数组
+      {
         action,
         language: language.value,
-        onProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            file.percentage = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+        onProgress: (progress, file) => {
+          // 找到对应的文件并更新进度
+          const targetFile = fileList.value.find(f => f.uid === file.uid)
+          if (targetFile) {
+            targetFile.status = 'uploading'
+            targetFile.percentage = progress
           }
         }
       }
-
-      console.log('Uploading file:', file.name, 'with options:', uploadOptions)
-      
-      const response = await uploadFile(file, uploadOptions)
-      console.log('Upload response:', response)
-
-      if (response.code === 200) {
-        file.status = 'success'
-        file.percentage = 100
-        
-        // 如果是识别操作，开始轮询进度
-        if (action === 'recognize' && response.data && response.data.id) {
-          await pollRecognizeProgress(response.data.id)
-        }
-        
-        return response.data
-      } else {
-        throw new Error(response.message || '上传失败')
-      }
-    } catch (error) {
-      console.error('Upload error for file:', file.name, error)
-      file.status = 'error'
-      throw error
-    }
-  })
-
-  try {
-    const results = await Promise.all(uploadPromises)
+    )
+    
     console.log('All uploads completed:', results)
     ElMessage.success(action === 'recognize' ? '文件上传并识别成功' : '文件上传成功')
+    
     emit('upload-success', {
       files: results,
       options: { action, language: language.value }
@@ -268,7 +259,10 @@ const handleUpload = async (action) => {
     handleClose()
   } catch (error) {
     console.error('Upload error:', error)
-    ElMessage.error(action === 'recognize' ? '部分文件上传或识别失败' : '部分文件上传失败')
+    const errorMessage = error.response?.data?.message || error.message || '上传失败'
+    ElMessage.error(action === 'recognize' ? 
+      `部分文件上传或识别失败: ${errorMessage}` : 
+      `部分文件上传失败: ${errorMessage}`)
     emit('upload-error', error)
   } finally {
     isUploading.value = false
@@ -302,6 +296,7 @@ const handleClose = () => {
   fileList.value = []
   isUploading.value = false
   dialogVisible.value = false
+  fileStore.loading = false // 确保关闭时重置加载状态
 }
 </script>
 
@@ -364,6 +359,12 @@ const handleClose = () => {
 }
 
 .file-size {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.file-duration {
+  margin-left: 12px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }

@@ -42,6 +42,10 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useFileStore } from '@/stores/fileStore'
+
+// 获取 store
+const fileStore = useFileStore()
 
 const props = defineProps({
   visible: {
@@ -54,7 +58,8 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:visible', 'replace'])
+// 移除不需要的 emit
+const emit = defineEmits(['update:visible'])
 
 // 状态
 const dialogVisible = ref(false)
@@ -100,24 +105,40 @@ const handleSearch = () => {
   }
 }
 
-const handleReplace = () => {
-  if (!searchText.value) return
+const handleReplace = async () => {
+  if (!searchText.value || !fileStore.currentFile) return
   
-  emit('replace', {
-    search: searchText.value,
-    replace: replaceText.value,
-    all: false
-  })
+  const newContent = props.content.replace(
+    new RegExp(escapeRegExp(searchText.value)), 
+    replaceText.value
+  )
+  
+  try {
+    await fileStore.saveFile(fileStore.currentFile.id, {
+      content: newContent
+    })
+    ElMessage.success('替换成功')
+  } catch (error) {
+    ElMessage.error('替换失败')
+  }
 }
 
-const handleReplaceAll = () => {
-  if (!searchText.value) return
+const handleReplaceAll = async () => {
+  if (!searchText.value || !fileStore.currentFile) return
 
-  emit('replace', {
-    search: searchText.value,
-    replace: replaceText.value,
-    all: true
-  })
+  const newContent = props.content.replaceAll(
+    new RegExp(escapeRegExp(searchText.value), 'g'),
+    replaceText.value
+  )
+  
+  try {
+    await fileStore.saveFile(fileStore.currentFile.id, {
+      content: newContent
+    })
+    ElMessage.success(`成功替换 ${matchCount.value} 处`)
+  } catch (error) {
+    ElMessage.error('替换失败')
+  }
 }
 </script>
 

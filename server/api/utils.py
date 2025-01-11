@@ -2,16 +2,44 @@ import os
 from typing import Optional, Tuple
 from datetime import datetime
 import json
+import re
+from .logger import get_logger
 
-def get_file_path(base_dir: str, file_id: str) -> str:
-    """获取文件的完整路径
+logger = get_logger(__name__)
+
+def sanitize_filename(filename: str) -> str:
+    """清理文件名，移除不合法字符
     Args:
-        base_dir: 基础目录
-        file_id: 文件ID
+        filename: 原始文件名
     Returns:
-        str: 文件的完整路径
+        str: 清理后的文件名
     """
-    return os.path.join(base_dir, file_id)
+    # 保留中文、英文、数字、下划线、连字符
+    cleaned = re.sub(r'[^\w\-\u4e00-\u9fff]', '_', filename)
+    # 移除连续的下划线
+    cleaned = re.sub(r'_+', '_', cleaned)
+    # 移除首尾的下划线
+    cleaned = cleaned.strip('_')
+    return cleaned if cleaned else 'unnamed'
+
+def generate_target_filename(original_filename: str) -> tuple:
+    """生成目标文件名，并返回相关的文件名信息
+    Args:
+        original_filename: 原始文件名
+    Returns:
+        tuple: (
+            target_filename,  # 完整的目标文件名（带时间戳和扩展名）
+            cleaned_name,     # 清理后的显示名称（不带扩展名）
+            cleaned_full_name,# 清理后的完整文件名（带扩展名）
+            ext              # 文件扩展名（带点号）
+        )
+    """
+    name, ext = os.path.splitext(original_filename)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    cleaned_name = sanitize_filename(name)
+    cleaned_full_name = f"{cleaned_name}{ext}"
+    target_filename = f"{timestamp}_{cleaned_name}{ext}"
+    return target_filename, cleaned_name, cleaned_full_name, ext
 
 def ensure_dir(dir_path: str) -> bool:
     """确保目录存在，如果不存在则创建
@@ -24,7 +52,7 @@ def ensure_dir(dir_path: str) -> bool:
         os.makedirs(dir_path, exist_ok=True)
         return True
     except Exception as e:
-        print(f"Error creating directory {dir_path}: {str(e)}")
+        logger.error(f"创建目录失败 {dir_path}: {str(e)}")
         return False
 
 def get_transcript_dir(base_dir: str, file_id: str) -> str:
@@ -38,52 +66,6 @@ def get_transcript_dir(base_dir: str, file_id: str) -> str:
     dir_path = os.path.join(base_dir, file_id)
     ensure_dir(dir_path)
     return dir_path
-
-def parse_file_id(file_id: str) -> Tuple[str, str, str]:
-    """解析文件ID，获取时间戳、语言和扩展名
-    Args:
-        file_id: 文件ID（如：20250109_141133_zh.wav）
-    Returns:
-        Tuple[str, str, str]: (timestamp, language, extension)
-    """
-    try:
-        # 分离扩展名
-        name, ext = os.path.splitext(file_id)
-        # 分离语言标识
-        parts = name.split('_')
-        if len(parts) >= 3:
-            timestamp = '_'.join(parts[:-1])  # 合并时间戳部分
-            language = parts[-1]
-        else:
-            timestamp = name
-            language = 'unknown'
-        return timestamp, language, ext.lstrip('.')
-    except Exception as e:
-        print(f"Error parsing file_id {file_id}: {str(e)}")
-        return file_id, 'unknown', ''
-
-def generate_file_id(filename):
-    """生成文件ID
-    Args:
-        filename: 原始文件名 (如: example.wav)
-    Returns:
-        str: 格式为 {timestamp}_{filename} 的文件ID
-    """
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    
-    # 如果文件名已经包含时间戳前缀，先去掉
-    if '_' in filename:
-        parts = filename.split('_')
-        try:
-            # 尝试解析第一部分是否为时间戳
-            datetime.strptime(parts[0], '%Y%m%d')
-            # 如果是时间戳，则使用剩余部分作为文件名
-            filename = '_'.join(parts[2:])
-        except ValueError:
-            # 不是时间戳格式，使用完整文件名
-            pass
-            
-    return f"{timestamp}_{filename}"
 
 def safe_read_json(file_path: str, default_value=None):
     """安全地读取JSON文件
@@ -120,3 +102,45 @@ def safe_write_json(file_path: str, data: dict, ensure_path: bool = True) -> boo
     except Exception as e:
         print(f"Error writing JSON file {file_path}: {str(e)}")
         return False 
+
+def get_audio_metadata(file_path: str, metadata_path: str) -> dict:
+    """获取音频文件的元数据
+    Args:
+        file_path: 音频文件路径
+        metadata_path: metadata.json 文件路径
+    Returns:
+        dict: 包含音频时长等信息的元数据
+    """
+    try:
+        # 读取 metadata.json
+        metadata = safe_read_json(metadata_path, {})
+        
+        # 获取文件名（不含路径）
+        filename = os.path.basename(file_path)
+        logger.debug(f"查找音频元数据 - 文件名: {filename}")
+        logger.debug(f"当前元数据内容: {metadata}")
+        
+        # 尝试不同的文件名格式匹配
+        file_metadata = metadata.get(filename, {})
+        if not file_metadata:
+            # 尝试去掉时间戳前缀的匹配
+            simple_name = '_'.join(filename.split('_')[2:]) if '_' in filename else filename
+            file_metadata = metadata.get(simple_name, {})
+            logger.debug(f"尝试简化文件名匹配: {simple_name}")
+        
+        if file_metadata:
+            logger.info(f"找到音频元数据: {file_metadata}")
+            return file_metadata
+        else:
+            logger.warning(f"未找到音频元数据: {filename}")
+            return {
+                "duration": 0,
+                "duration_str": "00:00"
+            }
+            
+    except Exception as e:
+        logger.error(f"获取音频元数据失败: {str(e)}")
+        return {
+            "duration": 0,
+            "duration_str": "00:00"
+        } 

@@ -3,13 +3,17 @@ from datetime import datetime
 try:
     from pydub import AudioSegment
 except ImportError:
-    print("Warning: pydub not installed. Audio duration detection will be disabled.")
+    logger.warning("pydub not installed. Audio duration detection will be disabled.")
     AudioSegment = None
 
 from typing import Optional, List, Dict
 from .config import config
 from .metadata import MetadataManager
 from fastapi.responses import JSONResponse
+from ..utils import sanitize_filename, generate_target_filename
+from ..logger import get_logger
+
+logger = get_logger(__name__)
 
 class FileOperations:
     """文件操作类"""
@@ -30,42 +34,51 @@ class FileOperations:
             print(f"Error getting duration for {file_path}: {e}")
             return None
     
-    def generate_target_filename(self, original_filename: str) -> tuple:
-        """生成目标文件名，并返回相关的文件名信息
-        
-        Returns:
-            tuple: (
-                target_filename,  # 完整的目标文件名（带时间戳和扩展名）
-                cleaned_name,     # 清理后的显示名称（不带扩展名）
-                cleaned_full_name,# 清理后的完整文件名（带扩展名）
-                ext              # 文件扩展名（带点号）
-            )
-        """
-        name, ext = os.path.splitext(original_filename)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        cleaned_name = self.sanitize_filename(name)
-        cleaned_full_name = f"{cleaned_name}{ext}"
-        target_filename = f"{timestamp}_{cleaned_name}{ext}"
-        return target_filename, cleaned_name, cleaned_full_name, ext
-
     def save_uploaded_file(self, file_content, options):
         """保存上传的文件"""
         try:
-            # 生成目标文件名和清理后的显示名称
-            original_filename = options['original_filename']
-            target_filename, cleaned_display_name, cleaned_full_name, ext = self.generate_target_filename(original_filename)
+            logger.info("=== FileOperations: 开始保存文件 ===")
             
-            # 使用配置的音频目录
+            # 验证必要参数
+            if 'original_filename' not in options:
+                error_msg = "缺少原始文件名"
+                logger.error(error_msg)
+                return {"code": 422, "message": error_msg}
+            
+            logger.debug(f"接收到的选项: {options}")
+            
+            # 生成文件名
+            original_filename = options['original_filename']
+            logger.debug(f"原始文件名: {original_filename}")
+            
+            target_filename, cleaned_display_name, cleaned_full_name, ext = generate_target_filename(original_filename)
+            logger.info(f"生成的目标文件名: {target_filename}")
+            logger.debug(f"清理后的显示名称: {cleaned_display_name}")
+            logger.debug(f"文件扩展名: {ext}")
+            
+            # 构建文件路径
             file_path = os.path.join(self.config.audio_dir, target_filename)
+            logger.info(f"目标文件路径: {file_path}")
+            
+            # 确保目录存在
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            logger.debug(f"确保目录存在: {os.path.dirname(file_path)}")
             
             # 保存文件
-            with open(file_path, 'wb') as f:
-                f.write(file_content)
+            logger.info("开始写入文件...")
+            try:
+                with open(file_path, 'wb') as f:
+                    f.write(file_content)
+                logger.info("文件写入成功")
+            except Exception as e:
+                logger.error(f"文件写入失败: {str(e)}", exc_info=True)
+                raise
             
             # 获取音频时长
             duration = self.get_audio_duration(file_path)
+            logger.info(f"音频时长: {duration}秒")
             
-            # 保存文件元数据
+            # 构建返回信息
             file_info = {
                 'id': target_filename,
                 'original_name': original_filename,
@@ -88,6 +101,8 @@ class FileOperations:
                 'duration_str': file_info['duration_str']
             })
             
+            print(f"File info: {file_info}")
+            
             return {
                 'code': 200,
                 'message': 'success',
@@ -95,10 +110,11 @@ class FileOperations:
             }
             
         except Exception as e:
-            print(f"Save file error: {str(e)}")
+            error_msg = f"保存文件失败: {str(e)}"
+            logger.exception(error_msg)  # 使用 exception 来记录完整的堆栈跟踪
             return {
                 'code': 500,
-                'message': f'保存文件失败: {str(e)}'
+                'message': error_msg
             }
     
     def get_file_list(self, page=1, page_size=20, query=None) -> Dict:
@@ -117,8 +133,8 @@ class FileOperations:
                             original_name = filename[16:]
                             stat = os.stat(full_path)
                             
-                            # 从元数据中获取时长
                             file_meta = self.metadata.get(filename)
+                            duration = file_meta.get('duration', 0)
                             duration_str = file_meta.get('duration_str', '未知')
                             
                             files.append({
@@ -128,7 +144,8 @@ class FileOperations:
                                 'date': datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S'),
                                 'status': '已上传',
                                 'path': full_path,
-                                'duration': duration_str
+                                'duration': duration,
+                                'duration_str': duration_str
                             })
                         except Exception as e:
                             print(f"Error parsing filename {filename}: {str(e)}")
@@ -161,7 +178,7 @@ class FileOperations:
             }
     
     def get_file_path(self, file_id: str) -> Dict:
-        """获取文件的实际路径"""
+        """获取文件路径"""
         try:
             file_found = self._find_file(file_id)
             if not file_found:
@@ -261,3 +278,7 @@ class FileOperations:
                 'code': 500,
                 'message': f'Recognition failed: {str(e)}'
             } 
+
+async def get_files(page: int, page_size: int, query: str):
+    logger.info(f"获取文件列表 - 页码: {page}, 每页数量: {page_size}, 查询: {query}")
+    # ... 其余代码 

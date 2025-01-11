@@ -1,5 +1,7 @@
 # 标准库导入
 from typing import Dict
+from ..logger import get_logger
+import os
 
 # 内部模块导入
 from .config import config
@@ -10,9 +12,9 @@ from .trash import TrashManager
 # 相关服务导入
 from ..speech.storage import transcript_manager
 from ..speech.recognize import speech_service
+from ..utils import generate_target_filename, get_audio_metadata
 
-# 工具函数导入
-from ..utils import generate_file_id
+logger = get_logger(__name__)
 
 class FileService:
     """文件服务主类"""
@@ -31,31 +33,72 @@ class FileService:
             options: 选项，包含language等
         """
         try:
-            # 获取语言选项 - 保存在元数据中
-            language = options.get('language', 'zh') if options else 'zh'
+            logger.info(f"=== 开始保存文件 ===")
             
-            # 生成文件ID - 使用原始文件名
-            file_id = generate_file_id(filename)
+            # 添加参数验证日志
+            logger.debug("参数验证:")
+            logger.debug(f"file_content 类型: {type(file_content)}, 大小: {len(file_content) if file_content else 0}")
+            logger.debug(f"filename: {filename}")
+            logger.debug(f"options: {options}")
             
-            print(f"Original filename: {filename}")
-            print(f"Generated file_id: {file_id}")
+            if not file_content:
+                error_msg = "文件内容为空"
+                logger.error(error_msg)
+                return {"code": 422, "message": error_msg}
             
-            return self.operations.save_uploaded_file(file_content, file_id, options)
+            if not filename:
+                error_msg = "文件名为空"
+                logger.error(error_msg)
+                return {"code": 422, "message": error_msg}
+            
+            # 获取语言选项
+            options = options or {}
+            print(f"Service received options: {options}")
+            
+            options['original_filename'] = filename  # 添加原始文件名到选项中
+            language = options.get('language', 'zh')
+            logger.debug(f"识别语言: {language}")
+            
+            options['original_filename'] = filename
+            logger.debug(f"处理后的选项: {options}")
+            
+            # 生成目标文件名
+            target_filename, _, _, _ = generate_target_filename(filename)
+            file_path = os.path.join(self.uploads_dir, target_filename)
+            
+            # 保存文件
+            with open(file_path, 'wb') as f:
+                f.write(file_content)
+            
+            # 获取音频元数据
+            metadata_path = os.path.join(self.uploads_dir, 'metadata.json')
+            metadata = get_audio_metadata(file_path, metadata_path)
+            
+            return {
+                'code': 200,
+                'message': '文件上传成功',
+                'data': {
+                    'file_id': target_filename,
+                    'metadata': metadata
+                }
+            }
             
         except Exception as e:
-            print(f"Save uploaded file error: {str(e)}")
+            logger.error(f"保存上传文件失败: {str(e)}")
             return {
-                "code": 500,
-                "message": f"保存上传的文件失败: {str(e)}"
+                'code': 500,
+                'message': f'保存文件失败: {str(e)}'
             }
     
-    def get_file_list(self, page=1, page_size=20, query=None):
+    def get_file_list(self, page: int, page_size: int, query: str = None):
+        logger.info(f"获取文件列表 - 页码: {page}, 每页数量: {page_size}, 查询: {query}")
         return self.operations.get_file_list(page, page_size, query)
     
     def get_file_path(self, file_id):
         return self.operations.get_file_path(file_id)
     
-    def delete_file(self, file_id):
+    def delete_file(self, file_id: str):
+        logger.info(f"删除文件: {file_id}")
         # 同时删除转写结果
         transcript_manager.delete_transcript(file_id)
         return self.trash.move_to_trash(file_id)
@@ -103,6 +146,7 @@ class FileService:
     
     def get_file_detail(self, file_id: str) -> dict:
         """获取文件详情，包括识别结果"""
+        logger.info(f"获取文件详情: {file_id}")
         try:
             print(f"\n=== 获取文件详情 ===")
             print(f"请求的文件ID: {file_id}")

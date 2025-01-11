@@ -1,3 +1,6 @@
+from ..logger import get_logger
+logger = get_logger(__name__)
+
 class FileStorage:
     def __init__(self, base_dir):
         self.base_dir = base_dir
@@ -11,8 +14,10 @@ class FileStorage:
             metadata: 文件元数据，包含原始文件名等信息
         """
         try:
+            logger.info(f"保存文件: {file_id}")
             # 确保文件名格式正确
             if not self._validate_file_id(file_id):
+                logger.error(f"无效的文件ID: {file_id}")
                 return {
                     "code": 400,
                     "message": "文件ID格式不正确"
@@ -55,10 +60,10 @@ class FileStorage:
                 return False
             
             # 分离时间戳和文件名
-            timestamp = file_id.split('_')[0]
+            timestamp = '_'.join(file_id.split('_')[:2])  # 获取完整时间戳 YYYYMMDD_HHMMSS
             
             # 验证时间戳格式
-            datetime.strptime(timestamp, '%Y%m%d')
+            datetime.strptime(timestamp, '%Y%m%d_%H%M%S')
             
             return True
             

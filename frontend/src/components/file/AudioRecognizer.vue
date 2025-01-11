@@ -100,8 +100,10 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Document, Upload } from '@element-plus/icons-vue'
 import * as asrApi from '@/api/modules/asr'
+import { useFileStore } from '@/stores/fileStore'
 
 const router = useRouter()
+const fileStore = useFileStore()
 
 // 状态
 const fileList = ref([])
@@ -185,6 +187,9 @@ const handleRecognize = async (file) => {
     file.progress = 0
     file.progressText = '准备上传...'
 
+    // 更新加载状态
+    fileStore.loading = true
+
     // 上传文件
     const uploadRes = await asrApi.uploadAudio(file.raw, {
       language: options.value.language,
@@ -204,6 +209,9 @@ const handleRecognize = async (file) => {
         } else {
           file.status = 'success'
           file.fileId = progressRes.fileId
+          
+          // 刷新文件列表
+          await fileStore.fetchFileList()
         }
       } catch (error) {
         file.status = 'error'
@@ -217,6 +225,8 @@ const handleRecognize = async (file) => {
     file.status = 'error'
     file.error = '识别失败'
     console.error('Failed to recognize:', error)
+  } finally {
+    fileStore.loading = false
   }
 }
 
@@ -232,6 +242,8 @@ const handleRetry = (file) => {
 // 查看结果
 const handleViewResult = (file) => {
   if (file.fileId) {
+    // 设置当前文件
+    fileStore.currentFile = fileStore.fileList.find(f => f.id === file.fileId)
     router.push('/editor/' + file.fileId)
   }
 }

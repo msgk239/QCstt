@@ -55,6 +55,7 @@
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, Delete } from '@element-plus/icons-vue'
+import { useFileStore } from '@/stores/fileStore'
 
 const props = defineProps({
   visible: {
@@ -83,16 +84,19 @@ const predefineColors = [
   '#1ABC9C'
 ]
 
+// 获取 store
+const fileStore = useFileStore()
+
 // 监听对话框可见性
 watch(() => props.visible, (val) => {
   dialogVisible.value = val
-  if (val) {
-    // 初始化说话人列表
-    speakers.value = props.initialSpeakers.map(speaker => ({
+  if (val && fileStore.currentFile) {
+    // 从当前文件获取说话人列表初始化
+    speakers.value = fileStore.currentFile.speakers?.map(speaker => ({
       ...speaker,
       originalName: speaker.name,
       newName: speaker.name
-    }))
+    })) || []
   }
 })
 
@@ -105,7 +109,7 @@ const handleDelete = (index) => {
   speakers.value.splice(index, 1)
 }
 
-const handleBatchReplace = () => {
+const handleBatchReplace = async () => {
   const changes = speakers.value
     .filter(speaker => speaker.originalName !== speaker.newName)
     .map(speaker => ({
@@ -119,9 +123,14 @@ const handleBatchReplace = () => {
     return
   }
 
-  emit('save', changes)
-  dialogVisible.value = false
-  ElMessage.success('更新成功')
+  // 保存到当前文件
+  if (fileStore.currentFile) {
+    await fileStore.saveFile(fileStore.currentFile.id, {
+      speakers: speakers.value
+    })
+    ElMessage.success('更新成功')
+    dialogVisible.value = false
+  }
 }
 
 const handleReset = () => {

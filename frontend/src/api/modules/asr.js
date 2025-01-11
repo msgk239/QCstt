@@ -35,4 +35,9 @@ export function getRecognizeProgress(fileId) {
     url: `/api/v1/asr/progress/${fileId}`,
     method: 'get'
   })
+}
+
+export function createProgressWebSocket(fileId) {
+  const wsUrl = `${import.meta.env.VITE_WS_URL}/api/v1/ws/asr/progress/${fileId}`
+  return new WebSocket(wsUrl)
 } 

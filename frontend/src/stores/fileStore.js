@@ -1,7 +1,10 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import * as fileApi from '@/api/modules/file'
+import { ref, computed, reactive } from 'vue'
+import { fileApi } from '@/api/modules/file'
 import { ElMessage } from 'element-plus'
+import { handleStoreAction } from '@/utils/storeHelpers'
+import * as asrApi from '@/api/modules/asr'
+import { uploadFile } from '@/api/modules/file'
 
 export const useFileStore = defineStore('file', () => {
   // 状态
@@ -17,19 +20,46 @@ export const useFileStore = defineStore('file', () => {
   const currentFile = ref(null)
   const saving = ref(false)
   const lastSaveTime = ref(null)
+  const selectedFiles = ref([])
+  const batchOperating = ref(false)
+  const uploadDialogVisible = ref(false)
+  const operationStates = reactive({
+    delete: false,
+    rename: false,
+    recognize: false,
+    export: false
+  })
+  const uploadProgress = ref({})
+  const uploadStatus = ref({})
 
   // 计算属性
   const filteredFiles = computed(() => {
-    return fileList.value.filter(file =>
-      file.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+    if (!searchQuery.value) return fileList.value
+    const query = searchQuery.value.toLowerCase()
+    return fileList.value.filter(file => 
+      file.name.toLowerCase().includes(query) || 
+      file.type.toLowerCase().includes(query)
     )
+  })
+
+  const sortedFiles = computed(() => {
+    const files = [...filteredFiles.value]
+    return files.sort((a, b) => {
+      if (sortBy.value === 'date') {
+        return sortOrder.value === 'desc' 
+          ? new Date(b.date) - new Date(a.date)
+          : new Date(a.date) - new Date(b.date)
+      }
+      // 其他排序逻辑...
+      return 0
+    })
   })
 
   // 方法
   const fetchFileList = async (params = {}) => {
     loading.value = true
     try {
-      const res = await fileApi.getFileList({
+      const response = await fileApi.getList({
         page: params.page || currentPage.value,
         page_size: params.page_size || pageSize.value,
         query: params.query || searchQuery.value,
@@ -37,61 +67,43 @@ export const useFileStore = defineStore('file', () => {
         sort_order: params.sort_order || sortOrder.value
       })
       
-      if (res.code === 200) {
-        fileList.value = res.data.items
-        totalFiles.value = res.data.total
-        currentPage.value = params.page || currentPage.value
-        pageSize.value = params.page_size || pageSize.value
-      } else {
-        throw new Error(res.message || '获取文件列表失败')
-      }
+      fileList.value = response.data.items
+      totalFiles.value = response.data.total
+      currentPage.value = params.page || currentPage.value
+      pageSize.value = params.page_size || pageSize.value
     } catch (error) {
-      console.error('Failed to fetch files:', error)
-      ElMessage.error(error.message || '获取文件列表失败')
+      console.error('获取文件列表失败:', error)
+      ElMessage.error('获取文件列表失败')
+      throw error
     } finally {
       loading.value = false
     }
   }
 
   const deleteFile = async (id) => {
-    try {
-      const res = await fileApi.deleteFile(id)
-      if (res.code === 200) {
-        await fetchFileList()
-        return res
-      }
-      throw new Error(res.message || '删除文件失败')
-    } catch (error) {
-      console.error('Failed to delete file:', error)
-      throw error
-    }
+    return handleStoreAction(
+      () => fileApi.deleteFile(id),
+      '删除文件失败'
+    )
   }
 
   const renameFile = async (id, newName) => {
-    try {
-      const res = await fileApi.renameFile(id, newName)
-      if (res.code === 200) {
-        await fetchFileList()
-        return res
-      }
-      throw new Error(res.message || '重命名文件失败')
-    } catch (error) {
-      console.error('Failed to rename file:', error)
-      throw error
-    }
+    return handleStoreAction(
+      () => fileApi.renameFile(id, newName),
+      '重命名文件失败'
+    )
   }
 
   const saveFile = async (fileId, data) => {
     saving.value = true
     try {
-      const result = await fileApi.updateFile(fileId, data)
-      if (result.code === 200) {
-        lastSaveTime.value = new Date()
-        return result
-      }
-      throw new Error(result.message || '保存文件失败')
+      return await handleStoreAction(
+        () => fileApi.updateFile(fileId, data),
+        '保存文件失败'
+      )
     } finally {
       saving.value = false
+      lastSaveTime.value = new Date()
     }
   }
 
@@ -110,6 +122,116 @@ export const useFileStore = defineStore('file', () => {
   // 初始化
   loadViewMode()
 
+  const batchDeleteFiles = async (ids) => {
+    batchOperating.value = true
+    try {
+      await handleStoreAction(
+        () => fileApi.batchDeleteFiles(ids),
+        '批量删除文件失败'
+      )
+    } finally {
+      batchOperating.value = false
+    }
+  }
+
+  const toggleFileSelection = (fileId) => {
+    const index = selectedFiles.value.indexOf(fileId)
+    if (index === -1) {
+      selectedFiles.value.push(fileId)
+    } else {
+      selectedFiles.value.splice(index, 1)
+    }
+  }
+
+  const clearSelection = () => {
+    selectedFiles.value = []
+  }
+
+  const fileStatusCount = computed(() => {
+    return fileList.value.reduce((acc, file) => {
+      acc[file.status] = (acc[file.status] || 0) + 1
+      return acc
+    }, {})
+  })
+
+  const startRecognition = async (fileId) => {
+    operationStates.recognize = true
+    try {
+      const response = await asrApi.startRecognition(fileId)
+      // ... 处理逻辑
+      return response
+    } finally {
+      operationStates.recognize = false
+    }
+  }
+
+  const exportFile = async (fileId, fileName) => {
+    operationStates.export = true
+    try {
+      const response = await fetch(`/api/v1/files/${fileId}/audio`)
+      if (!response.ok) {
+        throw new Error('导出失败')
+      }
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url)
+      }, 100)
+    } finally {
+      operationStates.export = false
+    }
+  }
+
+  const uploadFiles = async (files, options) => {
+    try {
+      const results = await Promise.all(
+        files.map(file => uploadSingleFile(file, options))
+      )
+      await fetchFileList()
+      return results
+    } catch (error) {
+      console.error('Upload files error:', error)
+      throw error
+    }
+  }
+
+  const uploadSingleFile = async (file, options) => {
+    try {
+      uploadStatus.value[file.uid] = 'uploading'
+      uploadProgress.value[file.uid] = 0
+
+      const response = await uploadFile(file, {
+        ...options,
+        onProgress: (event) => {
+          if (event.total) {
+            uploadProgress.value[file.uid] = Math.round(
+              (event.loaded * 100) / event.total
+            )
+          }
+        }
+      })
+
+      if (response.code === 200) {
+        uploadStatus.value[file.uid] = 'success'
+        uploadProgress.value[file.uid] = 100
+        return response.data
+      } else {
+        throw new Error(response.message || '上传失败')
+      }
+    } catch (error) {
+      uploadStatus.value[file.uid] = 'error'
+      throw error
+    }
+  }
+
   return {
     // 状态
     fileList,
@@ -124,13 +246,27 @@ export const useFileStore = defineStore('file', () => {
     currentFile,
     saving,
     lastSaveTime,
+    selectedFiles,
+    batchOperating,
+    uploadDialogVisible,
+    operationStates,
     // 计算属性
     filteredFiles,
+    sortedFiles,
+    fileStatusCount,
     // 方法
     fetchFileList,
     deleteFile,
     renameFile,
     saveFile,
-    saveViewMode
+    saveViewMode,
+    batchDeleteFiles,
+    toggleFileSelection,
+    clearSelection,
+    startRecognition,
+    exportFile,
+    uploadFiles,
+    uploadProgress,
+    uploadStatus
   }
 }) 

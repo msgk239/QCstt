@@ -24,7 +24,7 @@ import request from '../request'
  *   }
  * }>}
  */
-export function getFileList(params) {
+export const getFileList = async (params) => {
   return request({
     url: '/api/v1/files',
     method: 'get',
@@ -59,7 +59,7 @@ export function getFileList(params) {
  *   }
  * }>}
  */
-export function uploadFile(file, options = {}) {
+export const uploadFile = async (file, options) => {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('options', JSON.stringify(options))
@@ -113,7 +113,7 @@ export function getFileDetail(fileId) {
  *   message: string
  * }>}
  */
-export function deleteFile(fileId) {
+export const deleteFile = async (fileId) => {
   return request({
     url: `/api/v1/files/${fileId}`,
     method: 'delete'
@@ -133,7 +133,7 @@ export function deleteFile(fileId) {
  *   }
  * }>}
  */
-export function renameFile(fileId, newName) {
+export const renameFile = async (fileId, newName) => {
   return request({
     url: `/api/v1/files/${fileId}/rename`,
     method: 'put',
@@ -174,7 +174,7 @@ export function getFileProgress(fileId) {
  */
 export function updateFile(fileId, data) {
   return request({
-    url: `/api/v1/files/${fileId}/transcript`,
+    url: `/api/v1/files/${fileId}`,
     method: 'put',
     data
   })
@@ -251,4 +251,74 @@ export function formatFileData(response) {
     speakers: [],
     fullText: ''
   }
+}
+
+/**
+ * 批量删除文件
+ * @param {Array<string>} fileIds - 文件ID数组
+ * @returns {Promise<{
+ *   code: number,
+ *   message: string
+ * }>}
+ */
+export function batchDeleteFiles(fileIds) {
+  return request({
+    url: '/api/v1/files/batch-delete',
+    method: 'post',
+    data: { file_ids: fileIds }
+  })
+}
+
+/**
+ * 获取转写结果
+ * @param {string} fileId - 文件ID
+ * @returns {Promise<{
+ *   code: number,
+ *   message: string,
+ *   data: {
+ *     transcripts: {
+ *       original: Object,
+ *       metadata: Object
+ *     }
+ *   }
+ * }>}
+ */
+export function getTranscript(fileId) {
+  return request({
+    url: `/api/v1/files/${fileId}/transcript`,
+    method: 'get'
+  })
+}
+
+/**
+ * 更新转写结果
+ * @param {string} fileId - 文件ID
+ * @param {Object} data - 转写数据
+ * @returns {Promise<{
+ *   code: number,
+ *   message: string
+ * }>}
+ */
+export function updateTranscript(fileId, data) {
+  return request({
+    url: `/api/v1/files/${fileId}/transcript`,
+    method: 'put',
+    data
+  })
+}
+
+export const fileApi = {
+  upload: uploadFile,
+  getList: getFileList,
+  delete: deleteFile,
+  rename: renameFile,
+  getDetail: getFileDetail,
+  getProgress: getFileProgress,
+  update: updateFile,
+  getAudio: getAudioFile,
+  export: exportFile,
+  batchDelete: batchDeleteFiles,
+  getTranscript,
+  updateTranscript,
+  formatData: formatFileData
 }

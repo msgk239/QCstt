@@ -2,6 +2,9 @@ from datetime import datetime
 import os
 from ..files.config import config
 from ..utils import get_transcript_dir, safe_read_json, safe_write_json
+from ..logger import get_logger
+
+logger = get_logger(__name__)
 
 class TranscriptManager:
     """转写结果存储模块"""
@@ -11,6 +14,7 @@ class TranscriptManager:
     def save_result(self, file_id: str, result: dict) -> bool:
         """保存识别结果"""
         try:
+            logger.info(f"保存转写结果: {file_id}")
             file_dir = get_transcript_dir(self.transcripts_dir, file_id)
             
             # 保存原始识别结果

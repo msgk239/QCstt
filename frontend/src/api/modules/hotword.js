@@ -126,28 +126,36 @@ export function updateHotwordLibrary(libraryId, data) {
 
 /**
  * 获取热词列表
- * @param {string} libraryId - 热词库ID
+ * @param {Object} params - 查询参数
+ * @param {number} params.page - 页码 (默认: 1)
+ * @param {number} params.page_size - 每页数量 (默认: 20)
+ * @param {string} params.query - 搜索关键词
  * @returns {Promise<{
  *   code: number,
  *   message: string,
- *   data: Array<{
- *     id: string,
- *     text: string,
- *     category: string,
- *     created_at: string
- *   }>
+ *   data: {
+ *     items: Array<{
+ *       id: string,
+ *       text: string,
+ *       category: string,
+ *       created_at: string
+ *     }>,
+ *     total: number,
+ *     page: number,
+ *     page_size: number
+ *   }
  * }>}
  */
-export function getHotwords(libraryId) {
+export function getHotwords(params) {
   return request({
-    url: `/api/v1/asr/hotword-libraries/${libraryId}/words`,
-    method: 'get'
+    url: '/api/v1/asr/hotwords',
+    method: 'get',
+    params
   })
 }
 
 /**
  * 添加热词
- * @param {string} libraryId - 热词库ID
  * @param {Object} data - 热词数据
  * @param {string} data.text - 热词文本
  * @param {string} data.category - 分类
@@ -161,9 +169,9 @@ export function getHotwords(libraryId) {
  *   }
  * }>}
  */
-export function addHotword(libraryId, data) {
+export function addHotword(data) {
   return request({
-    url: `/api/v1/asr/hotword-libraries/${libraryId}/words`,
+    url: '/api/v1/asr/hotwords',
     method: 'post',
     data
   })
@@ -171,14 +179,13 @@ export function addHotword(libraryId, data) {
 
 /**
  * 删除热词
- * @param {string} libraryId - 热词库ID
  * @param {string} wordId - 热词ID
  * @returns {Promise<{
  *   code: number,
  *   message: string
  * }>}
  */
-export function deleteHotword(libraryId, wordId) {
+export function deleteHotword(wordId) {
   return request({
     url: `/api/v1/asr/hotwords/${wordId}`,
     method: 'delete'
@@ -187,7 +194,6 @@ export function deleteHotword(libraryId, wordId) {
 
 /**
  * 批量添加热词
- * @param {string} libraryId - 热词库ID
  * @param {Array<{text: string, category: string}>} words - 热词列表
  * @returns {Promise<{
  *   code: number,
@@ -198,7 +204,7 @@ export function deleteHotword(libraryId, wordId) {
  *   }
  * }>}
  */
-export function batchAddHotwords(libraryId, words) {
+export function batchAddHotwords(words) {
   return request({
     url: `/api/v1/asr/hotwords/batch-import`,
     method: 'post',
@@ -208,7 +214,6 @@ export function batchAddHotwords(libraryId, words) {
 
 /**
  * 更新热词
- * @param {string} libraryId - 热词库ID
  * @param {string} wordId - 热词ID
  * @param {Object} data - 更新数据
  * @param {string} data.text - 热词文本
@@ -223,10 +228,17 @@ export function batchAddHotwords(libraryId, words) {
  *   }
  * }>}
  */
-export function updateHotword(libraryId, wordId, data) {
+export function updateHotword(wordId, data) {
   return request({
     url: `/api/v1/asr/hotwords/${wordId}`,
     method: 'put',
     data
+  })
+}
+
+export const getHotwords = () => {
+  return request({
+    url: '/api/hotwords',
+    method: 'get'
   })
 } 

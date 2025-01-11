@@ -56,8 +56,17 @@ service.interceptors.response.use(
     return res
   },
   error => {
+    const errorCodes = {
+      400: '请求参数错误',
+      401: '未授权访问',
+      403: '禁止访问',
+      404: '资源不存在',
+      422: '请求验证错误',
+      500: '服务器内部错误'
+    }
+    
+    let message = errorCodes[error.response?.status] || '网络错误'
     // 详细的错误信息处理
-    let message = '网络错误'
     if (error.response) {
       // 服务器返回了错误状态码
       const status = error.response.status
@@ -78,5 +87,28 @@ service.interceptors.response.use(
     })
   }
 )
+
+/**
+ * 统一处理业务错误
+ * @param {Object} response - API响应
+ * @param {string} customMessage - 自定义错误消息
+ * @returns {boolean} 是否有错误
+ */
+export function handleBusinessError(response, customMessage = '') {
+  if (response.code !== 200) {
+    ElMessage.error(customMessage || response.message)
+    return true
+  }
+  return false
+}
+
+/**
+ * 统一处理网络错误
+ * @param {Error} error - 错误对象
+ * @param {string} customMessage - 自定义错误消息
+ */
+export function handleNetworkError(error, customMessage = '') {
+  ElMessage.error(customMessage || error.message || '网络请求失败')
+}
 
 export default service 

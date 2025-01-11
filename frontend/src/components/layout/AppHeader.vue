@@ -5,6 +5,9 @@
         :icon="isCollapse ? Expand : Fold"
         @click="toggleCollapse"
       />
+      <el-icon v-if="isLoading" class="loading-icon is-loading">
+        <Loading />
+      </el-icon>
     </div>
     <div class="header-center">
       <div class="title-container">
@@ -21,6 +24,16 @@
         </el-image>
         <h1 class="app-title">潜催语音转文字系统</h1>
       </div>
+      <div v-if="fileStats.total > 0" class="file-stats">
+        <el-tag size="small">总文件: {{ fileStats.total }}</el-tag>
+        <el-tag 
+          v-if="fileStats.processing > 0" 
+          type="warning" 
+          size="small"
+        >
+          处理中: {{ fileStats.processing }}
+        </el-tag>
+      </div>
     </div>
     <div class="header-right">
       <el-button-group>
@@ -32,9 +45,12 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { Expand, Fold, QuestionFilled, Setting } from '@element-plus/icons-vue'
+import { ref, computed } from 'vue'
+import { Expand, Fold, QuestionFilled, Setting, Loading } from '@element-plus/icons-vue'
+import { useFileStore } from '@/stores/fileStore'
 import logoUrl from '@/assets/logo.svg'
+
+const fileStore = useFileStore()
 
 const isCollapse = ref(false)
 
@@ -45,6 +61,15 @@ const toggleCollapse = () => {
 }
 
 const emit = defineEmits(['update:collapse'])
+
+const isLoading = computed(() => fileStore.loading)
+
+const fileStats = computed(() => {
+  return {
+    total: fileStore.totalFiles,
+    processing: fileStore.fileList.filter(f => f.status === 'processing').length
+  }
+})
 </script>
 
 <style scoped>
@@ -89,5 +114,16 @@ const emit = defineEmits(['update:collapse'])
 .header-right {
   display: flex;
   justify-content: flex-end;
+}
+
+.loading-icon {
+  margin-left: 8px;
+  color: var(--el-color-primary);
+}
+
+.file-stats {
+  display: flex;
+  gap: 8px;
+  margin-left: 16px;
 }
 </style> 

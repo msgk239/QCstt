@@ -81,6 +81,7 @@
                 <el-button 
                   type="primary" 
                   link
+                  :loading="operationStates.rename"
                   @click="handleRenameStart(row)"
                 >
                   <el-icon><Edit /></el-icon>
@@ -109,6 +110,7 @@
               <el-button 
                 type="primary" 
                 link 
+                :loading="operationStates.recognize"
                 :disabled="row.status !== '已上传'"
                 @click="startRecognition(row)"
               >
@@ -117,7 +119,7 @@
               <el-button 
                 type="danger" 
                 link 
-                :loading="loadingStates.delete"
+                :loading="operationStates.delete"
                 @click="handleDeleteFile(row)"
               >
                 <el-icon><Delete /></el-icon>
@@ -151,6 +153,7 @@
                 <el-button 
                   type="primary" 
                   link
+                  :loading="operationStates.rename"
                   @click="handleRenameStart(file)"
                 >
                   <el-icon><Edit /></el-icon>
@@ -159,6 +162,7 @@
               <el-button 
                 type="primary" 
                 link 
+                :loading="operationStates.recognize"
                 :disabled="file.status !== '已上传'"
                 @click="startRecognition(file)"
               >
@@ -174,7 +178,7 @@
               <el-button 
                 type="danger" 
                 link 
-                :loading="loadingStates.delete"
+                :loading="operationStates.delete"
                 @click="handleDeleteFile(file)"
               >
                 <el-icon><Delete /></el-icon>
@@ -220,6 +224,7 @@ import { useFileStore } from '@/stores/fileStore'
 import { storeToRefs } from 'pinia'
 import { debounce } from 'lodash-es'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import { formatFileSize, formatDuration, formatDisplayName } from '@/utils/format'
 
 // 设置 Element Plus 的语言为中文
 const locale = zhCn
@@ -228,27 +233,24 @@ const router = useRouter()
 const fileStore = useFileStore()
 
 // 从 store 中获取状态
-const { fileList, totalFiles, loading, viewMode, searchQuery, currentPage, pageSize } = storeToRefs(fileStore)
-
-// 视图状态管理
-const viewStates = reactive({
-  uploadDialogVisible: false
-})
-
-// 加载状态管理
-const loadingStates = reactive({
-  delete: false,
-  rename: false,
-  recognize: false,
-  export: false
-})
+const { 
+  fileList, 
+  totalFiles, 
+  loading, 
+  viewMode, 
+  searchQuery, 
+  currentPage, 
+  pageSize,
+  operationStates,
+  uploadDialogVisible 
+} = storeToRefs(fileStore)
 
 // 获取文件列表的防抖处理
 const debouncedFetchFiles = debounce(() => {
   fileStore.fetchFileList({
-    page: viewStates.currentPage,
-    page_size: viewStates.pageSize,
-    query: viewStates.searchQuery
+    page: currentPage.value,
+    page_size: pageSize.value,
+    query: searchQuery.value
   })
 }, 300)
 
@@ -278,9 +280,9 @@ const filteredFiles = computed(() => {
   }))
 })
 
-// 显示上传对话框
+// 修改显示对话框方法
 const showUploadDialog = () => {
-  viewStates.uploadDialogVisible = true
+  uploadDialogVisible.value = true
 }
 
 // 上传回调处理
@@ -308,7 +310,6 @@ const handleDeleteFile = async (file) => {
       }
     )
     
-    loadingStates.delete = true
     await fileStore.deleteFile(file.id)
     ElMessage.success('文件已移至回收站')
   } catch (error) {
@@ -316,8 +317,6 @@ const handleDeleteFile = async (file) => {
       console.error('Delete file error:', error)
       ElMessage.error(error.message || '删除文件失败')
     }
-  } finally {
-    loadingStates.delete = false
   }
 }
 
@@ -329,16 +328,15 @@ const startRecognition = async (file) => {
   }
 
   try {
-    loadingStates.recognize = true
-    const response = await asrApi.startRecognition(file.id)
+    const response = await fileStore.startRecognition(file.id)
     
     if (response.code === 200) {
       // 使用 Promise 和 async/await 优化轮询逻辑
       const pollRecognitionStatus = async () => {
-        const fileInfo = await asrApi.getFileInfo(file.id)
+        const progress = await asrApi.getRecognizeProgress(file.id)
         
-        if (fileInfo.code === 200) {
-          const { status } = fileInfo.data
+        if (progress.code === 200) {
+          const { status } = progress.data
           
           if (status === '已完成') {
             ElMessage.success('识别完成')
@@ -354,7 +352,7 @@ const startRecognition = async (file) => {
             throw new Error(`识别异常：${status}`)
           }
         }
-        throw new Error(fileInfo.message || '获取识别状态失败')
+        throw new Error(progress.message || '获取识别状态失败')
       }
       
       await pollRecognitionStatus()
@@ -364,8 +362,6 @@ const startRecognition = async (file) => {
   } catch (error) {
     console.error('Recognition error:', error)
     ElMessage.error(error.message || '识别失败，请重试')
-  } finally {
-    loadingStates.recognize = false
   }
 }
 
@@ -392,7 +388,6 @@ const handleRename = async (file) => {
     )
     
     if (newName && newName !== file.name) {
-      loadingStates.rename = true
       await fileStore.renameFile(file.id, newName)
       ElMessage.success('重命名成功')
     }
@@ -401,44 +396,17 @@ const handleRename = async (file) => {
       console.error('Rename error:', error)
       ElMessage.error(error.message || '重命名失败')
     }
-  } finally {
-    loadingStates.rename = false
   }
 }
 
 // 导出文件
 const handleExport = async (file) => {
   try {
-    loadingStates.export = true
-    const response = await fetch(`/api/v1/files/${file.id}/audio`)
-    const blob = await response.blob()
-    const url = window.URL.createObjectURL(blob)
-    
-    const link = document.createElement('a')
-    link.href = url
-    link.download = formatDisplayName(file.name)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    
-    setTimeout(() => {
-      window.URL.revokeObjectURL(url)
-    }, 100)
+    await fileStore.exportFile(file.id, file.name)
+    ElMessage.success('导出成功')
   } catch (error) {
-    console.error('Export error:', error)
-    ElMessage.error('导出失败，请重试')
-  } finally {
-    loadingStates.export = false
+    ElMessage.error('导出失败')
   }
-}
-
-// 工具函数
-const formatFileSize = (bytes) => {
-  if (!bytes) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
 }
 
 const getStatusType = (status) => {
@@ -450,26 +418,6 @@ const getStatusType = (status) => {
     '失败': 'danger'
   }
   return statusMap[status] || 'info'
-}
-
-const formatDuration = (duration) => {
-  if (!duration || duration === '未知') return '未知'
-  
-  const [minutes, seconds] = duration.split(':').map(Number)
-  const totalMinutes = minutes
-  
-  if (totalMinutes >= 60) {
-    const hours = Math.floor(totalMinutes / 60)
-    const remainingMinutes = totalMinutes % 60
-    return `${hours}:${String(remainingMinutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-  }
-  
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
-
-const formatDisplayName = (fullName) => {
-  const match = fullName.match(/\d{8}_\d{6}_(.+)/)
-  return match ? match[1] : fullName
 }
 
 // 文件路径相关功能
@@ -670,4 +618,3 @@ onMounted(() => {
   background-color: var(--el-fill-color-light);
 }
 </style>
-
