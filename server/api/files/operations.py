@@ -25,19 +25,19 @@ class FileOperations:
         """获取音频文件时长"""
         try:
             if AudioSegment is None:
-                print("Warning: pydub not available")
+                logger.warning("pydub not available")
                 return None
                 
             audio = AudioSegment.from_file(file_path)
             return len(audio) / 1000.0
         except Exception as e:
-            print(f"Error getting duration for {file_path}: {e}")
+            logger.error(f"Error getting duration for {file_path}: {e}")
             return None
     
     def save_uploaded_file(self, file_content, options):
         """保存上传的文件"""
         try:
-            logger.info("=== FileOperations: 开始保存文件 ===")
+            logger.info("=== 开始保存文件 ===")
             
             # 验证必要参数
             if 'original_filename' not in options:
@@ -65,18 +65,18 @@ class FileOperations:
             logger.debug(f"确保目录存在: {os.path.dirname(file_path)}")
             
             # 保存文件
-            logger.info("开始写入文件...")
+            logger.info(f"开始写入文件: {file_path}")
             try:
                 with open(file_path, 'wb') as f:
                     f.write(file_content)
                 logger.info("文件写入成功")
             except Exception as e:
-                logger.error(f"文件写入失败: {str(e)}", exc_info=True)
+                logger.error(f"文件写入失败", exc_info=True)
                 raise
             
             # 获取音频时长
             duration = self.get_audio_duration(file_path)
-            logger.info(f"音频时长: {duration}秒")
+            logger.info(f"音频时长: {duration if duration else '未知'}秒")
             
             # 构建返回信息
             file_info = {
@@ -101,7 +101,7 @@ class FileOperations:
                 'duration_str': file_info['duration_str']
             })
             
-            print(f"File info: {file_info}")
+            logger.debug(f"文件信息: {file_info}")
             
             return {
                 'code': 200,
@@ -111,7 +111,7 @@ class FileOperations:
             
         except Exception as e:
             error_msg = f"保存文件失败: {str(e)}"
-            logger.exception(error_msg)  # 使用 exception 来记录完整的堆栈跟踪
+            logger.exception(error_msg)
             return {
                 'code': 500,
                 'message': error_msg
@@ -148,7 +148,7 @@ class FileOperations:
                                 'duration_str': duration_str
                             })
                         except Exception as e:
-                            print(f"Error parsing filename {filename}: {str(e)}")
+                            logger.error(f"Error parsing filename {filename}: {str(e)}")
                             continue
             
             # 按日期倒序排序
@@ -171,7 +171,7 @@ class FileOperations:
             }
             
         except Exception as e:
-            print(f"Get file list error: {str(e)}")
+            logger.error(f"获取文件列表失败: {str(e)}")
             return {
                 "code": 500,
                 "message": f"获取文件列表失败: {str(e)}"
@@ -240,7 +240,7 @@ class FileOperations:
             }
             
         except Exception as e:
-            print(f"Rename file error: {str(e)}")
+            logger.error(f"Rename file error: {str(e)}")
             return {"code": 500, "message": f"重命名文件失败: {str(e)}"}
     
     def update_file_status(self, file_id: str, status: str) -> Dict:
@@ -262,7 +262,7 @@ class FileOperations:
             }
             
         except Exception as e:
-            print(f"Update status error: {str(e)}")
+            logger.error(f"Update status error: {str(e)}")
             return {"code": 500, "message": f"更新状态失败: {str(e)}"}
     
     def start_recognition(self):
