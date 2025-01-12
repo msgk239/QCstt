@@ -33,58 +33,24 @@ class FileService:
             options: 选项，包含language等
         """
         try:
-            logger.info(f"=== 开始保存文件 ===")
+            logger.info(f"=== 开始处理文件上传 ===")
             
-            # 添加参数验证日志
-            logger.debug("参数验证:")
-            logger.debug(f"file_content 类型: {type(file_content)}, 大小: {len(file_content) if file_content else 0}")
-            logger.debug(f"filename: {filename}")
-            logger.debug(f"options: {options}")
-            
+            # 验证参数
             if not file_content:
                 error_msg = "文件内容为空"
                 logger.error(error_msg)
                 return {"code": 422, "message": error_msg}
             
-            if not filename:
-                error_msg = "文件名为空"
-                logger.error(error_msg)
-                return {"code": 422, "message": error_msg}
+            # 准备选项
+            upload_options = options or {}
+            upload_options['original_filename'] = filename
+            upload_options['language'] = upload_options.get('language', 'zh')
             
-            # 获取语言选项
-            options = options or {}
-            print(f"Service received options: {options}")
-            
-            options['original_filename'] = filename  # 添加原始文件名到选项中
-            language = options.get('language', 'zh')
-            logger.debug(f"识别语言: {language}")
-            
-            options['original_filename'] = filename
-            logger.debug(f"处理后的选项: {options}")
-            
-            # 生成目标文件名
-            target_filename, _, _, _ = generate_target_filename(filename)
-            file_path = os.path.join(self.uploads_dir, target_filename)
-            
-            # 保存文件
-            with open(file_path, 'wb') as f:
-                f.write(file_content)
-            
-            # 获取音频元数据
-            metadata_path = os.path.join(self.uploads_dir, 'metadata.json')
-            metadata = get_audio_metadata(file_path, metadata_path)
-            
-            return {
-                'code': 200,
-                'message': '文件上传成功',
-                'data': {
-                    'file_id': target_filename,
-                    'metadata': metadata
-                }
-            }
+            # 调用 operations 处理文件保存
+            return self.operations.save_uploaded_file(file_content, upload_options)
             
         except Exception as e:
-            logger.error(f"保存上传文件失败: {str(e)}")
+            logger.error(f"处理文件上传失败: {str(e)}", exc_info=True)
             return {
                 'code': 500,
                 'message': f'保存文件失败: {str(e)}'
@@ -307,6 +273,76 @@ class FileService:
             return {
                 "code": 500,
                 "message": f"识别失败: {str(e)}"
+            }
+    
+    def get_recognition_progress(self, file_id: str) -> Dict:
+        """获取识别进度
+        Args:
+            file_id: 文件ID
+        Returns:
+            Dict: 包含进度信息的字典
+        """
+        try:
+            # 获取文件详情
+            file_info = self.get_file_detail(file_id)
+            if file_info["code"] != 200:
+                return {
+                    "code": file_info["code"],
+                    "message": file_info["message"],
+                    "data": {
+                        "progress": 0,
+                        "status": "error",
+                        "message": file_info["message"]
+                    }
+                }
+            
+            # 获取文件状态
+            status = file_info["data"]["status"]
+            
+            # 根据状态返回进度信息
+            if status == "已完成":
+                return {
+                    "code": 200,
+                    "message": "success",
+                    "data": {
+                        "progress": 100,
+                        "status": status,
+                        "message": "识别完成"
+                    }
+                }
+            elif status == "识别中":
+                # 这里可以根据实际情况计算进度
+                # 目前简单返回 50% 进度
+                return {
+                    "code": 200,
+                    "message": "success",
+                    "data": {
+                        "progress": 50,
+                        "status": status,
+                        "message": "正在识别..."
+                    }
+                }
+            else:
+                return {
+                    "code": 200,
+                    "message": "success",
+                    "data": {
+                        "progress": 0,
+                        "status": status,
+                        "message": "未开始识别"
+                    }
+                }
+                
+        except Exception as e:
+            logger.error(f"Get recognition progress error: {str(e)}")
+            return {
+                "code": 500,
+                "message": f"获取识别进度失败: {str(e)}",
+                "data": {
+                    "progress": 0,
+                    "status": "error",
+                    "message": str(e)
+                }
             }
 
 # 创建全局实例

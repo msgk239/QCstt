@@ -11,29 +11,71 @@ from rich.status import Status
 from rich.table import Table
 from rich.tree import Tree
 from rich.panel import Panel
+from rich import print
 
-# 安装 rich 的异常处理
-install(show_locals=True)
+# 创建控制台实例时配置
+console = Console(
+    force_terminal=True,
+    color_system="auto",
+    width=None,
+    tab_size=4,
+    record=False,
+    markup=True
+)
+
+# 配置异常处理
+install(
+    console=console,
+    width=None,           # 自动宽度
+    extra_lines=0,        # 不显示额外的上下文行
+    theme=None,           # 使用简单主题
+    show_locals=False,    # 不显示本地变量
+    max_frames=1,          # 只显示最后一帧
+    suppress=[           # 添加这个参数来抑制特定框架的堆栈跟踪
+        "uvicorn",
+        "fastapi",
+        "starlette",
+        "pydantic"
+    ]
+)
+
+# 配置日志处理器
+handler = RichHandler(
+    console=console,
+    rich_tracebacks=True,
+    omit_repeated_times=True,
+    show_path=False,
+    enable_link_path=False,
+    markup=True,
+    show_time=False,
+    show_level=True,
+    tracebacks_show_locals=False,
+    tracebacks_extra_lines=0,
+    tracebacks_theme=None,
+    tracebacks_word_wrap=True
+)
 
 class LogConfig:
     """日志配置类"""
+    # 修改日志级别为 DEBUG
+    LOG_LEVEL = logging.DEBUG  # 显示所有日志信息
     LOG_DIR = "logs"  # 日志目录
     LOG_FILENAME = "app.log"  # 主日志文件
     ERROR_FILENAME = "error.log"  # 错误日志文件
     MAX_BYTES = 10 * 1024 * 1024  # 10MB
     BACKUP_COUNT = 5
-    DEBUG = True  # 可以通过环境变量控制
+    DEBUG = True
     
-    # 为控制台添加自定义格式
-    CONSOLE_FORMAT = "%(message)s"  # rich 会自动添加其他信息
+    # 简化控制台格式
+    CONSOLE_FORMAT = "%(levelname)s: %(message)s"
     
-    # 文件日志格式
-    FILE_FORMAT = '[%(asctime)s] %(levelname)s [%(name)s:%(lineno)d] %(message)s'
+    # 文件日志格式也简化
+    FILE_FORMAT = '%(asctime)s %(levelname)s: %(message)s'
     DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
     
     # FastAPI 相关配置
     FASTAPI_DEBUG = True
-    FASTAPI_LOG_LEVEL = logging.DEBUG if DEBUG else logging.INFO
+    FASTAPI_LOG_LEVEL = logging.DEBUG
 
 class CustomFormatter(logging.Formatter):
     def __init__(self):
@@ -97,13 +139,22 @@ class Logger:
         console_handler = RichHandler(
             console=console,
             rich_tracebacks=True,
-            tracebacks_show_locals=True,
+            tracebacks_show_locals=False,
+            tracebacks_extra_lines=0,
+            tracebacks_theme=None,
+            tracebacks_width=100,    # 限制宽度
+            tracebacks_suppress=[    # 在这里也添加抑制配置
+                "uvicorn",
+                "fastapi",
+                "starlette",
+                "pydantic"
+            ],
             show_time=False,
             show_path=False,
             markup=True,
-            enable_link_path=True,
+            enable_link_path=False,
             show_level=True,
-            omit_repeated_times=False,
+            omit_repeated_times=True
         )
         # 设置自定义格式
         console_handler.setFormatter(logging.Formatter(LogConfig.CONSOLE_FORMAT))

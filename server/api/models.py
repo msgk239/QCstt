@@ -7,21 +7,39 @@ class BaseResponse(BaseModel):
     code: int = Field(200, description="状态码")
     message: str = Field("success", description="状态信息")
 
+# 文件元数据模型
+class FileMetadata(BaseModel):
+    duration: Optional[float] = Field(0, description="音频时长(秒)")
+    duration_str: Optional[str] = Field("00:00", description="格式化时长")
+    # 可以根据需要在这里添加其他元数据字段
+
 # 文件信息模型
 class FileInfo(BaseModel):
-    id: str = Field(..., description="文件ID")
-    original_name: str = Field(..., description="原始文件名")
-    display_name: str = Field(..., description="显示名称")
-    display_full_name: str = Field(..., description="完整显示名称")
-    storage_name: str = Field(..., description="存储文件名")
-    extension: str = Field(..., description="文件扩展名")
-    size: int = Field(..., description="文件大小(字节)")
-    date: datetime = Field(..., description="上传时间")
-    status: str = Field(..., description="文件状态")
-    path: str = Field(..., description="文件路径")
-    duration: Optional[float] = Field(None, description="音频时长(秒)")
-    duration_str: Optional[str] = Field(None, description="格式化时长")
-    options: Optional[Dict[str, Any]] = Field(None, description="上传选项")
+    file_id: str = Field(..., description="文件ID")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="文件元数据")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "file_id": "20250112_133516_zh.wav",
+                "metadata": {
+                    "duration": 0,
+                    "duration_str": "00:00",
+                    # metadata 可以包含以下字段：
+                    # original_name: str - 原始文件名
+                    # display_name: str - 显示名称
+                    # display_full_name: str - 完整显示名称
+                    # storage_name: str - 存储文件名
+                    # extension: str - 文件扩展名
+                    # size: int - 文件大小(字节)
+                    # date: datetime - 上传时间
+                    # status: str - 文件状态
+                    # path: str - 文件路径
+                    # options: Dict[str, Any] - 上传选项
+                    # 以及其他任意元数据
+                }
+            }
+        }
 
 # 文件响应模型
 class FileResponse(BaseResponse):

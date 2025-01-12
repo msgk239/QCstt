@@ -37,7 +37,8 @@ class FileOperations:
     def save_uploaded_file(self, file_content, options):
         """保存上传的文件"""
         try:
-            logger.info("=== 开始保存文件 ===")
+            logger.info("=== 开始保存上传文件 ===")
+            logger.debug(f"接收到的选项: {options}")
             
             # 验证必要参数
             if 'original_filename' not in options:
@@ -80,7 +81,7 @@ class FileOperations:
             
             # 构建返回信息
             file_info = {
-                'id': target_filename,
+                'file_id': datetime.now().strftime('%Y%m%d_%H%M%S'),
                 'original_name': original_filename,
                 'display_name': cleaned_display_name,
                 'display_full_name': cleaned_full_name,
@@ -96,10 +97,27 @@ class FileOperations:
             }
             
             # 保存元数据
-            self.metadata.update(target_filename, {
+            logger.debug(f"准备构建元数据内容")
+            metadata_content = {
+                'file_id': file_info['file_id'],
                 'duration': duration,
-                'duration_str': file_info['duration_str']
-            })
+                'duration_str': file_info['duration_str'],
+                'original_name': file_info['original_name'],
+                'display_name': file_info['display_name'],
+                'display_full_name': file_info['display_full_name'],
+                'storage_name': file_info['storage_name'],
+                'extension': file_info['extension'],
+                'size': file_info['size'],
+                'date': file_info['date'],
+                'status': file_info['status'],
+                'path': file_info['path'],
+                'options': file_info['options']
+            }
+            logger.debug(f"构建的元数据内容: {metadata_content}")
+            
+            logger.info(f"开始更新元数据 - 文件名: {target_filename}")
+            self.metadata.update(target_filename, metadata_content)
+            logger.info("元数据更新完成")
             
             logger.debug(f"文件信息: {file_info}")
             
@@ -110,11 +128,10 @@ class FileOperations:
             }
             
         except Exception as e:
-            error_msg = f"保存文件失败: {str(e)}"
-            logger.exception(error_msg)
+            logger.error(f"保存文件失败: {str(e)}", exc_info=True)
             return {
                 'code': 500,
-                'message': error_msg
+                'message': f"保存文件失败: {str(e)}"
             }
     
     def get_file_list(self, page=1, page_size=20, query=None) -> Dict:
@@ -129,24 +146,23 @@ class FileOperations:
                     full_path = os.path.join(self.config.audio_dir, filename)
                     if os.path.isfile(full_path):
                         try:
-                            timestamp = filename[:15]
-                            original_name = filename[16:]
-                            stat = os.stat(full_path)
-                            
                             file_meta = self.metadata.get(filename)
-                            duration = file_meta.get('duration', 0)
-                            duration_str = file_meta.get('duration_str', '未知')
-                            
-                            files.append({
-                                'id': timestamp,
-                                'name': original_name,
-                                'size': stat.st_size,
-                                'date': datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S'),
-                                'status': '已上传',
-                                'path': full_path,
-                                'duration': duration,
-                                'duration_str': duration_str
-                            })
+                            if file_meta:
+                                files.append({
+                                    'file_id': file_meta['file_id'],
+                                    'name': file_meta['original_name'],
+                                    'display_name': file_meta['display_name'],
+                                    'display_full_name': file_meta['display_full_name'],
+                                    'storage_name': file_meta['storage_name'],
+                                    'extension': file_meta['extension'],
+                                    'size': file_meta['size'],
+                                    'date': file_meta['date'],
+                                    'status': file_meta['status'],
+                                    'path': file_meta['path'],
+                                    'duration': file_meta['duration'],
+                                    'duration_str': file_meta['duration_str'],
+                                    'options': file_meta['options']
+                                })
                         except Exception as e:
                             logger.error(f"Error parsing filename {filename}: {str(e)}")
                             continue
