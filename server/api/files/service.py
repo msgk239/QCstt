@@ -162,8 +162,10 @@ class FileService:
             response = {
                 "code": 200,
                 "message": "success",
-                "data": recognition_result,
-                "metadata": metadata
+                "data": {
+                    **recognition_result,
+                    **metadata
+                }
             }
             logger.debug(f"\n最终响应: {response}")
             return response
