@@ -114,27 +114,34 @@ class FileService:
         """获取文件详情，包括识别结果"""
         logger.info(f"获取文件详情: {file_id}")
         try:
-            print(f"\n=== 获取文件详情 ===")
-            print(f"请求的文件ID: {file_id}")
+            logger.debug(f"\n=== 获取文件详情 ===")
+            logger.debug(f"请求的文件ID: {file_id}")
             
             # 获取文件基本信息
             file_info = self.get_file_path(file_id)
-            print(f"文件基本信息: {file_info}")
+            logger.debug(f"文件基本信息: {file_info}")
             
             if file_info["code"] != 200:
                 return file_info
                 
             file_path = file_info["data"]["path"]
-            print(f"文件路径: {file_path}")
+            logger.debug(f"文件路径: {file_path}")
             
             # 获取转写结果
-            print("\n获取转写结果...")
+            logger.debug("\n获取转写结果...")
             transcripts = transcript_manager.get_transcript(file_id)
-            print(f"转写结果: {transcripts}")
+            logger.debug(f"转写结果: {transcripts}")
             
-            print("\n获取元数据...")
-            metadata = transcript_manager.get_metadata(file_id)
-            print(f"元数据: {metadata}")
+            # 获取两种元数据
+            # 1. 从 转写metadata 获取的元数据
+            transcript_metadata = transcript_manager.get_metadata(file_id)
+            
+            # 2. 从 文件metadata 获取的元数据
+            metadata_result = self.metadata.get_by_file_id(file_id)
+            
+            # 合并元数据：优先使用 transcript_metadata 的值
+            metadata = {**metadata_result, **transcript_metadata}
+            logger.debug(f"合并后的元数据: {metadata}")
             
             # 构建响应
             status = metadata.get("status", "未识别") if metadata else "未识别"
@@ -143,11 +150,11 @@ class FileService:
             # 检查转写结果
             if transcripts and "original" in transcripts:
                 recognition_result = transcripts["original"]
-                print(f"\n原始识别结果: {recognition_result}")
+                logger.debug(f"\n原始识别结果: {recognition_result}")
                 # 如果original中包含data字段，则取data
                 if isinstance(recognition_result, dict) and "data" in recognition_result:
                     recognition_result = recognition_result["data"]
-                    print(f"处理后的识别结果: {recognition_result}")
+                    logger.debug(f"处理后的识别结果: {recognition_result}")
                 
             # 从元数据中获取原始文件名
             original_filename = metadata.get("original_filename") if metadata else file_id
@@ -155,20 +162,14 @@ class FileService:
             response = {
                 "code": 200,
                 "message": "success",
-                "data": {
-                    "file_id": file_id,
-                    "name": original_filename,  # 使用原始文件名
-                    "path": file_path,
-                    "status": status,
-                    "recognition_result": recognition_result,
-                    "speech_type": metadata.get("language", "auto")  # 单独返回语音类型
-                }
+                "data": recognition_result,
+                "metadata": metadata
             }
-            print(f"\n最终响应: {response}")
+            logger.debug(f"\n最终响应: {response}")
             return response
             
         except Exception as e:
-            print(f"Get file detail error: {str(e)}")
+            logger.error(f"Get file detail error: {str(e)}", exc_info=True)
             return {
                 "code": 500,
                 "message": f"获取文件详情失败: {str(e)}"

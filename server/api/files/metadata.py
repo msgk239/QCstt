@@ -74,4 +74,10 @@ class MetadataManager:
         logger.info("=== 重新加载元数据文件 ===")
         self.metadata = self._load()
         logger.debug(f"重新加载后的元数据内容: {self.metadata}")
- 
+    
+    def get_by_file_id(self, file_id: str) -> dict:
+        """通过 file_id 获取元数据"""
+        # 直接搜索包含 file_id 的键
+        for key in self.metadata:
+            if file_id in key:  # 只要键中包含 file_id 就匹配
+                return self.metadata.get(key, {})
