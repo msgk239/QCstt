@@ -86,7 +86,7 @@ class FileService:
     def rename_file(self, file_id, new_name):
         """重命名文件
         Args:
-            file_id: 原文件ID (timestamp_name.wav)
+            file_id: 原文件ID 
             new_name: 新文件名 (timestamp_new_name.wav)
         """
         try:
@@ -156,7 +156,7 @@ class FileService:
                 "code": 200,
                 "message": "success",
                 "data": {
-                    "id": file_id,
+                    "file_id": file_id,
                     "name": original_filename,  # 使用原始文件名
                     "path": file_path,
                     "status": status,
@@ -200,7 +200,10 @@ class FileService:
             return {
                 "code": 200,
                 "message": "success",
-                "data": transcripts["original"]
+                "data": {
+                    "file_id": file_id,
+                    **transcripts["original"]
+                }
             }
         return {
             "code": 404,

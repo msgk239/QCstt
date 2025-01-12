@@ -10,7 +10,7 @@ class FileStorage:
         """保存文件
         Args:
             file_content: 文件内容
-            file_id: 文件ID (timestamp_filename.wav)
+            file_id: 文件ID 
             metadata: 文件元数据，包含原始文件名等信息
         """
         try:

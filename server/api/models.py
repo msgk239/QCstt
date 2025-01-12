@@ -21,7 +21,7 @@ class FileInfo(BaseModel):
     class Config:
         schema_extra = {
             "example": {
-                "file_id": "20250112_133516_zh.wav",
+                "file_id": "20250112_133516",
                 "metadata": {
                     "duration": 0,
                     "duration_str": "00:00",
