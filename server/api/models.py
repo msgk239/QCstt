@@ -43,7 +43,7 @@ class FileInfo(BaseModel):
 
 # 文件响应模型
 class FileResponse(BaseResponse):
-    data: FileInfo
+    data: Optional[Any] = Field(None, description="响应数据")
 
 # 文件列表响应模型
 class FileListResponse(BaseResponse):

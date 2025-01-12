@@ -175,29 +175,55 @@ async def update_file(file_id: str):
 @app.get("/api/v1/files/{file_id}/audio")
 async def get_audio_file(file_id: str):
     try:
+        logger.info(f"开始处理音频文件请求 - 文件ID: {file_id}")
+        
         # 获取文件路径
         file_info = file_service.get_file_path(file_id)
         if file_info["code"] != 200:
+            logger.error(f"获取文件路径失败 - 文件ID: {file_id}, 错误: {file_info}")
             return file_info
             
         file_path = file_info["data"]["path"]
+        logger.debug(f"获取到的文件路径: {file_path}")
         
         # 检查文件是否存在
         if not os.path.exists(file_path):
+            logger.error(f"文件不存在 - 路径: {file_path}")
             return {
                 "code": 404,
                 "message": "文件不存在"
             }
             
-        # 返回音频文件
+        # 检查文件权限
+        if not os.access(file_path, os.R_OK):
+            logger.error(f"文件不可读 - 路径: {file_path}")
+            return {
+                "code": 403,
+                "message": "没有读取文件的权限"
+            }
+            
+        # 获取文件扩展名并设置正确的媒体类型
+        ext = os.path.splitext(file_path)[1].lower()
+        logger.debug(f"文件扩展名: {ext}")
+        
+        media_types = {
+            '.wav': 'audio/wav',
+            '.mp3': 'audio/mpeg',
+            '.ogg': 'audio/ogg',
+            '.m4a': 'audio/mp4',
+            '.webm': 'audio/webm'
+        }
+        media_type = media_types.get(ext, 'application/octet-stream')
+        logger.info(f"成功获取音频文件 - 文件ID: {file_id}, 媒体类型: {media_type}")
+        
         return FileResponse(
             path=file_path,
             filename=file_info["data"]["filename"],
-            media_type="audio/wav"  # 根据实际文件类型设置
+            media_type=media_type
         )
         
     except Exception as e:
-        print(f"Get audio file error: {str(e)}")
+        logger.error(f"获取音频文件异常 - 文件ID: {file_id}, 错误: {str(e)}", exc_info=True)
         return {
             "code": 500,
             "message": f"获取音频文件失败: {str(e)}"
