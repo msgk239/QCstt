@@ -322,29 +322,44 @@ const handleDeleteFile = async (file) => {
 
 // 开始识别
 const startRecognition = async (file) => {
-  if (!file?.id) {
+  console.log('开始识别文件:', file)
+  
+  if (!file?.file_id) {
+    console.warn('文件对象:', file)
     ElMessage.error('文件ID不存在')
     return
   }
 
   try {
-    const response = await fileStore.startRecognition(file.id)
+    console.log('发送识别请求, ID:', file.file_id)
+    const response = await fileStore.startRecognition(file.file_id)
+    console.log('识别请求响应:', response)
     
     if (response.code === 200) {
       // 使用 Promise 和 async/await 优化轮询逻辑
       const pollRecognitionStatus = async () => {
-        const progress = await asrApi.getRecognizeProgress(file.id)
+        const progress = await asrApi.getRecognizeProgress(file.file_id)
+        console.log('识别进度响应:', progress)
         
         if (progress.code === 200) {
           const { status } = progress.data
+          console.log('当前识别状态:', status)
           
           if (status === '已完成') {
             ElMessage.success('识别完成')
-            await router.push({
-              name: 'editor',
-              params: { id: file.id }
-            })
-            return true
+            try {
+              console.log('准备跳转到编辑页面，file_id:', file.file_id)
+              await router.push({
+                name: 'editor',
+                params: { id: file.file_id }
+              })
+              console.log('跳转成功')
+              return true
+            } catch (error) {
+              console.error('路由跳转失败:', error)
+              ElMessage.error('跳转到编辑页面失败')
+              throw error
+            }
           } else if (status === '识别中') {
             await new Promise(resolve => setTimeout(resolve, 1000))
             return pollRecognitionStatus()
@@ -360,7 +375,7 @@ const startRecognition = async (file) => {
       throw new Error(response.message || '开始识别失败')
     }
   } catch (error) {
-    console.error('Recognition error:', error)
+    console.error('识别请求失败:', error)
     ElMessage.error(error.message || '识别失败，请重试')
   }
 }

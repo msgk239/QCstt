@@ -259,6 +259,7 @@ onUnmounted(() => {
 })
 
 const formatDisplayName = (fullName) => {
+  if (!fullName) return ''
   const match = fullName.match(/\d{8}_\d{6}_(.+)/)
   return match ? match[1] : fullName
 }

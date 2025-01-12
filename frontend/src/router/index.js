@@ -1,8 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useFileStore } from '@/stores/fileStore'
-import HomeView from '@/views/HomeView.vue'
-import EditorView from '@/views/EditorView.vue'
-import TrashView from '@/views/TrashView.vue'
+// 改为动态导入
+const HomeView = () => import('@/views/HomeView.vue')
+const EditorView = () => import('@/views/EditorView.vue')
+const TrashView = () => import('@/views/TrashView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -28,10 +29,10 @@ const router = createRouter({
         const fileId = to.params.id
         
         // 如果 store 中没有当前文件，尝试获取
-        if (!fileStore.currentFile || fileStore.currentFile.id !== fileId) {
+        if (!fileStore.currentFile || fileStore.currentFile.file_id !== fileId) {
           try {
             await fileStore.fetchFileList()
-            const file = fileStore.fileList.find(f => f.id === fileId)
+            const file = fileStore.fileList.find(f => f.file_id === fileId)
             if (!file) {
               return {
                 path: '/',
