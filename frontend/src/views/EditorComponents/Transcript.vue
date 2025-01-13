@@ -138,55 +138,52 @@ watch([() => props.segments, () => props.speakers], () => {
   console.log('segments:', props.segments)
   console.log('speakers:', props.speakers)
 })
-
 // 添加合并段落的计算属性
 const mergedSegments = computed(() => {
   const result = []
   let currentSegment = null
-  const MIN_SEGMENT_LENGTH = 5 // 定义最小段落长度（按字数）
+  const MIN_SEGMENT_LENGTH = 5 // 按字符数计算
 
   props.segments.forEach(segment => {
     if (!currentSegment || currentSegment.speaker_id !== segment.speaker_id) {
-      // 新说话人，创建新段落
       currentSegment = {
         ...segment,
         subSegments: [segment]
       }
       result.push(currentSegment)
     } else {
-      // 检查是否需要合并短段落
       const lastSubSegment = currentSegment.subSegments[currentSegment.subSegments.length - 1]
-      const isShortSegment = lastSubSegment.text.split(' ').length < MIN_SEGMENT_LENGTH
+      const isShortSegment = lastSubSegment.text.length < MIN_SEGMENT_LENGTH
       
       if (isShortSegment) {
         // 合并短段落
-        lastSubSegment.text += ' ' + segment.text
+        lastSubSegment.text = `${lastSubSegment.text} ${segment.text}`.trim()
         lastSubSegment.end_time = segment.end_time
         if (segment.timestamps) {
           lastSubSegment.timestamps = [
             ...(lastSubSegment.timestamps || []),
             ...segment.timestamps
-          ]
+          ].sort((a, b) => a.start - b.start) // 按时间排序
         }
       } else {
-        // 添加新的子段落
         currentSegment.subSegments.push(segment)
       }
       
       // 更新合并后的段落信息
-      currentSegment.text += ' ' + segment.text
+      currentSegment.text = `${currentSegment.text} ${segment.text}`.trim()
       currentSegment.end_time = segment.end_time
       if (segment.timestamps) {
         currentSegment.timestamps = [
           ...(currentSegment.timestamps || []),
           ...segment.timestamps
-        ]
+        ].sort((a, b) => a.start - b.start) // 按时间排序
       }
     }
   })
 
   return result
 })
+
 </script>
 
 <style scoped>

@@ -378,6 +378,7 @@ const handleReset = () => {
   display: flex;
   flex-direction: column;
   background: #fff;
+  position: relative;
 }
 
 .editor-header {
@@ -400,8 +401,8 @@ const handleReset = () => {
   flex: 1;
   padding: 24px;
   overflow-y: auto;
-  /* 留出播放器的空间 */
-  padding-bottom: 80px;
+  padding-bottom: 120px;
+  min-height: calc(100vh - 200px);
 }
 
 .player-container {
@@ -412,7 +413,8 @@ const handleReset = () => {
   background: #fff;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
   z-index: 100;
-  padding: 8px 24px;
+  padding: 16px 24px;
+  height: 80px;
 }
 
 .header-tools {
@@ -435,6 +437,18 @@ const handleReset = () => {
   height: 24px;
   background-color: #dcdfe6;
   margin: 0 8px;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    padding: 16px;
+    padding-bottom: 100px;
+  }
+  
+  .player-container {
+    padding: 12px 16px;
+    height: 70px;
+  }
 }
 </style>
 
