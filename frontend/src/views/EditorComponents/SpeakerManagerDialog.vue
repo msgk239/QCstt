@@ -28,11 +28,23 @@
 import { ref } from 'vue'
 
 const visible = ref(false)
-const speakers = ref([])
+const props = defineProps({
+  speakers: {
+    type: Array,
+    required: true,
+    default: () => []
+  }
+})
+
+const localSpeakers = ref(
+  Array.isArray(props.speakers) 
+    ? [...props.speakers] 
+    : []
+)
 
 const handleBatchReplace = () => {
   const nameMapping = {}
-  speakers.value.forEach(speaker => {
+  localSpeakers.value.forEach(speaker => {
     if (speaker.name !== speaker.originalName) {
       nameMapping[speaker.originalName] = speaker.name
     }
@@ -43,7 +55,7 @@ const handleBatchReplace = () => {
 }
 
 const handleReset = () => {
-  speakers.value.forEach(speaker => {
+  localSpeakers.value.forEach(speaker => {
     speaker.name = speaker.originalName
     speaker.color = speaker.originalColor
   })

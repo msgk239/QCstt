@@ -28,6 +28,13 @@
         @timestamp-insert="insertTimestamp"
       />
       <NoteToolbar />
+      <el-button 
+        type="primary" 
+        @click="speakerDialogVisible = true"
+        icon="User"
+      >
+        说话人管理
+      </el-button>
     </div>
 
     <!-- 主要内容区 -->
@@ -62,7 +69,12 @@
     <ReplaceDialog v-model="replaceDialogVisible" />
     <HotwordsDialog v-model="hotwordsDialogVisible" />
     <SpeedMenuDialog v-model="speedMenuVisible" />
-    <SpeakerManagerDialog v-model="speakerDialogVisible" />
+    <SpeakerManagerDialog 
+      v-model="speakerDialogVisible"
+      :speakers="speakers || []"
+      @batch-replace="handleBatchReplace"
+      @reset="handleReset"
+    />
   </div>
 </template>
 
@@ -319,6 +331,43 @@ const formatDisplayName = (fullName) => {
 
 const handleTimeUpdate = (time) => {
   currentTime.value = time
+}
+
+const handleBatchReplace = (nameMapping) => {
+  // 更新所有相关片段的说话人名称
+  segments.value = segments.value.map(segment => {
+    if (nameMapping[segment.speaker]) {
+      return {
+        ...segment,
+        speaker: nameMapping[segment.speaker]
+      }
+    }
+    return segment
+  })
+  
+  // 更新说话人列表
+  speakers.value = speakers.value.map(speaker => {
+    if (nameMapping[speaker.originalName]) {
+      return {
+        ...speaker,
+        name: nameMapping[speaker.originalName]
+      }
+    }
+    return speaker
+  })
+  
+  ElMessage.success('批量替换成功')
+}
+
+const handleReset = () => {
+  // 重置说话人列表
+  speakers.value = speakers.value.map(speaker => ({
+    ...speaker,
+    name: speaker.originalName,
+    color: speaker.originalColor
+  }))
+  
+  ElMessage.success('重置成功')
 }
 </script>
 
