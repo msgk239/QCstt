@@ -109,13 +109,15 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, UploadFilled } from '@element-plus/icons-vue'
-import { startRecognition, getRecognizeProgress } from '@/api/modules/asr'
+import * as asrApi from '@/api/modules/asr'
 import { uploadFile } from '@/api/modules/file'
 import { useFileStore } from '@/stores/fileStore'
 import { formatDuration } from '@/utils/format'
+import { useRouter } from 'vue-router'
 
 // 获取 store
 const fileStore = useFileStore()
+const router = useRouter()
 
 // 定义属性和事件
 const props = defineProps({
@@ -232,14 +234,12 @@ const handleUpload = async (action) => {
   isUploading.value = true
   
   try {
-    // 使用 fileStore.uploadFiles 方法
     const results = await fileStore.uploadFiles(
-      fileList.value.map(file => file.raw),  // 传入原始文件数组
+      fileList.value.map(file => file.raw),
       {
-        action,
+        action: 'upload',  // 先只上传
         language: language.value,
         onProgress: (progress, file) => {
-          // 找到对应的文件并更新进度
           const targetFile = fileList.value.find(f => f.uid === file.uid)
           if (targetFile) {
             targetFile.status = 'uploading'
@@ -249,9 +249,38 @@ const handleUpload = async (action) => {
       }
     )
     
-    console.log('All uploads completed:', results)
-    ElMessage.success(action === 'recognize' ? '文件上传并识别成功' : '文件上传成功')
-    
+    // 如果是上传并识别，则执行识别流程
+    if (action === 'recognize') {
+      for (const file of results) {
+        // 复用 HomeView 中的识别逻辑
+        const response = await fileStore.startRecognition(file.file_id)
+        
+        if (response.code === 200) {
+          // 轮询识别状态
+          const pollRecognitionStatus = async () => {
+            const progress = await asrApi.getRecognizeProgress(file.file_id)
+            
+            if (progress.code === 200) {
+              const { status } = progress.data
+              
+              if (status === '已完成') {
+                ElMessage.success('识别完成')
+                await router.push({
+                  name: 'editor',
+                  params: { id: file.file_id }
+                })
+                return true
+              } else if (status === '识别中') {
+                await new Promise(resolve => setTimeout(resolve, 1000))
+                return pollRecognitionStatus()
+              }
+            }
+          }
+          await pollRecognitionStatus()
+        }
+      }
+    }
+
     emit('upload-success', {
       files: results,
       options: { action, language: language.value }

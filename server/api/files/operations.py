@@ -82,6 +82,8 @@ class FileOperations:
             original_filename = options['original_filename']
             logger.debug(f"原始文件名: {original_filename}")
             
+            # 提前生成时间戳，确保文件名和 file_id 一致
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             target_filename, cleaned_display_name, cleaned_full_name, ext = generate_target_filename(original_filename)
             logger.info(f"生成的目标文件名: {target_filename}")
             logger.debug(f"清理后的显示名称: {cleaned_display_name}")
@@ -111,7 +113,7 @@ class FileOperations:
             
             # 构建返回信息
             file_info = {
-                'file_id': datetime.now().strftime('%Y%m%d_%H%M%S'),
+                'file_id': timestamp,
                 'original_name': original_filename,
                 'display_name': cleaned_display_name,
                 'display_full_name': cleaned_full_name,
