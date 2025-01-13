@@ -2,6 +2,11 @@
 from typing import Dict
 from ..logger import get_logger
 import os
+from datetime import datetime
+from email.utils import formatdate
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi import HTTPException
+from pydub import AudioSegment
 
 # 内部模块导入
 from .config import config
@@ -61,7 +66,40 @@ class FileService:
         return self.operations.get_file_list(page, page_size, query)
     
     def get_file_path(self, file_id):
-        return self.operations.get_file_path(file_id)
+        """获取文件路径
+        Args:
+            file_id: 文件ID
+        Returns:
+            Dict: 包含文件路径的响应
+        """
+        try:
+            file_path = self.operations.get_file_path(file_id)
+            return {
+                "code": 200,
+                "message": "success",
+                "data": {
+                    "path": file_path,
+                    "filename": os.path.basename(file_path)
+                }
+            }
+        except FileNotFoundError as e:
+            logger.error(str(e))
+            return {
+                "code": 404,
+                "message": "文件不存在"
+            }
+        except ValueError as e:
+            logger.error(str(e))
+            return {
+                "code": 400,
+                "message": str(e)
+            }
+        except Exception as e:
+            logger.error(f"获取文件路径失败: {str(e)}", exc_info=True)
+            return {
+                "code": 500,
+                "message": f"获取文件路径失败: {str(e)}"
+            }
     
     def delete_file(self, file_id: str):
         logger.info(f"删除文件: {file_id}")
@@ -350,6 +388,79 @@ class FileService:
                     "message": str(e)
                 }
             }
+    
+    def get_audio_file(self, file_id: str):
+        """获取音频文件"""
+        logger.error(f"=== 开始获取音频文件 === file_id: {file_id}")
+        try:
+            # 获取文件路径
+            file_info = self.get_file_path(file_id)
+            logger.info(f"获取文件路径结果: {file_info}")
+            
+            if file_info["code"] != 200:
+                logger.error(f"文件不存在: {file_id}")
+                raise FileNotFoundError(f"文件不存在: {file_id}")
+            
+            file_path = file_info["data"]["path"]
+            logger.info(f"文件路径: {file_path}")
+            
+            # 检查文件是否存在和可读
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"文件不存在: {file_path}")
+            if not os.access(file_path, os.R_OK):
+                raise PermissionError(f"文件不可读: {file_path}")
+            
+            # 获取文件扩展名和MIME类型
+            extension = os.path.splitext(file_path)[1].lower()
+            logger.info(f"文件扩展名: {extension}")
+            
+            mime_types = {
+                '.mp3': 'audio/mpeg',
+                '.wav': 'audio/wav',
+                '.ogg': 'audio/ogg',
+                '.m4a': 'audio/mp4',
+                '.aac': 'audio/aac'
+            }
+            
+            if extension not in mime_types:
+                logger.info(f"不支持的格式，转换为 mp3: {extension}")
+                # 如果是不支持的格式，使用 pydub 转换为 mp3
+                audio = AudioSegment.from_file(file_path)
+                temp_path = file_path.rsplit('.', 1)[0] + '.mp3'
+                audio.export(temp_path, format='mp3')
+                file_path = temp_path
+                media_type = 'audio/mpeg'
+                logger.info(f"转换后的文件路径: {file_path}")
+            else:
+                media_type = mime_types[extension]
+                logger.info(f"媒体类型: {media_type}")
+            
+            # 设置响应头
+            headers = {
+                'Accept-Ranges': 'bytes',
+                'Content-Disposition': f'inline; filename="{os.path.basename(file_path)}"',
+                'Cache-Control': 'public, max-age=31536000',
+                'ETag': f'"{os.path.getmtime(file_path)}"',
+                'Last-Modified': formatdate(os.path.getmtime(file_path), usegmt=True)
+            }
+            logger.info(f"响应头: {headers}")
+            
+            response = FileResponse(
+                path=file_path,
+                media_type=media_type,
+                filename=os.path.basename(file_path),
+                headers=headers
+            )
+            logger.info(f"响应对象类型: {type(response)}")
+            logger.info(f"响应对象属性: {dir(response)}")
+            return response
+            
+        except Exception as e:
+            logger.error(f"获取音频文件失败: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=404 if isinstance(e, FileNotFoundError) else 500,
+                detail=str(e)
+            )
 
 # 创建全局实例
 file_service = FileService()

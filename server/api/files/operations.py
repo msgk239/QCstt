@@ -1,11 +1,5 @@
 import os
 from datetime import datetime
-try:
-    from pydub import AudioSegment
-except ImportError:
-    logger.warning("pydub not installed. Audio duration detection will be disabled.")
-    AudioSegment = None
-
 from typing import Optional, List, Dict
 from .config import config
 from .metadata import MetadataManager
@@ -15,6 +9,51 @@ from ..logger import get_logger
 
 logger = get_logger(__name__)
 
+try:
+    import wave
+    def get_wav_duration(file_path: str) -> Optional[float]:
+        """获取 WAV 文件时长"""
+        try:
+            with wave.open(file_path, 'rb') as wav_file:
+                frames = wav_file.getnframes()
+                rate = wav_file.getframerate()
+                duration = frames / float(rate)
+                return duration
+        except Exception as e:
+            logger.error(f"Error getting WAV duration: {e}")
+            return None
+
+    def get_audio_duration(file_path: str) -> Optional[float]:
+        """获取音频文件时长"""
+        try:
+            # 如果是 WAV 文件，直接使用 wave 模块
+            if file_path.lower().endswith('.wav'):
+                return get_wav_duration(file_path)
+            
+            # 对于其他格式，尝试使用 FFmpeg
+            import subprocess
+            result = subprocess.run([
+                'ffmpeg', '-i', file_path, 
+                '-f', 'null', '-'
+            ], capture_output=True, text=True, stderr=subprocess.PIPE)
+            
+            # 从 FFmpeg 输出中解析时长
+            for line in result.stderr.split('\n'):
+                if 'Duration:' in line:
+                    time_str = line.split('Duration:')[1].split(',')[0].strip()
+                    h, m, s = time_str.split(':')
+                    duration = float(h) * 3600 + float(m) * 60 + float(s)
+                    return duration
+            return None
+        except Exception as e:
+            logger.error(f"Error getting duration for {file_path}: {e}")
+            return None
+
+except ImportError:
+    logger.warning("wave module not available, audio duration detection will be limited")
+    def get_audio_duration(file_path: str) -> Optional[float]:
+        return None
+
 class FileOperations:
     """文件操作类"""
     def __init__(self):
@@ -23,16 +62,7 @@ class FileOperations:
     
     def get_audio_duration(self, file_path: str) -> Optional[float]:
         """获取音频文件时长"""
-        try:
-            if AudioSegment is None:
-                logger.warning("pydub not available")
-                return None
-                
-            audio = AudioSegment.from_file(file_path)
-            return len(audio) / 1000.0
-        except Exception as e:
-            logger.error(f"Error getting duration for {file_path}: {e}")
-            return None
+        return get_audio_duration(file_path)
     
     def save_uploaded_file(self, file_content, options):
         """保存上传的文件"""
@@ -193,32 +223,59 @@ class FileOperations:
                 "message": f"获取文件列表失败: {str(e)}"
             }
     
-    def get_file_path(self, file_id: str) -> Dict:
-        """获取文件路径"""
-        try:
-            file_found = self._find_file(file_id)
-            if not file_found:
-                return {"code": 404, "message": "文件不存在"}
-            
-            file_path = os.path.join(self.config.audio_dir, file_found)
-            return {
-                "code": 200,
-                "message": "success",
-                "data": {
-                    "path": os.path.abspath(file_path),
-                    "filename": file_found[16:]  # 去掉时间戳前缀
-                }
-            }
-        except Exception as e:
-            return {"code": 500, "message": f"获取文件路径失败: {str(e)}"}
-    
     def _find_file(self, file_id: str) -> Optional[str]:
         """根据文件ID查找文件"""
-        if os.path.exists(self.config.audio_dir):
+        try:
+            if not os.path.exists(self.config.audio_dir):
+                logger.error(f"音频目录不存在: {self.config.audio_dir}")
+                return None
+            
             for filename in os.listdir(self.config.audio_dir):
                 if filename.startswith(file_id):
+                    logger.info(f"找到文件: {filename}")
                     return filename
-        return None 
+                
+            logger.error(f"未找到文件ID对应的文件: {file_id}")
+            return None
+        except Exception as e:
+            logger.error(f"查找文件时发生错误: {str(e)}")
+            return None
+
+    def get_file_path(self, file_id: str) -> str:
+        """获取文件路径
+        Args:
+            file_id: 文件ID
+        Returns:
+            str: 文件的绝对路径
+        Raises:
+            FileNotFoundError: 文件不存在时抛出
+        """
+        try:
+            if not file_id:
+                logger.error("文件ID为空")
+                raise ValueError("文件ID不能为空")
+            
+            file_found = self._find_file(file_id)
+            if not file_found:
+                logger.error(f"文件不存在: {file_id}")
+                raise FileNotFoundError(f"文件不存在: {file_id}")
+        
+            file_path = os.path.join(self.config.audio_dir, file_found)
+            abs_path = os.path.abspath(file_path)
+            
+            if not os.path.exists(abs_path):
+                logger.error(f"文件路径不存在: {abs_path}")
+                raise FileNotFoundError(f"文件不存在: {abs_path}")
+            
+            # 获取并缓存元数据
+            self.get_audio_metadata(abs_path)
+            
+            logger.info(f"返回文件路径: {abs_path}")
+            return abs_path
+            
+        except Exception as e:
+            logger.error(f"获取文件路径失败: {str(e)}", exc_info=True)
+            raise
     
     def rename_file(self, file_id: str, new_name: str) -> Dict:
         """重命名文件"""
@@ -294,6 +351,72 @@ class FileOperations:
                 'code': 500,
                 'message': f'Recognition failed: {str(e)}'
             } 
+
+    def get_audio_metadata(self, file_path: str) -> Dict:
+        """获取音频文件的元数据
+        Args:
+            file_path: 音频文件路径
+        Returns:
+            Dict: 包含音频元数据的字典
+        """
+        try:
+            # 先检查缓存
+            cache_key = f"metadata_{os.path.basename(file_path)}"
+            cached = self.metadata.get(cache_key)
+            if cached:
+                return cached
+
+            metadata = {
+                'duration': None,
+                'format': None,
+                'bit_rate': None,
+                'sample_rate': None,
+                'channels': None
+            }
+
+            # 使用 FFmpeg 获取详细信息
+            import subprocess
+            result = subprocess.run([
+                'ffprobe', 
+                '-v', 'quiet',
+                '-print_format', 'json',
+                '-show_format',
+                '-show_streams',
+                file_path
+            ], capture_output=True, text=True)
+
+            if result.returncode == 0:
+                import json
+                probe_data = json.loads(result.stdout)
+                
+                # 获取格式信息
+                if 'format' in probe_data:
+                    format_data = probe_data['format']
+                    metadata['duration'] = float(format_data.get('duration', 0))
+                    metadata['format'] = format_data.get('format_name')
+                    metadata['bit_rate'] = int(format_data.get('bit_rate', 0))
+                
+                # 获取音频流信息
+                if 'streams' in probe_data:
+                    for stream in probe_data['streams']:
+                        if stream.get('codec_type') == 'audio':
+                            metadata['sample_rate'] = int(stream.get('sample_rate', 0))
+                            metadata['channels'] = int(stream.get('channels', 0))
+                            break
+
+            # 缓存结果
+            self.metadata.update(cache_key, metadata)
+            return metadata
+
+        except Exception as e:
+            logger.error(f"获取音频元数据失败: {str(e)}", exc_info=True)
+            return {
+                'duration': None,
+                'format': None,
+                'bit_rate': None,
+                'sample_rate': None,
+                'channels': None
+            }
 
 async def get_files(page: int, page_size: int, query: str):
     logger.info(f"获取文件列表 - 页码: {page}, 每页数量: {page_size}, 查询: {query}")

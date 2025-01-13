@@ -43,14 +43,18 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   response => {
-    // 如果是二进制数据（如文件下载），直接返回
+    // 如果是二进制数据（如文件下载），直接返回 data
     if (response.config.responseType === 'blob') {
-      return response
+      console.log('Blob response:', {
+        type: response.data?.type,
+        size: response.data?.size,
+        headers: response.headers
+      })
+      return response.data  // 直接返回 blob 数据
     }
 
     const res = response.data
     if (res.code !== 200) {
-      // 返回错误响应而不是抛出错误，让调用方处理具体的错误信息
       return res
     }
     return res

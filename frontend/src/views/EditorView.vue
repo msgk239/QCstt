@@ -126,25 +126,56 @@ let autoSaveTimer = null
 // 初始化音频
 const initAudio = async () => {
   try {
-    const response = await getAudioFile(route.params.id)
-    const audioUrl = URL.createObjectURL(response.data)
+    const blob = await getAudioFile(route.params.id)  // 现在直接返回 blob
+    console.log('Audio blob:', {
+      type: blob.type,
+      size: blob.size
+    })
+    
+    if (!(blob instanceof Blob)) {
+      console.error('Response is not a Blob:', blob)
+      throw new Error('Invalid response data type')
+    }
+    
+    // 在设置 src 之前先移除旧的 URL
+    if (audio.value.src) {
+      URL.revokeObjectURL(audio.value.src)
+    }
+    
+    // 确保 blob 类型正确
+    const audioBlob = blob.type.includes('audio/') 
+      ? blob 
+      : new Blob([blob], { type: 'audio/mpeg' })  // 默认使用 mp3 格式
+    
+    const audioUrl = URL.createObjectURL(audioBlob)
+    
+    // 设置音频源
     audio.value.src = audioUrl
     
-    // 设置音频事件监听
-    audio.value.addEventListener('loadedmetadata', () => {
-      duration.value = audio.value.duration
+    // 添加加载事件监听
+    const loadPromise = new Promise((resolve, reject) => {
+      audio.value.addEventListener('loadedmetadata', () => {
+        console.log('Audio loaded:', {
+          duration: audio.value.duration,
+          readyState: audio.value.readyState
+        })
+        duration.value = audio.value.duration
+        resolve()
+      })
+      
+      audio.value.addEventListener('error', (e) => {
+        console.error('Audio load failed:', e)
+        reject(new Error('Failed to load audio'))
+      })
     })
     
-    audio.value.addEventListener('timeupdate', () => {
-      currentTime.value = audio.value.currentTime
-    })
+    // 等待音频加载完成
+    await loadPromise
     
-    audio.value.addEventListener('ended', () => {
-      playing.value = false
-    })
   } catch (error) {
     console.error('加载音频失败:', error)
     ElMessage.error('音频加载失败')
+    throw error
   }
 }
 
