@@ -86,19 +86,22 @@ class JsonFormatter(logging.Formatter):
         super().__init__(*args, **kwargs)
     
     def format(self, record: logging.LogRecord) -> str:
-        message = record.getMessage()
+        # 先获取标准格式化的消息
+        formatted = super().format(record)
+        
         try:
-            # 尝试解析消息是否为 JSON 格式
+            # 尝试在完整消息中查找 JSON 内容
+            message = record.getMessage()
             if isinstance(message, str) and (message.startswith('{') or message.startswith('[')):
                 parsed = json.loads(message)
                 # 美化 JSON 输出，使用4个空格缩进
                 formatted_json = json.dumps(parsed, indent=4, ensure_ascii=False)
-                # 替换原始消息
-                record.msg = f"\n{formatted_json}"
+                # 替换原始消息，保持其他格式信息
+                formatted = formatted.replace(message, f"\n{formatted_json}")
         except (json.JSONDecodeError, TypeError):
             pass
         
-        return super().format(record)
+        return formatted
 
 class CustomFormatter(logging.Formatter):
     def __init__(self):
@@ -189,7 +192,7 @@ class Logger:
         )
         console_handler.addFilter(JsonFilter())  # 添加 JSON 过滤器
         console_handler.setFormatter(logging.Formatter(LogConfig.CONSOLE_FORMAT))
-        console_handler.setLevel(logging.INFO)  # 终端只显示 INFO 级别
+        console_handler.setLevel(logging.DEBUG)  # 终端显示所有级别
         logger.addHandler(console_handler)
         
         # 2. 主日志文件处理器
