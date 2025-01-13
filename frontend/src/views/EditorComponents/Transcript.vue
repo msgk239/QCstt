@@ -141,48 +141,60 @@ watch([() => props.segments, () => props.speakers], () => {
 // 添加合并段落的计算属性
 const mergedSegments = computed(() => {
   const result = []
-  let currentSegment = null
-  const MIN_SEGMENT_LENGTH = 5 // 按字符数计算
+  const MIN_SEGMENT_LENGTH = 5
+  let i = 0
+  const segments = props.segments
 
-  props.segments.forEach(segment => {
-    if (!currentSegment || currentSegment.speaker_id !== segment.speaker_id) {
-      currentSegment = {
-        ...segment,
-        subSegments: [segment]
-      }
-      result.push(currentSegment)
-    } else {
+  while (i < segments.length) {
+    const currentSegment = { ...segments[i], subSegments: [segments[i]] }
+    result.push(currentSegment)
+    
+    // 合并连续短段落
+    while (i + 1 < segments.length && 
+           segments[i + 1].speaker_id === currentSegment.speaker_id) {
+      i++
+      const nextSegment = segments[i]
       const lastSubSegment = currentSegment.subSegments[currentSegment.subSegments.length - 1]
-      const isShortSegment = lastSubSegment.text.length < MIN_SEGMENT_LENGTH
       
-      if (isShortSegment) {
-        // 合并短段落
-        lastSubSegment.text = `${lastSubSegment.text} ${segment.text}`.trim()
-        lastSubSegment.end_time = segment.end_time
-        if (segment.timestamps) {
-          lastSubSegment.timestamps = [
-            ...(lastSubSegment.timestamps || []),
-            ...segment.timestamps
-          ].sort((a, b) => a.start - b.start) // 按时间排序
+      // 处理文本格式
+      const shouldMerge = lastSubSegment.text.length < MIN_SEGMENT_LENGTH
+      if (shouldMerge) {
+        // 保留原始格式，正确处理换行和空格
+        lastSubSegment.text = `${lastSubSegment.text}\n${nextSegment.text}`.trim()
+        lastSubSegment.end_time = nextSegment.end_time
+        
+        // 合并并排序时间戳
+        if (nextSegment.timestamps) {
+          lastSubSegment.timestamps = mergeAndSortTimestamps(
+            lastSubSegment.timestamps,
+            nextSegment.timestamps
+          )
         }
       } else {
-        currentSegment.subSegments.push(segment)
+        currentSegment.subSegments.push(nextSegment)
       }
       
       // 更新合并后的段落信息
-      currentSegment.text = `${currentSegment.text} ${segment.text}`.trim()
-      currentSegment.end_time = segment.end_time
-      if (segment.timestamps) {
-        currentSegment.timestamps = [
-          ...(currentSegment.timestamps || []),
-          ...segment.timestamps
-        ].sort((a, b) => a.start - b.start) // 按时间排序
+      currentSegment.text = `${currentSegment.text}\n${nextSegment.text}`.trim()
+      currentSegment.end_time = nextSegment.end_time
+      if (nextSegment.timestamps) {
+        currentSegment.timestamps = mergeAndSortTimestamps(
+          currentSegment.timestamps,
+          nextSegment.timestamps
+        )
       }
     }
-  })
+    i++
+  }
 
   return result
 })
+
+// 新增时间戳合并工具函数
+const mergeAndSortTimestamps = (timestamps1 = [], timestamps2 = []) => {
+  const merged = [...timestamps1, ...timestamps2]
+  return merged.sort((a, b) => a.start - b.start)
+}
 
 </script>
 
