@@ -271,13 +271,15 @@ watch(viewMode, () => {
 const filteredFiles = computed(() => {
   if (!fileList.value) return []
   
-  return fileList.value.map(file => ({
-    ...file,
-    displayName: formatDisplayName(file.name),
-    statusType: getStatusType(file.status),
-    formattedSize: formatFileSize(file.size),
-    formattedDuration: formatDuration(file.duration)
-  }))
+  return fileList.value
+    .filter(file => !file.status || file.status === '已上传' || file.status === '识别中' || file.status === '已完成' || file.status === '失败')
+    .map(file => ({
+      ...file,
+      displayName: formatDisplayName(file.name),
+      statusType: getStatusType(file.status),
+      formattedSize: formatFileSize(file.size),
+      formattedDuration: formatDuration(file.duration)
+    }))
 })
 
 // 修改显示对话框方法

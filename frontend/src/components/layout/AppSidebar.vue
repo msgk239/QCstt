@@ -54,7 +54,9 @@ const activeMenu = computed(() => route.path)
 const isCollapse = computed(() => props.collapse)
 
 // 文件数量统计
-const fileCount = computed(() => fileStore.totalFiles)
+const fileCount = computed(() => {
+  return fileStore.fileList.filter(file => file.status === '已上传').length
+})
 
 // 回收站文件数量
 const trashCount = computed(() => {
