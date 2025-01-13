@@ -39,7 +39,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, watchEffect } from 'vue'
 
 const props = defineProps({
   segments: {
@@ -85,6 +85,12 @@ const handleContentChange = (event, segment) => {
   }
   emit('segment-update', updatedSegment)
 }
+
+// 添加调试代码
+watchEffect(() => {
+  console.log('segments:', props.segments)
+  console.log('speakers:', props.speakers)
+})
 </script>
 
 <style scoped>

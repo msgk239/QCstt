@@ -253,31 +253,54 @@ export function exportFile(fileId, format) {
 export function formatFileData(response) {
   const { data } = response
   
-  if (data.transcripts) {
-    const { original, metadata } = data.transcripts
-    const recognitionData = original || {}
-    
+  if (!data) {
     return {
-      id: data.id,
-      name: data.name,
-      duration: recognitionData.duration || 0,
-      date: new Date(metadata?.created_at).toLocaleDateString(),
-      status: metadata?.status || '未识别',
-      segments: recognitionData.segments || [],
-      speakers: recognitionData.speakers || [],
-      fullText: recognitionData.full_text || ''
+      id: '',
+      name: '',
+      duration: 0,
+      duration_str: '0:00',
+      date: new Date().toLocaleDateString(),
+      status: '未识别',
+      segments: [],
+      speakers: [],
+      fullText: '',
+      metadata: {
+        has_timestamp: false,
+        has_speaker: false,
+        has_emotion: false
+      },
+      extension: '',
+      size: 0,
+      options: {
+        language: 'auto',
+        action: 'upload'
+      },
+      version_count: 0
     }
   }
-  
+
   return {
-    id: data.id,
-    name: data.name,
-    duration: 0,
-    date: new Date().toLocaleDateString(),
-    status: '未识别',
-    segments: [],
-    speakers: [],
-    fullText: ''
+    id: data.file_id || data.id,
+    name: data.display_name || data.original_name,
+    duration: data.duration || 0,
+    duration_str: data.duration_str || '0:00',
+    date: new Date(data.created_at || data.date).toLocaleDateString(),
+    status: data.status || '未识别',
+    segments: data.segments || [],
+    speakers: data.speakers || [],
+    fullText: data.full_text || '',
+    metadata: {
+      has_timestamp: data.metadata?.has_timestamp || false,
+      has_speaker: data.metadata?.has_speaker || false,
+      has_emotion: data.metadata?.has_emotion || false
+    },
+    extension: data.extension || '',
+    size: data.size || 0,
+    options: data.options || {
+      language: 'auto',
+      action: 'upload'
+    },
+    version_count: data.version_count || 0
   }
 }
 
