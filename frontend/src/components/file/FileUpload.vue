@@ -102,6 +102,15 @@
         </div>
       </div>
     </template>
+
+    <!-- 添加转写进度组件 -->
+    <TranscriptionProgress
+      v-if="showProgress"
+      :files="transcribingFiles"
+      @close="showProgress = false"
+      @pause="handlePauseTranscription"
+      @cancel="handleCancelTranscription"
+    />
   </el-dialog>
 </template>
 
@@ -114,6 +123,7 @@ import { uploadFile } from '@/api/modules/file'
 import { useFileStore } from '@/stores/fileStore'
 import { formatDuration } from '@/utils/format'
 import { useRouter } from 'vue-router'
+import TranscriptionProgress from './TranscriptionProgress.vue'
 
 // 获取 store
 const fileStore = useFileStore()
@@ -139,6 +149,8 @@ const uploadRef = ref(null)
 const fileList = ref([])
 const isUploading = ref(false)
 const language = ref('auto')
+const transcribingFiles = ref([])
+const showProgress = ref(false)
 
 // 计算属性
 const totalSize = computed(() => {
@@ -251,8 +263,19 @@ const handleUpload = async (action) => {
     
     // 如果是上传并识别，则执行识别流程
     if (action === 'recognize') {
+      showProgress.value = true
       for (const file of results) {
-        // 复用 HomeView 中的识别逻辑
+        // 添加到转写列表
+        transcribingFiles.value.push({
+          id: file.file_id,
+          name: file.name,
+          size: formatFileSize(file.size),
+          progress: 0,
+          remainingTime: '计算中...',
+          currentSegment: '准备中...'
+        })
+
+        // 开始识别
         const response = await fileStore.startRecognition(file.file_id)
         
         if (response.code === 200) {
@@ -261,14 +284,30 @@ const handleUpload = async (action) => {
             const progress = await asrApi.getRecognizeProgress(file.file_id)
             
             if (progress.code === 200) {
-              const { status } = progress.data
+              const { status, progress: percentage, current_segment, remaining_time } = progress.data
+              
+              // 更新进度信息
+              const fileIndex = transcribingFiles.value.findIndex(f => f.id === file.file_id)
+              if (fileIndex > -1) {
+                transcribingFiles.value[fileIndex] = {
+                  ...transcribingFiles.value[fileIndex],
+                  progress: percentage,
+                  currentSegment: current_segment,
+                  remainingTime: remaining_time
+                }
+              }
               
               if (status === '已完成') {
                 ElMessage.success('识别完成')
-                await router.push({
-                  name: 'editor',
-                  params: { id: file.file_id }
-                })
+                // 从列表中移除
+                transcribingFiles.value = transcribingFiles.value.filter(f => f.id !== file.file_id)
+                if (transcribingFiles.value.length === 0) {
+                  showProgress.value = false
+                  await router.push({
+                    name: 'editor',
+                    params: { id: file.file_id }
+                  })
+                }
                 return true
               } else if (status === '识别中') {
                 await new Promise(resolve => setTimeout(resolve, 1000))
