@@ -141,7 +141,6 @@ watch([() => props.segments, () => props.speakers], () => {
 // 添加合并段落的计算属性
 const mergedSegments = computed(() => {
   const result = []
-  const MIN_SEGMENT_LENGTH = 5
   let i = 0
   const segments = props.segments
 
@@ -149,40 +148,15 @@ const mergedSegments = computed(() => {
     const currentSegment = { ...segments[i], subSegments: [segments[i]] }
     result.push(currentSegment)
     
-    // 合并连续短段落
+    // 仅根据说话人合并
     while (i + 1 < segments.length && 
            segments[i + 1].speaker_id === currentSegment.speaker_id) {
       i++
       const nextSegment = segments[i]
-      const lastSubSegment = currentSegment.subSegments[currentSegment.subSegments.length - 1]
+      currentSegment.subSegments.push(nextSegment)
       
-      // 处理文本格式
-      const shouldMerge = lastSubSegment.text.length < MIN_SEGMENT_LENGTH
-      if (shouldMerge) {
-        // 保留原始格式，正确处理换行和空格
-        lastSubSegment.text = `${lastSubSegment.text}\n${nextSegment.text}`.trim()
-        lastSubSegment.end_time = nextSegment.end_time
-        
-        // 合并并排序时间戳
-        if (nextSegment.timestamps) {
-          lastSubSegment.timestamps = mergeAndSortTimestamps(
-            lastSubSegment.timestamps,
-            nextSegment.timestamps
-          )
-        }
-      } else {
-        currentSegment.subSegments.push(nextSegment)
-      }
-      
-      // 更新合并后的段落信息
+      // 只合并文本，不合并时间
       currentSegment.text = `${currentSegment.text}\n${nextSegment.text}`.trim()
-      currentSegment.end_time = nextSegment.end_time
-      if (nextSegment.timestamps) {
-        currentSegment.timestamps = mergeAndSortTimestamps(
-          currentSegment.timestamps,
-          nextSegment.timestamps
-        )
-      }
     }
     i++
   }
@@ -190,11 +164,6 @@ const mergedSegments = computed(() => {
   return result
 })
 
-// 新增时间戳合并工具函数
-const mergeAndSortTimestamps = (timestamps1 = [], timestamps2 = []) => {
-  const merged = [...timestamps1, ...timestamps2]
-  return merged.sort((a, b) => a.start - b.start)
-}
 
 </script>
 
