@@ -1,36 +1,40 @@
 import os
 import time
-from ..files.service import APIService
+from .recognize import SpeechService
 
 def test_languages():
     print("\n=== 测试语言列表 API ===")
-    api = APIService()
-    languages = api.get_languages()
+    service = SpeechService()
+    languages = service.get_languages()
     print("支持的语言列表:")
     for lang in languages["data"]:
         print(f"- {lang['name']} ({lang['code']})")
 
-def test_asr(language="auto"):
-    # 1. 初始化 API Service
-    api = APIService()
+def test_asr():
+    # 1. 初始化 Service
+    service = SpeechService()
     
     # 2. 准备测试音频文件
     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    test_file = os.path.join(root_dir, "input", "1234.wav")
+    test_file = os.path.join(root_dir, "input", "123456789.wav")
     
-    print(f"\n=== 开始测试 ASR API (语言: {language}) ===")
+    print(f"\n=== 开始测试中文 ASR API ===")
     print(f"测试文件: {test_file}")
     
-    # 3. 调用 API 处理音频
+    # 3. 调用 Service 处理音频
     try:
         start_time = time.time()
         
         with open(test_file, "rb") as f:
             audio_data = f.read()
-            result = api.process_audio(audio_data, language)
+            result = service.process_audio(audio_data, "zh")  # 固定使用中文
         
         process_time = time.time() - start_time
         print(f"处理耗时: {process_time:.2f}秒")
+        
+        # 调试输出 res[0] 的内容
+        print("\n调试信息: 识别结果内容")
+        print(result)  # 打印整个结果
         
         # 4. 打印结果
         print("\n完整文本:")
@@ -55,17 +59,9 @@ def test_asr(language="auto"):
         print(f"测试失败: {str(e)}")
         raise e
 
-def run_all_tests():
-    print("=== 开始全部测试 ===")
-    
+if __name__ == "__main__":
     # 测试语言列表
     test_languages()
     
-    # 测试不同语言的识别
-    for lang in ["auto", "zh", "en"]:
-        test_asr(lang)
-    
-    print("\n=== 全部测试完成 ===")
-
-if __name__ == "__main__":
-    run_all_tests() 
+    # 只测试中文识别
+    test_asr() 

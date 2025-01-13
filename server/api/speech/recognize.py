@@ -50,6 +50,8 @@ class SpeechService:
             batch_size_s=60
         )
         
+        print("模型输出:", res)
+        
         # 2. 处理说话人分离结果，格式化为飞书妙记风格
         speakers_data = []
         for segment in res[0]["sentence_info"]:

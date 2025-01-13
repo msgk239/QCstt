@@ -70,6 +70,7 @@ D:\python3.12.8\Lib\site-packages\funasr\auto\auto_model.py
 ```bash
 python -m server.api.app
 ```
+python -m server.api.speech.test_recognize
 服务端将在  http://localhost:8010启动
 
 2. 启动前端（开发模式）

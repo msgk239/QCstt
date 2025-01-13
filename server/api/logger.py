@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 from logging.handlers import RotatingFileHandler
-from typing import Optional
+from typing import Optional, Any
 from rich.logging import RichHandler
 from rich.console import Console
 from rich.traceback import install
@@ -12,6 +12,7 @@ from rich.table import Table
 from rich.tree import Tree
 from rich.panel import Panel
 from rich import print
+import json
 
 # 创建控制台实例时配置
 console = Console(
@@ -59,14 +60,16 @@ class LogConfig:
     """日志配置类"""
     # 修改日志级别为 DEBUG
     LOG_LEVEL = logging.DEBUG  # 显示所有日志信息
-    LOG_DIR = "logs"  # 日志目录
+    LOG_DIR = os.path.join("server", "logs")  # 修改为 server/logs
     LOG_FILENAME = "app.log"  # 主日志文件
     ERROR_FILENAME = "error.log"  # 错误日志文件
     MAX_BYTES = 10 * 1024 * 1024  # 10MB
     BACKUP_COUNT = 5
     DEBUG = True
     
-    # 简化控制台格式
+    # 添加详细日志格式
+    DETAILED_FILE_FORMAT = '%(asctime)s [%(levelname)s] %(pathname)s:%(lineno)d:\n%(message)s'
+    # 保持控制台格式简短
     CONSOLE_FORMAT = "%(levelname)s: %(message)s"
     
     # 文件日志格式也简化
@@ -76,6 +79,26 @@ class LogConfig:
     # FastAPI 相关配置
     FASTAPI_DEBUG = True
     FASTAPI_LOG_LEVEL = logging.DEBUG
+
+class JsonFormatter(logging.Formatter):
+    """自定义 JSON 格式化器"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    def format(self, record: logging.LogRecord) -> str:
+        message = record.getMessage()
+        try:
+            # 尝试解析消息是否为 JSON 格式
+            if isinstance(message, str) and (message.startswith('{') or message.startswith('[')):
+                parsed = json.loads(message)
+                # 美化 JSON 输出，使用4个空格缩进
+                formatted_json = json.dumps(parsed, indent=4, ensure_ascii=False)
+                # 替换原始消息
+                record.msg = f"\n{formatted_json}"
+        except (json.JSONDecodeError, TypeError):
+            pass
+        
+        return super().format(record)
 
 class CustomFormatter(logging.Formatter):
     def __init__(self):
@@ -100,6 +123,14 @@ class CustomFormatter(logging.Formatter):
         self.repeat_count = 0
         
         return super().format(record)
+
+class JsonFilter(logging.Filter):
+    """过滤 JSON 格式的日志，使其不在终端显示"""
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        # 如果是 JSON 格式，返回 False 表示不显示
+        return not (isinstance(message, str) and 
+                   (message.startswith('{') or message.startswith('[')))
 
 class Logger:
     """日志管理类"""
@@ -126,9 +157,9 @@ class Logger:
         # 设置日志级别
         logger.setLevel(logging.DEBUG if LogConfig.DEBUG else logging.INFO)
         
-        # 文件日志格式化器
-        file_formatter = logging.Formatter(
-            LogConfig.FILE_FORMAT,
+        # 修改文件日志格式化器为自定义的 JSON 格式化器
+        file_formatter = JsonFormatter(
+            LogConfig.DETAILED_FILE_FORMAT,
             datefmt=LogConfig.DATE_FORMAT
         )
         
@@ -156,9 +187,9 @@ class Logger:
             show_level=True,
             omit_repeated_times=True
         )
-        # 设置自定义格式
+        console_handler.addFilter(JsonFilter())  # 添加 JSON 过滤器
         console_handler.setFormatter(logging.Formatter(LogConfig.CONSOLE_FORMAT))
-        console_handler.setLevel(logging.DEBUG if LogConfig.DEBUG else logging.INFO)
+        console_handler.setLevel(logging.INFO)  # 终端只显示 INFO 级别
         logger.addHandler(console_handler)
         
         # 2. 主日志文件处理器
@@ -168,7 +199,7 @@ class Logger:
             backupCount=LogConfig.BACKUP_COUNT,
             encoding='utf-8'
         )
-        file_handler.setLevel(logging.INFO)
+        file_handler.setLevel(logging.DEBUG)  # 文件记录所有级别
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
         
