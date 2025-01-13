@@ -231,10 +231,16 @@ const sliderValue = computed({
 // 处理进度条拖动
 const handleSliderInput = (value) => {
   emit('seek', value)
+  if (!props.playing) {
+    emit('play')
+  }
 }
 
 const handleSeek = (value) => {
   emit('seek', value)
+  if (!props.playing) {
+    emit('play')
+  }
 }
 
 const handleSpeedChange = (speed) => {

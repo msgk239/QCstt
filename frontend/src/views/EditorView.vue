@@ -152,14 +152,22 @@ const initAudio = async () => {
     // 设置音频源
     audio.value.src = audioUrl
     
+    // 添加时间更新监听
+    audio.value.addEventListener('timeupdate', () => {
+      currentTime.value = audio.value.currentTime
+    })
+    
     // 添加加载事件监听
     const loadPromise = new Promise((resolve, reject) => {
       audio.value.addEventListener('loadedmetadata', () => {
         console.log('Audio loaded:', {
-          duration: audio.value.duration,
-          readyState: audio.value.readyState
+          audioDuration: audio.value.duration,
+          fileDuration: duration.value
         })
-        duration.value = audio.value.duration
+        // 如果文件数据中没有时长，才使用音频时长
+        if (!duration.value) {
+          duration.value = audio.value.duration
+        }
         resolve()
       })
       
@@ -171,6 +179,14 @@ const initAudio = async () => {
     
     // 等待音频加载完成
     await loadPromise
+    
+    audio.value.addEventListener('loadedmetadata', () => {
+      console.log('音频加载完成:', {
+        duration: audio.value.duration,
+        currentDuration: duration.value
+      })
+      duration.value = audio.value.duration
+    })
     
   } catch (error) {
     console.error('加载音频失败:', error)
@@ -223,7 +239,10 @@ const togglePlay = () => {
 }
 
 const seekTo = (time) => {
-  audio.value.currentTime = time
+  if (audio.value.readyState >= 1) {  // 确保音频已加载
+    audio.value.currentTime = time
+    currentTime.value = time  // 立即更新当前时间，避免延迟
+  }
 }
 
 const handleSpeedChange = (speed) => {
@@ -264,6 +283,7 @@ const loadFileData = async () => {
   file.value = formattedData
   segments.value = formattedData.segments
   speakers.value = formattedData.speakers
+  duration.value = formattedData.duration || 0
 }
 
 // 生命周期钩子
