@@ -11,7 +11,7 @@
         <!-- 说话人信息 -->
         <div class="segment-header">
           <el-select 
-            v-model="segment.speaker"
+            v-model="segment.speaker_id"
             size="small"
             @change="(val) => handleSpeakerChange(val, segment)"
           >
@@ -46,7 +46,7 @@
 </template>
 
 <script setup>
-import { ref, watch, watchEffect } from 'vue'
+import { ref, watch, watchEffect, computed } from 'vue'
 
 const props = defineProps({
   segments: {
@@ -69,15 +69,17 @@ const transcriptRef = ref(null)
 
 // 格式化时间
 const formatTime = (seconds) => {
-  if (!seconds) return '00:00'
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.floor(seconds % 60)
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  const date = new Date(seconds * 1000)
+  return date.toISOString().substr(11, 8).replace(/^00:/, '')
 }
 
 // 处理说话人变更
 const handleSpeakerChange = (speakerId, segment) => {
-  emit('speaker-change', speakerId, segment)
+  const updatedSegment = {
+    ...segment,
+    speaker_id: speakerId
+  }
+  emit('speaker-change', speakerId, updatedSegment)
 }
 
 // 处理内容编辑
@@ -92,9 +94,8 @@ const handleContentChange = (event, segment) => {
 
 // 优化 isSegmentPlaying 函数
 const isSegmentPlaying = (segment) => {
-  const buffer = 0.1 // 100ms 缓冲，避免边界判断问题
-  return props.currentTime >= (segment.start_time - buffer) && 
-         props.currentTime <= (segment.end_time + buffer)
+  return props.currentTime >= segment.start_time && 
+         props.currentTime <= segment.end_time
 }
 
 // 将文本按时间戳分割
@@ -119,6 +120,12 @@ const isWordPlaying = (word) => {
   return props.currentTime >= (word.start - buffer) && 
          props.currentTime <= (word.end + buffer)
 }
+
+// 添加 speakerName 计算属性
+const speakerName = computed(() => (speakerId) => {
+  const speaker = props.speakers.find(s => s.id === speakerId)
+  return speaker ? speaker.name : '未知说话人'
+})
 
 // 添加调试代码
 watch([() => props.segments, () => props.speakers], () => {
