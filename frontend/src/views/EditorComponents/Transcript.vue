@@ -3,7 +3,7 @@
     <!-- 转写内容段落列表 -->
     <div class="segments">
       <div 
-        v-for="segment in segments" 
+        v-for="segment in mergedSegments" 
         :key="segment.id"
         class="segment"
         :class="{ 'is-playing': isSegmentPlaying(segment) }"
@@ -29,15 +29,21 @@
         <!-- 转写文本 -->
         <div class="segment-content">
           <div 
-            class="segment-text"
-            contenteditable="true"
-            @input="(e) => handleContentChange(e, segment)"
+            v-for="(subSegment, index) in segment.subSegments"
+            :key="index"
+            class="sub-segment"
           >
-            <span
-              v-for="(word, index) in splitTextWithTimestamps(segment)"
-              :key="index"
-              :class="{ 'word-highlight': isWordPlaying(word) }"
-            >{{ word.text }}</span>
+            <div 
+              class="segment-text"
+              contenteditable="true"
+              @input="(e) => handleContentChange(e, segment)"
+            >
+              <span
+                v-for="(word, index) in splitTextWithTimestamps(subSegment)"
+                :key="index"
+                :class="{ 'word-highlight': isWordPlaying(word) }"
+              >{{ word.text }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -132,6 +138,55 @@ watch([() => props.segments, () => props.speakers], () => {
   console.log('segments:', props.segments)
   console.log('speakers:', props.speakers)
 })
+
+// 添加合并段落的计算属性
+const mergedSegments = computed(() => {
+  const result = []
+  let currentSegment = null
+  const MIN_SEGMENT_LENGTH = 5 // 定义最小段落长度（按字数）
+
+  props.segments.forEach(segment => {
+    if (!currentSegment || currentSegment.speaker_id !== segment.speaker_id) {
+      // 新说话人，创建新段落
+      currentSegment = {
+        ...segment,
+        subSegments: [segment]
+      }
+      result.push(currentSegment)
+    } else {
+      // 检查是否需要合并短段落
+      const lastSubSegment = currentSegment.subSegments[currentSegment.subSegments.length - 1]
+      const isShortSegment = lastSubSegment.text.split(' ').length < MIN_SEGMENT_LENGTH
+      
+      if (isShortSegment) {
+        // 合并短段落
+        lastSubSegment.text += ' ' + segment.text
+        lastSubSegment.end_time = segment.end_time
+        if (segment.timestamps) {
+          lastSubSegment.timestamps = [
+            ...(lastSubSegment.timestamps || []),
+            ...segment.timestamps
+          ]
+        }
+      } else {
+        // 添加新的子段落
+        currentSegment.subSegments.push(segment)
+      }
+      
+      // 更新合并后的段落信息
+      currentSegment.text += ' ' + segment.text
+      currentSegment.end_time = segment.end_time
+      if (segment.timestamps) {
+        currentSegment.timestamps = [
+          ...(currentSegment.timestamps || []),
+          ...segment.timestamps
+        ]
+      }
+    }
+  })
+
+  return result
+})
 </script>
 
 <style scoped>
@@ -198,5 +253,12 @@ watch([() => props.segments, () => props.speakers], () => {
 
 .segment-text:focus .word-highlight {
   background-color: var(--el-color-primary-light-3);
+}
+
+.sub-segment {
+  margin-bottom: 8px;
+}
+.sub-segment:last-child {
+  margin-bottom: 0;
 }
 </style> 
