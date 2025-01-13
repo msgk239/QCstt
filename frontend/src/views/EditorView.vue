@@ -39,6 +39,7 @@
         :currentTime="currentTime"
         @segment-update="handleSegmentUpdate"
         @speaker-change="handleSpeakerChange"
+        @timeupdate="handleTimeUpdate"
       />
     </div>
 
@@ -53,6 +54,7 @@
         @play="togglePlay"
         @seek="seekTo"
         @speed-change="handleSpeedChange"
+        @timeupdate="handleTimeUpdate"
       />
     </div>
 
@@ -313,6 +315,10 @@ const formatDisplayName = (fullName) => {
   if (!fullName) return ''
   const match = fullName.match(/\d{8}_\d{6}_(.+)/)
   return match ? match[1] : fullName
+}
+
+const handleTimeUpdate = (time) => {
+  currentTime.value = time
 }
 </script>
 

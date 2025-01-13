@@ -220,7 +220,7 @@ const props = defineProps({
   playbackRate: Number
 })
 
-const emit = defineEmits(['play', 'seek', 'speed-change'])
+const emit = defineEmits(['play', 'seek', 'speed-change', 'timeupdate'])
 
 // 进度条值
 const sliderValue = computed({
@@ -231,6 +231,7 @@ const sliderValue = computed({
 // 处理进度条拖动
 const handleSliderInput = (value) => {
   emit('seek', value)
+  emit('timeupdate', value)
   if (!props.playing) {
     emit('play')
   }
@@ -277,5 +278,10 @@ const handleMouseMove = (e) => {
 
 const handleMouseLeave = () => {
   showTooltip.value = false
+}
+
+// 添加时间更新处理函数
+const handleTimeUpdate = (time) => {
+  emit('timeupdate', time)
 }
 </script> 

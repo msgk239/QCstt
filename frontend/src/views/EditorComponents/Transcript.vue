@@ -1,5 +1,5 @@
 <template>
-  <div class="transcript">
+  <div class="transcript" ref="transcriptRef">
     <!-- 转写内容段落列表 -->
     <div class="segments">
       <div 
@@ -27,19 +27,26 @@
         </div>
 
         <!-- 转写文本 -->
-        <div 
-          class="segment-content"
-          contenteditable="true"
-          @input="(e) => handleContentChange(e, segment)"
-          v-html="segment.text"
-        ></div>
+        <div class="segment-content">
+          <div 
+            class="segment-text"
+            contenteditable="true"
+            @input="(e) => handleContentChange(e, segment)"
+          >
+            <span
+              v-for="(word, index) in splitTextWithTimestamps(segment)"
+              :key="index"
+              :class="{ 'word-highlight': isWordPlaying(word) }"
+            >{{ word.text }}</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, watchEffect } from 'vue'
+import { ref, watch, watchEffect } from 'vue'
 
 const props = defineProps({
   segments: {
@@ -58,11 +65,7 @@ const props = defineProps({
 
 const emit = defineEmits(['segment-update', 'speaker-change'])
 
-// 判断当前段落是否正在播放
-const isSegmentPlaying = (segment) => {
-  return props.currentTime >= segment.start_time && 
-         props.currentTime <= segment.end_time
-}
+const transcriptRef = ref(null)
 
 // 格式化时间
 const formatTime = (seconds) => {
@@ -79,15 +82,46 @@ const handleSpeakerChange = (speakerId, segment) => {
 
 // 处理内容编辑
 const handleContentChange = (event, segment) => {
+  const text = event.target.textContent
   const updatedSegment = {
     ...segment,
-    text: event.target.innerHTML
+    text: text,
   }
   emit('segment-update', updatedSegment)
 }
 
+// 优化 isSegmentPlaying 函数
+const isSegmentPlaying = (segment) => {
+  const buffer = 0.1 // 100ms 缓冲，避免边界判断问题
+  return props.currentTime >= (segment.start_time - buffer) && 
+         props.currentTime <= (segment.end_time + buffer)
+}
+
+// 将文本按时间戳分割
+const splitTextWithTimestamps = (segment) => {
+  if (!segment.timestamps || !segment.text) return [{ text: segment.text }]
+  
+  const text = segment.text
+  const timestamps = segment.timestamps
+  const minLength = Math.min(text.length, timestamps.length)
+  
+  return Array.from({ length: minLength }, (_, index) => ({
+    text: text[index],
+    start: timestamps[index].start,
+    end: timestamps[index].end
+  }))
+}
+
+// 判断单个词是否正在播放
+const isWordPlaying = (word) => {
+  if (!word.start || !word.end) return false
+  const buffer = 0.05 // 50ms 缓冲
+  return props.currentTime >= (word.start - buffer) && 
+         props.currentTime <= (word.end + buffer)
+}
+
 // 添加调试代码
-watchEffect(() => {
+watch([() => props.segments, () => props.speakers], () => {
   console.log('segments:', props.segments)
   console.log('speakers:', props.speakers)
 })
@@ -95,7 +129,9 @@ watchEffect(() => {
 
 <style scoped>
 .transcript {
-  padding: 20px;
+  height: calc(100vh - 200px); /* 适当的高度 */
+  overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .segments {
@@ -112,7 +148,7 @@ watchEffect(() => {
 }
 
 .segment.is-playing {
-  background: #f5f7fa;
+  background: #f0f7ff;
   border-color: var(--el-color-primary);
 }
 
@@ -136,8 +172,24 @@ watchEffect(() => {
   padding: 4px;
 }
 
-.segment-content:focus {
+.segment-text {
+  padding: 8px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.word-highlight {
+  background-color: var(--el-color-primary-light-5);
+  border-radius: 2px;
+}
+
+.segment-text:focus {
   background: #f5f7fa;
   border-radius: 4px;
+  outline: none;
+}
+
+.segment-text:focus .word-highlight {
+  background-color: var(--el-color-primary-light-3);
 }
 </style> 
