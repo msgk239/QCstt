@@ -14,12 +14,16 @@
 
     <div class="files">
       <div v-for="file in files" :key="file.id" class="file-item">
-        <div class="file-name">{{ file.name }}</div>
+        <div class="file-name">
+          <el-icon><Document /></el-icon>
+          {{ file.name }}
+        </div>
         <div class="file-status">
           <template v-if="file.status === 'processing'">
             <el-progress 
               :percentage="file.progress" 
-              :format="() => `${file.progress}% 还需 ${file.remainingTime}`"
+              :format="() => `${file.progress}% 预计还需 ${formatFileTime(file.remainingTime)}`"
+              :color="file.progress > 50 ? '#67c23a' : '#409eff'"
             />
           </template>
           <template v-else-if="file.status === 'error'">
@@ -37,7 +41,7 @@
           <div class="details">
             <div>• 正在处理：{{ file.currentSegment }}</div>
             <div>• 文件大小：{{ file.size }}</div>
-            <div v-if="file.error">• 错误信息：{{ file.error }}</div>
+            <div>• 预计完成时间：{{ calculateFinishTime(file) }}</div>
             <div>• 状态：{{ getStatusText(file.status) }}</div>
           </div>
         </template>
@@ -71,7 +75,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Close, Warning } from '@element-plus/icons-vue'
+import { Close, Warning, Document } from '@element-plus/icons-vue'
 
 const props = defineProps({
   files: {
@@ -91,15 +95,25 @@ const totalProgress = computed(() => {
   return Math.floor(props.files.reduce((sum, file) => sum + file.progress, 0) / props.files.length)
 })
 
+const formatTime = (seconds) => {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins}分${secs}秒`
+}
+
 const totalRemainingTime = computed(() => {
-  // 计算总剩余时间
   const total = props.files.reduce((sum, file) => {
     const [min, sec] = file.remainingTime.split(':').map(Number)
     return sum + min * 60 + sec
   }, 0)
   
-  return `${Math.floor(total / 60)}分${total % 60}秒`
+  return formatTime(total)
 })
+
+const formatFileTime = (time) => {
+  const [min, sec] = time.split(':').map(Number)
+  return formatTime(min * 60 + sec)
+}
 
 const handlePause = () => {
   isPaused.value = !isPaused.value
@@ -123,6 +137,13 @@ const getStatusText = (status) => {
 const hasErrors = computed(() => {
   return props.files.some(file => file.status === 'error')
 })
+
+const calculateFinishTime = (file) => {
+  const now = new Date()
+  const remainingSeconds = file.remainingTime.split(':').reduce((acc, time) => (60 * acc) + +time)
+  const finishTime = new Date(now.getTime() + remainingSeconds * 1000)
+  return finishTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
 </script>
 
 <style scoped>
@@ -152,6 +173,9 @@ const hasErrors = computed(() => {
 .file-name {
   margin-bottom: 4px;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .details {
@@ -189,6 +213,10 @@ const hasErrors = computed(() => {
 }
 
 .file-status {
+  margin: 8px 0;
+}
+
+.el-progress {
   margin: 8px 0;
 }
 </style> 
