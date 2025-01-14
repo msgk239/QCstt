@@ -150,12 +150,38 @@ const mergedSegments = computed(() => {
     speakers: props.speakers
   })
   
-  // 直接返回原始段落，不做合并
-  return props.segments.map(segment => ({
-    ...segment,
-    subSegments: [segment],
-    text: segment.text || ''
-  }))
+  const result = []
+  let currentGroup = null
+  
+  props.segments.forEach(segment => {
+    // 如果是新的说话人或者第一个段落
+    if (!currentGroup || currentGroup.speaker_id !== segment.speaker_id) {
+      // 保存当前组
+      if (currentGroup) {
+        result.push(currentGroup)
+      }
+      
+      // 创建新组
+      currentGroup = {
+        ...segment,
+        subSegments: [segment],
+        text: segment.text || ''
+      }
+    } else {
+      // 添加到当前组
+      currentGroup.subSegments.push(segment)
+      currentGroup.text = `${currentGroup.text}\n${segment.text || ''}`.trim()
+      currentGroup.end_time = segment.end_time
+    }
+  })
+  
+  // 添加最后一组
+  if (currentGroup) {
+    result.push(currentGroup)
+  }
+  
+  console.log('Merged result:', result)
+  return result
 })
 
 // 添加 speakers 的监听
