@@ -36,6 +36,9 @@
         :data="filteredFiles"
         style="width: 100%"
         v-loading="loading"
+        @row-click="handleRowClick"
+        :row-class-name="getRowClass"
+        :highlight-current-row="false"
       >
         <el-table-column prop="name" label="文件名" min-width="200">
           <template #default="{ row }">
@@ -50,7 +53,9 @@
                   @keyup.esc="handleRenameCancel(row)"
                 />
               </div>
-              <span v-else class="filename" :title="row.name">
+              <span v-else class="filename" :title="row.name" 
+                @click="row.status === '已完成' && handleFileClick(row)"
+                :class="{ 'clickable': row.status === '已完成' }">
                 {{ formatDisplayName(row.name) }}
               </span>
             </div>
@@ -76,7 +81,7 @@
         <el-table-column prop="date" label="上传时间" width="180" />
         <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
-            <el-button-group>
+            <el-button-group @click.stop>
               <el-tooltip content="重命名" placement="top">
                 <el-button 
                   type="primary" 
@@ -504,6 +509,31 @@ const handleRenameCancel = (file) => {
   file.newName = formatDisplayName(file.name)
 }
 
+const handleFileClick = async (file) => {
+  if (file.status === '已完成') {
+    try {
+      await router.push({
+        name: 'editor',
+        params: { id: file.file_id }
+      })
+    } catch (error) {
+      console.error('路由跳转失败:', error)
+      ElMessage.error('跳转到编辑页面失败')
+    }
+  }
+}
+
+const handleRowClick = (row) => {
+  if (row.status === '已完成') {
+    handleFileClick(row)
+  }
+}
+
+const getRowClass = ({ status }) => {
+  console.log('Row status:', status)
+  return status === '已完成' ? 'completed-row' : ''
+}
+
 // 初始化
 onMounted(() => {
   debouncedFetchFiles()
@@ -624,14 +654,37 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
-  cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
   transition: all 0.3s;
 }
 
-.filename:hover {
+.completed-row .filename:hover {
+  background-color: transparent;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover {
   color: var(--el-color-primary);
-  background-color: var(--el-fill-color-light);
+}
+
+/* 表格行样式 */
+:deep(.el-table__row.completed-row) {
+  &:hover td {
+    color: var(--el-color-primary);
+    background-color: var(--el-fill-color-light) !important;
+  }
+  
+  &:hover .el-tag {
+    color: var(--el-color-primary);
+    border-color: var(--el-color-primary);
+  }
+}
+
+:deep(.el-table__row.completed-row td) {
+  cursor: pointer;
 }
 </style>
