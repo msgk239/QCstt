@@ -235,11 +235,44 @@ const handleSegmentUpdate = (segment) => {
 }
 
 const handleSpeakerChange = (speakerId, segment) => {
+  console.log('EditorView handleSpeakerChange:', {
+    speakerId,
+    segment,
+    currentSpeakers: speakers.value
+  })
+
   if (speakerId === 'new') {
     speakerDialogVisible.value = true
     return
   }
-  segment.speaker = speakerId
+  
+  // 创建新的数组以触发响应式更新
+  segments.value = segments.value.map(s => {
+    if (s.id === segment.id) {
+      return {
+        ...s,
+        speaker_id: speakerId
+      }
+    }
+    return s
+  })
+  
+  // 确保说话人列表中有这个说话人
+  const existingSpeaker = speakers.value.find(s => s.id === speakerId)
+  if (!existingSpeaker) {
+    // 添加新说话人到列表，使用正确的ID格式
+    const speakerNumber = speakerId.replace('speaker_', '')
+    const newSpeaker = {
+      id: speakerId,
+      name: `说话人${parseInt(speakerNumber) + 1}`,  // 显示时从1开始计数
+      color: '#409EFF',
+      originalName: `说话人${parseInt(speakerNumber) + 1}`,
+      originalColor: '#409EFF'
+    }
+    console.log('Adding new speaker:', newSpeaker)
+    // 创建新的数组以触发响应式更新
+    speakers.value = [...speakers.value, newSpeaker]
+  }
 }
 
 // 播放控制方法
@@ -296,7 +329,10 @@ const loadFileData = async () => {
   const formattedData = formatFileData(response)
   file.value = formattedData
   segments.value = formattedData.segments
-  speakers.value = formattedData.speakers
+  // 只在 speakers 为空时初始化
+  if (!speakers.value.length) {
+    speakers.value = formattedData.speakers
+  }
   duration.value = formattedData.duration || 0
 }
 
@@ -334,26 +370,28 @@ const handleTimeUpdate = (time) => {
 }
 
 const handleBatchReplace = (nameMapping) => {
-  // 更新所有相关片段的说话人名称
-  segments.value = segments.value.map(segment => {
-    if (nameMapping[segment.speaker]) {
-      return {
-        ...segment,
-        speaker: nameMapping[segment.speaker]
-      }
-    }
-    return segment
-  })
-  
   // 更新说话人列表
   speakers.value = speakers.value.map(speaker => {
-    if (nameMapping[speaker.originalName]) {
+    if (nameMapping[speaker.name]) {
       return {
         ...speaker,
-        name: nameMapping[speaker.originalName]
+        name: nameMapping[speaker.name]
       }
     }
     return speaker
+  })
+  
+  // 更新所有相关片段的说话人
+  segments.value = segments.value.map(segment => {
+    const speaker = speakers.value.find(s => s.id === segment.speaker_id)
+    if (speaker && nameMapping[speaker.name]) {
+      // 保持 speaker_id 不变，只更新关联的说话人信息
+      return {
+        ...segment,
+        speaker_id: segment.speaker_id
+      }
+    }
+    return segment
   })
   
   ElMessage.success('批量替换成功')

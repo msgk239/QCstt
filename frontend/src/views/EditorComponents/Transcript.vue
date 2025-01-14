@@ -11,9 +11,9 @@
         <!-- 说话人信息 -->
         <div class="segment-header">
           <el-select 
-            v-model="segment.speaker_id"
+            :model-value="segment.speaker_id"
             size="small"
-            @change="(val) => handleSpeakerChange(val, segment)"
+            @update:model-value="(val) => handleSpeakerChange(val, segment)"
           >
             <el-option
               v-for="speaker in speakers"
@@ -81,6 +81,11 @@ const formatTime = (seconds) => {
 
 // 处理说话人变更
 const handleSpeakerChange = (speakerId, segment) => {
+  console.log('Transcript handleSpeakerChange:', {
+    speakerId,
+    segment,
+    allSpeakers: props.speakers
+  })
   const updatedSegment = {
     ...segment,
     speaker_id: speakerId
@@ -140,30 +145,28 @@ watch([() => props.segments, () => props.speakers], () => {
 })
 // 添加合并段落的计算属性
 const mergedSegments = computed(() => {
-  const result = []
-  let i = 0
-  const segments = props.segments
-
-  while (i < segments.length) {
-    const currentSegment = { ...segments[i], subSegments: [segments[i]] }
-    result.push(currentSegment)
-    
-    // 仅根据说话人合并
-    while (i + 1 < segments.length && 
-           segments[i + 1].speaker_id === currentSegment.speaker_id) {
-      i++
-      const nextSegment = segments[i]
-      currentSegment.subSegments.push(nextSegment)
-      
-      // 只合并文本，不合并时间
-      currentSegment.text = `${currentSegment.text}\n${nextSegment.text}`.trim()
-    }
-    i++
-  }
-
-  return result
+  console.log('Computing mergedSegments with:', {
+    segments: props.segments,
+    speakers: props.speakers
+  })
+  
+  // 直接返回原始段落，不做合并
+  return props.segments.map(segment => ({
+    ...segment,
+    subSegments: [segment],
+    text: segment.text || ''
+  }))
 })
 
+// 添加 speakers 的监听
+watch(() => props.speakers, (newSpeakers) => {
+  console.log('Speakers changed:', newSpeakers)
+}, { deep: true })
+
+// 添加 segments 的监听
+watch(() => props.segments, (newSegments) => {
+  console.log('Segments changed:', newSegments)
+}, { deep: true })
 
 </script>
 
