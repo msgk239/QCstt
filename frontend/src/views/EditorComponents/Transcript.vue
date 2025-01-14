@@ -29,21 +29,18 @@
         <!-- 转写文本 -->
         <div class="segment-content">
           <div 
-            v-for="(subSegment, index) in segment.subSegments"
-            :key="index"
-            class="sub-segment"
+            class="segment-text"
+            contenteditable="true"
+            @input="(e) => handleContentChange(e, segment)"
           >
-            <div 
-              class="segment-text"
-              contenteditable="true"
-              @input="(e) => handleContentChange(e, segment)"
-            >
+            <template v-for="(subSegment, subIndex) in segment.subSegments" :key="subIndex">
               <span
-                v-for="(word, index) in splitTextWithTimestamps(subSegment)"
-                :key="index"
+                v-for="(word, wordIndex) in splitTextWithTimestamps(subSegment)"
+                :key="`${subIndex}-${wordIndex}`"
                 :class="{ 'word-highlight': isWordPlaying(word) }"
               >{{ word.text }}</span>
-            </div>
+              <br v-if="subIndex < segment.subSegments.length - 1">
+            </template>
           </div>
         </div>
       </div>
