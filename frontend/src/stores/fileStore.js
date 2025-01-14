@@ -82,7 +82,7 @@ export const useFileStore = defineStore('file', () => {
 
   const deleteFile = async (id) => {
     return handleStoreAction(
-      () => fileApi.deleteFile(id),
+      () => fileApi.delete(id),
       '删除文件失败'
     )
   }

@@ -317,8 +317,9 @@ const handleDeleteFile = async (file) => {
       }
     )
     
-    await fileStore.deleteFile(file.id)
+    await fileStore.deleteFile(file.file_id)
     ElMessage.success('文件已移至回收站')
+    await fileStore.fetchFileList()
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Delete file error:', error)
@@ -410,7 +411,7 @@ const handleRename = async (file) => {
     )
     
     if (newName && newName !== file.name) {
-      await fileStore.renameFile(file.id, newName)
+      await fileStore.renameFile(file.file_id, newName)
       ElMessage.success('重命名成功')
     }
   } catch (error) {
@@ -424,7 +425,7 @@ const handleRename = async (file) => {
 // 导出文件
 const handleExport = async (file) => {
   try {
-    await fileStore.exportFile(file.id, file.name)
+    await fileStore.exportFile(file.file_id, file.name)
     ElMessage.success('导出成功')
   } catch (error) {
     ElMessage.error('导出失败')
@@ -445,7 +446,7 @@ const getStatusType = (status) => {
 // 文件路径相关功能
 const handleCopyPath = async (file) => {
   try {
-    const response = await asrApi.getFilePath(file.id)
+    const response = await asrApi.getFilePath(file.file_id)
     if (response.code === 200) {
       const path = response.data.path
       await navigator.clipboard.writeText(path)
@@ -461,7 +462,7 @@ const handleCopyPath = async (file) => {
 
 const handleShowPath = async (file) => {
   try {
-    const response = await asrApi.getFilePath(file.id)
+    const response = await asrApi.getFilePath(file.file_id)
     if (response.code === 200) {
       const path = response.data.path
       // 使用 electron 的 shell.showItemInFolder
@@ -493,7 +494,7 @@ const handleRenameConfirm = async (file) => {
     }
 
     loadingStates.rename = true
-    await fileStore.renameFile(file.id, file.newName)
+    await fileStore.renameFile(file.file_id, file.newName)
     ElMessage.success('重命名成功')
   } catch (error) {
     console.error('Rename error:', error)
