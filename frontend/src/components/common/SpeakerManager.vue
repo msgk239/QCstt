@@ -42,6 +42,23 @@
           </template>
         </el-input>
       </div>
+      
+      <!-- 添加说话人列表 -->
+      <div class="speaker-list">
+        <div 
+          v-for="speaker in props.speakers" 
+          :key="speaker.id" 
+          class="speaker-item"
+          @click="handleSpeakerSelect(speaker)"
+        >
+          <div class="speaker-info">
+            <el-icon :color="speaker.color" class="speaker-icon">
+              <User />
+            </el-icon>
+            <span>{{ speaker.name }}</span>
+          </div>
+        </div>
+      </div>
     </div>
   </el-popover>
 </template>
@@ -99,6 +116,14 @@ const handleButtonClick = () => {
 }
 
 const getSpeakerColor = (id) => {
+  // 如果有自定义显示名，先查找对应的说话人
+  if (props.segment.speakerDisplayName) {
+    const matchedSpeaker = props.speakers.find(s => s.name === props.segment.speakerDisplayName)
+    if (matchedSpeaker) {
+      return matchedSpeaker.color
+    }
+  }
+  // 否则使用原始说话人的颜色
   const speaker = props.speakers.find(s => s.id === id)
   return speaker?.color || '#409EFF'
 }
@@ -145,6 +170,23 @@ const handleFocus = () => {
   // 确保输入框为空
   newSpeakerName.value = ''
 }
+
+// 在 script setup 部分添加处理函数
+const handleSpeakerSelect = (speaker) => {
+  // 更新 segment 的说话人显示名称
+  const updatedSegment = {
+    ...props.segment,
+    speakerDisplayName: speaker.name
+  }
+
+  // 发出事件，让父组件处理更新
+  emit('speaker-select', updatedSegment)
+  
+  // 关闭对话框
+  dialogVisible.value = false
+  
+  ElMessage.success('更新成功')
+}
 </script>
 
 <style scoped>
@@ -165,57 +207,26 @@ const handleFocus = () => {
 }
 
 .speaker-list {
-  max-height: 300px;
+  margin-top: 12px;
+  max-height: 200px;
   overflow-y: auto;
-  padding: 0 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
 }
 
 .speaker-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  padding: 12px 20px;
+  transition: background-color 0.3s;
+  cursor: pointer;
 }
 
-.current-speaker {
-  padding: 12px;
-  margin: 0 12px 12px;
-  background-color: var(--el-fill-color-lighter);
-  border-radius: 4px;
-}
-
-.batch-actions {
-  margin-top: 16px;
-  padding: 12px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  border-top: 1px solid var(--el-border-color-lighter);
+.speaker-item:hover {
+  background-color: var(--el-fill-color-light);
 }
 
 .speaker-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-}
-
-.original-name {
-  min-width: 80px;
-}
-
-.name-input {
-  width: 150px;
-}
-
-.speaker-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.speaker-option {
   display: flex;
   align-items: center;
   gap: 8px;
