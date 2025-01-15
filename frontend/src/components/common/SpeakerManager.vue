@@ -46,18 +46,40 @@
       <!-- 添加说话人列表 -->
       <div class="speaker-list">
         <div 
-          v-for="speaker in props.speakers" 
+          v-for="speaker in localSpeakers" 
           :key="speaker.id" 
           class="speaker-item"
-          @click="handleSpeakerSelect(speaker)"
+          @click="handleSpeakerItemClick(speaker)"
+          :class="{ 'disabled': isCurrentSpeaker(speaker) }"
         >
           <div class="speaker-info">
+            <el-checkbox 
+              v-model="speaker.selected" 
+              @change="(val) => handleSpeakerCheck(speaker, val)"
+              @click.stop
+              :disabled="isCurrentSpeaker(speaker)"
+            />
             <el-icon :color="speaker.color" class="speaker-icon">
               <User />
             </el-icon>
             <span>{{ speaker.name }}</span>
           </div>
         </div>
+      </div>
+
+      <!-- 添加批量更新选项和确认按钮 -->
+      <div class="batch-update-section">
+        <el-checkbox v-model="batchUpdate" class="batch-checkbox">
+          批量修改相同名称的说话人
+        </el-checkbox>
+        <el-button 
+          type="primary" 
+          size="small" 
+          @click="handleConfirm"
+          class="confirm-button"
+        >
+          确认
+        </el-button>
       </div>
     </div>
   </el-popover>
@@ -99,6 +121,7 @@ const currentSpeaker = computed(() => {
 watch(dialogVisible, (val) => {
   if (!val) {
     newSpeakerName.value = ''
+    localSpeakers.value.forEach(speaker => speaker.selected = false)
   } else {
     // 当对话框打开时，清空输入框并设置焦点
     newSpeakerName.value = ''
@@ -171,12 +194,32 @@ const handleFocus = () => {
   newSpeakerName.value = ''
 }
 
-// 在 script setup 部分添加处理函数
-const handleSpeakerSelect = (speaker) => {
-  // 更新 segment 的说话人显示名称
+// 添加批量更新状态
+const batchUpdate = ref(false)
+const selectedSpeaker = ref(null)
+
+// 在 script setup 中添加
+const localSpeakers = ref(props.speakers.map(speaker => ({
+  ...speaker,
+  selected: false
+})))
+
+// 修改选择处理函数
+const handleSpeakerCheck = (speaker, checked) => {
+  selectedSpeaker.value = checked ? speaker : null
+}
+
+// 修改确认处理函数
+const handleConfirm = () => {
+  if (!selectedSpeaker.value) {
+    ElMessage.warning('请先选择一个说话人')
+    return
+  }
+
   const updatedSegment = {
     ...props.segment,
-    speakerDisplayName: speaker.name
+    speakerDisplayName: selectedSpeaker.value.name,
+    batchUpdate: batchUpdate.value
   }
 
   // 发出事件，让父组件处理更新
@@ -185,7 +228,31 @@ const handleSpeakerSelect = (speaker) => {
   // 关闭对话框
   dialogVisible.value = false
   
+  // 重置状态
+  selectedSpeaker.value = null
+  batchUpdate.value = false
+  localSpeakers.value.forEach(speaker => speaker.selected = false)
+  
   ElMessage.success('更新成功')
+}
+
+// 在 script setup 中添加
+const handleSpeakerItemClick = (speaker) => {
+  if (isCurrentSpeaker(speaker)) return
+  // 切换选中状态
+  speaker.selected = !speaker.selected
+  // 调用原有的处理函数
+  handleSpeakerCheck(speaker, speaker.selected)
+}
+
+// 修改 isCurrentSpeaker 函数
+const isCurrentSpeaker = (speaker) => {
+  // 如果有自定义显示名，先用显示名比较
+  if (props.segment.speakerDisplayName) {
+    return speaker.name === props.segment.speakerDisplayName
+  }
+  // 否则用原始 ID 比较
+  return speaker.id === props.segment.speaker_id
 }
 </script>
 
@@ -301,6 +368,31 @@ const handleSpeakerSelect = (speaker) => {
 .name-editor :deep(.el-input-group__append button:hover) {
   background-color: var(--el-color-primary) !important;
   color: white !important;
+}
+
+.batch-update-section {
+  padding: 12px 20px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.batch-checkbox {
+  color: var(--el-text-color-regular);
+}
+
+.confirm-button {
+  min-width: 80px;
+}
+
+.speaker-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.speaker-item.disabled:hover {
+  background-color: transparent;
 }
 </style>
 
