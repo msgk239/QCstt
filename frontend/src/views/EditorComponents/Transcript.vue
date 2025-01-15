@@ -4,7 +4,7 @@
     <div class="segments">
       <div 
         v-for="segment in mergedSegments" 
-        :key="segment.id"
+        :key="segment.segmentId"
         class="segment"
         :class="{ 
           'is-playing': isSegmentPlaying(segment),
@@ -16,7 +16,7 @@
           <SpeakerManager
             :segment="segment"
             :speakers="props.speakers"
-            :manager-id="segment.id"
+            :manager-id="segment.segmentId"
             @speaker-select="handleSpeakerChange"
           />
           <span class="time">{{ formatTime(segment.start_time) }}</span>
@@ -32,10 +32,10 @@
             contenteditable="true"
             @input="(e) => handleContentChange(e, segment)"
           >
-            <template v-for="(subSegment, subIndex) in segment.subSegments" :key="subIndex">
+            <template v-for="(subSegment, subIndex) in segment.subSegments" :key="subSegment.subsegmentId">
               <span
                 v-for="(word, wordIndex) in splitTextWithTimestamps(subSegment)"
-                :key="`${subIndex}-${wordIndex}`"
+                :key="`${subSegment.subsegmentId}-${wordIndex}`"
                 :class="{ 'word-highlight': isWordPlaying(word) }"
               >{{ word.text }}</span>
               <br v-if="subIndex < segment.subSegments.length - 1">
@@ -50,6 +50,7 @@
 <script setup>
 import { ref, watch, watchEffect, computed } from 'vue'
 import SpeakerManager from '@/components/common/SpeakerManager.vue'
+import { nanoid } from 'nanoid'
 
 const props = defineProps({
   segments: {
@@ -134,7 +135,7 @@ const mergedSegments = computed(() => {
   const result = []
   let currentGroup = null
   
-  props.segments.forEach(segment => {
+  props.segments.forEach((segment, index) => {
     // 使用 speakerKey 判断是否是同一个说话人
     const currentKey = segment.speakerKey
     const groupKey = currentGroup?.speakerKey
@@ -148,15 +149,42 @@ const mergedSegments = computed(() => {
       
       // 创建新组
       currentGroup = {
-        ...segment,
-        subSegments: [segment],
-        text: segment.text || ''
+        // 原始字段（不变）
+        speaker_id: segment.speaker_id,
+        speaker_name: segment.speaker_name,
+        
+        // 前端使用的字段（可变）
+        speakerKey: segment.speakerKey,
+        speakerDisplayName: segment.speakerDisplayName,
+        color: segment.color,
+        
+        // 段落标识（可变）
+        segmentId: `${segment.speakerKey}_${nanoid(6)}`,   // 唯一标识符（speakerKey + nanoid(6)）
+        
+        // 时间信息（可变）
+        start_time: segment.start_time,
+        end_time: segment.end_time,
+        
+        // 子段落信息
+        subSegments: [{
+          subsegmentId: `${segment.speaker_id}-${segment.start_time}-${segment.end_time}`,  // 子段落唯一标识
+          text: segment.text || '',
+          start_time: segment.start_time,
+          end_time: segment.end_time,
+          timestamps: segment.timestamps
+        }]
       }
     } else {
       // 添加到当前组
-      currentGroup.subSegments.push(segment)
-      currentGroup.text = `${currentGroup.text}\n${segment.text || ''}`.trim()
-      currentGroup.end_time = segment.end_time
+      currentGroup.subSegments.push({
+        subsegmentId: `${segment.speaker_id}-${segment.start_time}-${segment.end_time}`,
+        text: segment.text || '',
+        start_time: segment.start_time,
+        end_time: segment.end_time,
+        timestamps: segment.timestamps
+      })
+      currentGroup.text = currentGroup.subSegments.map(sub => sub.text).join('\n').trim()
+      currentGroup.end_time = segment.end_time  // 更新合并后的 end_time
     }
   })
   
@@ -172,7 +200,7 @@ const mergedSegments = computed(() => {
 const handleSegmentClick = (segment) => {
   const updatedSegments = props.segments.map(s => ({
     ...s,
-    isSelected: s.id === segment.id
+    isSelected: s.segmentId === segment.segmentId
   }))
   emit('segment-select', updatedSegments)
 }

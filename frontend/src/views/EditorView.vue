@@ -72,6 +72,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getFileDetail, formatFileData, getAudioFile } from '@/api/modules/file'
 import { useFileStore } from '@/stores/fileStore'
+import { nanoid } from 'nanoid'
 
 // 获取 store 实例
 const fileStore = useFileStore()
@@ -99,18 +100,18 @@ const file = ref(null)
 const segments = ref([])
 const speakers = ref([
   {
-    id: 'speaker_0',
-    name: '说话人 1',
+    speakerKey: 'speaker_0',
+    speakerDisplayName: '说话人 1',
     color: '#409EFF',
-    original_id: 'speaker_0',
-    original_name: '说话人 1'
+    speaker_id: 'speaker_0',
+    speaker_name: '说话人 1'
   },
   {
-    id: 'speaker_1',
-    name: '说话人 2',
+    speakerKey: 'speaker_1',
+    speakerDisplayName: '说话人 2',
     color: '#F56C6C',
-    original_id: 'speaker_1',
-    original_name: '说话人 2'
+    speaker_id: 'speaker_1',
+    speaker_name: '说话人 2'
   }
 ])
 const saving = ref(false)
@@ -217,16 +218,27 @@ const handleSave = async () => {
     // 保存时可能需要处理数据，确保原始字段正确
     const saveData = {
       segments: segments.value.map(segment => ({
-        ...segment,
-        // 确保原始字段不变
+        // 原始字段（不变）
         speaker_id: segment.speaker_id,
-        speaker_name: segment.speaker_name
+        speaker_name: segment.speaker_name,
+        
+        // 时间信息
+        start_time: segment.start_time,
+        end_time: segment.end_time,
+        
+        // 子段落信息
+        subSegments: segment.subSegments.map(sub => ({
+          subsegmentId: sub.subsegmentId,
+          text: sub.text,
+          start_time: sub.start_time,
+          end_time: sub.end_time,
+          timestamps: sub.timestamps
+        }))
       })),
       speakers: speakers.value.map(speaker => ({
-        ...speaker,
-        // 确保原始字段不变
-        id: speaker.original_id || speaker.id,
-        name: speaker.name
+        // 原始字段（不变）
+        id: speaker.speaker_id,
+        name: speaker.speaker_name
       }))
     }
     await fileStore.saveFile(route.params.id, saveData)
@@ -240,24 +252,74 @@ const handleSave = async () => {
   }
 }
 
-const handleSegmentUpdate = async (updatedSegments) => {
-  // 如果是数组，说明是批量更新
+const handleSegmentUpdate = (updatedSegments) => {
   if (Array.isArray(updatedSegments)) {
-    segments.value = updatedSegments.map(segment => ({
-      ...segment,
-      speaker_id: segment.speaker_id,  // 保持原始ID不变
-      speaker_name: segment.speaker_name,  // 保持原始名字不变
-      speakerDisplayName: segment.speakerDisplayName,
-      speakerKey: segment.speakerKey
-    }))
+    segments.value = updatedSegments.map((segment, index) => {
+      // 确保基本字段存在
+      const safeSegment = {
+        ...segment,
+        speaker_id: segment.speaker_id || `speaker_${index}`,
+        speaker_name: segment.speaker_name || `说话人 ${index + 1}`,
+        speakerKey: segment.speakerKey || segment.speaker_id || `speaker_${index}`,
+        speakerDisplayName: segment.speakerDisplayName || segment.speaker_name || `说话人 ${index + 1}`,
+        color: segment.color || '#409EFF',
+        start_time: segment.start_time || 0,
+        end_time: segment.end_time || 0,
+        text: segment.text || '',
+        timestamps: segment.timestamps || []
+      }
+      
+      return {
+        ...safeSegment,
+        segmentId: `${safeSegment.speakerKey}_${nanoid(6)}`,
+        subSegments: segment.subSegments?.map(sub => ({
+          subsegmentId: `${safeSegment.speaker_id}-${sub.start_time || 0}-${sub.end_time || 0}`,
+          text: sub.text || '',
+          start_time: sub.start_time || 0,
+          end_time: sub.end_time || 0,
+          timestamps: sub.timestamps || []
+        })) || [{
+          subsegmentId: `${safeSegment.speaker_id}-${safeSegment.start_time}-${safeSegment.end_time}`,
+          text: safeSegment.text,
+          start_time: safeSegment.start_time,
+          end_time: safeSegment.end_time,
+          timestamps: safeSegment.timestamps
+        }]
+      }
+    })
   } else {
-    // 单个段落更新
-    const index = segments.value.findIndex(s => s.id === updatedSegments.id)
+    const index = segments.value.findIndex(s => s.segmentId === updatedSegments.segmentId)
     if (index > -1) {
-      segments.value[index] = {
+      // 确保基本字段存在
+      const safeSegment = {
         ...updatedSegments,
-        speaker_id: segments.value[index].speaker_id,  // 保持原始ID不变
-        speaker_name: segments.value[index].speaker_name  // 保持原始名字不变
+        speaker_id: updatedSegments.speaker_id || segments.value[index].speaker_id,
+        speaker_name: updatedSegments.speaker_name || segments.value[index].speaker_name,
+        speakerKey: updatedSegments.speakerKey || updatedSegments.speaker_id || segments.value[index].speakerKey,
+        speakerDisplayName: updatedSegments.speakerDisplayName || updatedSegments.speaker_name || segments.value[index].speakerDisplayName,
+        color: updatedSegments.color || segments.value[index].color || '#409EFF',
+        start_time: updatedSegments.start_time || 0,
+        end_time: updatedSegments.end_time || 0,
+        text: updatedSegments.text || '',
+        timestamps: updatedSegments.timestamps || []
+      }
+      
+      segments.value[index] = {
+        ...safeSegment,
+        segmentId: `${safeSegment.speakerKey}_${nanoid(6)}`,
+        subSegments: updatedSegments.subSegments?.map(sub => ({
+          subsegmentId: `${safeSegment.speaker_id}-${sub.start_time || 0}-${sub.end_time || 0}`,
+          text: sub.text || '',
+          start_time: sub.start_time || 0,
+          end_time: sub.end_time || 0,
+          timestamps: sub.timestamps || []
+        })) || [{
+          subsegmentId: `${safeSegment.speaker_id}-${safeSegment.start_time}-${safeSegment.end_time}`,
+          text: safeSegment.text,
+          start_time: safeSegment.start_time,
+          end_time: safeSegment.end_time,
+          timestamps: safeSegment.timestamps
+        }]
       }
     }
   }
@@ -318,28 +380,60 @@ const loadFileData = async () => {
   file.value = formattedData
   
   // 初始化 segments
-  segments.value = formattedData.segments.map(segment => ({
-    ...segment,
-    // 确保所有必要字段都存在
-    speaker_id: segment.speaker_id,
-    speaker_name: segment.speaker_name,
-    speakerDisplayName: segment.speaker_name,
-    speakerKey: segment.speaker_id,
-    // 添加其他可能需要的字段
-    isSelected: false
-  }))
+  segments.value = formattedData.segments.map((segment, index) => {
+    // 确保基本字段存在
+    const safeSegment = {
+      // 原始字段（不变）
+      speaker_id: segment.speaker_id || `speaker_${index}`,
+      speaker_name: segment.speaker_name || `说话人 ${index + 1}`,
+      
+      // 前端使用的字段（可变）
+      speakerKey: segment.speaker_id || `speaker_${index}`,
+      speakerDisplayName: segment.speaker_name || `说话人 ${index + 1}`,
+      color: segment.color || '#409EFF',
+      
+      // 段落标识（可变）
+      segmentId: `${segment.speaker_id || `speaker_${index}`}_${nanoid(6)}`,
+      
+      // 时间信息（可变）
+      start_time: segment.start_time || 0,
+      end_time: segment.end_time || 0,
+      
+      // 子段落信息
+      text: segment.text || '',
+      timestamps: segment.timestamps || [],
+      
+      // 其他状态
+      isSelected: false
+    }
+    
+    return {
+      ...safeSegment,
+      subSegments: [{
+        subsegmentId: `${safeSegment.speaker_id}-${safeSegment.start_time}-${safeSegment.end_time}`,
+        text: safeSegment.text,
+        start_time: safeSegment.start_time,
+        end_time: safeSegment.end_time,
+        timestamps: safeSegment.timestamps
+      }]
+    }
+  })
 
-  // 初始化 speakers
+  // 只在第一次加载时初始化 speakers
   if (!speakers.value.length) {
-    const colors = ['#409EFF', '#F56C6C']
+    const colors = ['#409EFF', '#F56C6C', '#67C23A', '#E6A23C', '#909399']
     speakers.value = formattedData.speakers.map((speaker, index) => ({
-      ...speaker,
+      // 前端使用的字段（可变）
+      speakerKey: speaker.id || `speaker_${index}`,
+      speakerDisplayName: speaker.name || `说话人 ${index + 1}`,
       color: colors[index % colors.length],
-      original_id: speaker.id,
-      original_name: speaker.name,
-      selected: false
+      
+      // 原始字段（不变）
+      speaker_id: speaker.id || `speaker_${index}`,
+      speaker_name: speaker.name || `说话人 ${index + 1}`
     }))
   }
+  
   duration.value = formattedData.duration || 0
 }
 
@@ -411,8 +505,8 @@ const handleReset = () => {
   // 重置说话人列表
   speakers.value = speakers.value.map(speaker => ({
     ...speaker,
-    name: speaker.original_name,    // 使用保存的原始名字
-    color: speaker.color           // 保持颜色不变
+    speakerDisplayName: speaker.speaker_name,    // 使用原始名字
+    speakerKey: speaker.speaker_id              // 使用原始ID
   }))
   
   // 同时重置所有段落
@@ -430,13 +524,13 @@ const currentSpeaker = computed(() => {
   const selectedSegment = segments.value.find(s => s.isSelected)
   if (!selectedSegment) return null
   
-  const speaker = speakers.value.find(s => s.id === selectedSegment.speakerKey)
+  const speaker = speakers.value.find(s => s.speakerKey === selectedSegment.speakerKey)
   if (!speaker) return null
 
   return {
     ...speaker,
-    originalName: speaker.original_name,  // 使用保存的原始名字
-    newName: speaker.name                // 使用当前名字
+    speaker_name: speaker.speaker_name,  // 使用原始名字
+    speakerDisplayName: speaker.speakerDisplayName  // 使用当前显示名字
   }
 })
 
@@ -452,42 +546,31 @@ const handleSegmentSelect = (updatedSegments) => {
 }
 
 const handleSpeakerChange = (updatedSegment) => {
+  // 如果需要批量更新
   if (updatedSegment.batchUpdate) {
-    // 批量更新时，修改所有相同 speakerKey 的段落
-    segments.value = segments.value.map(s => {
-      if (s.speakerKey === updatedSegment.oldSpeakerKey) {
+    // 更新所有相同说话人的段落
+    segments.value = segments.value.map(segment => {
+      if (segment.speakerKey === updatedSegment.speakerKey) {
         return {
-          ...s,
+          ...segment,
+          speakerKey: updatedSegment.speakerKey,
           speakerDisplayName: updatedSegment.speakerDisplayName,
-          speakerKey: updatedSegment.speakerKey
+          segmentId: `${updatedSegment.speakerKey}_${nanoid(6)}`  // 使用新的 ID 格式
         }
       }
-      return s
-    })
-  } else if (updatedSegment.mergedIds) {
-    // 更新合并段落中的所有子段落
-    segments.value = segments.value.map(s => {
-      if (updatedSegment.mergedIds.includes(s.id)) {
-        return {
-          ...s,
-          speakerDisplayName: updatedSegment.speakerDisplayName,
-          speakerKey: updatedSegment.speakerKey
-        }
-      }
-      return s
+      return segment
     })
   } else {
-    // 单个段落更新
-    segments.value = segments.value.map(s => {
-      if (s.id === updatedSegment.id) {
-        return {
-          ...s,
-          speakerDisplayName: updatedSegment.speakerDisplayName,
-          speakerKey: updatedSegment.speakerKey
-        }
+    // 只更新单个段落
+    const index = segments.value.findIndex(s => s.segmentId === updatedSegment.segmentId)
+    if (index > -1) {
+      segments.value[index] = {
+        ...segments.value[index],
+        speakerKey: updatedSegment.speakerKey,
+        speakerDisplayName: updatedSegment.speakerDisplayName,
+        segmentId: updatedSegment.segmentId
       }
-      return s
-    })
+    }
   }
 }
 
