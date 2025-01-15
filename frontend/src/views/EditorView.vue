@@ -283,7 +283,12 @@ const loadFileData = async () => {
   segments.value = formattedData.segments
   // 只在 speakers 为空时初始化
   if (!speakers.value.length) {
-    speakers.value = formattedData.speakers
+    // 为每个说话人设置不同的颜色
+    const colors = ['#409EFF', '#F56C6C'] // 蓝色和红色
+    speakers.value = formattedData.speakers.map((speaker, index) => ({
+      ...speaker,
+      color: colors[index % colors.length]
+    }))
   }
   duration.value = formattedData.duration || 0
 }
