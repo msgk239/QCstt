@@ -17,8 +17,7 @@
             :segment="segment"
             :speakers="props.speakers"
             :manager-id="segment.id"
-            @update:speakers="handleSpeakersUpdate"
-            @speaker-select="(speakerId) => handleSpeakerChange(speakerId, segment)"
+            @speaker-select="handleSpeakerChange"
           />
           <span class="time">{{ formatTime(segment.start_time) }}</span>
         </div>
@@ -67,7 +66,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['segment-update', 'speaker-change', 'timeupdate', 'segment-select', 'speakers-update'])
+const emit = defineEmits(['segment-update', 'speaker-change', 'timeupdate', 'segment-select'])
 
 const transcriptRef = ref(null)
 
@@ -79,23 +78,8 @@ const formatTime = (seconds) => {
 
 // 处理说话人变更
 const handleSpeakerChange = (updatedSegment) => {
-  // 获取当前合并段落中的所有子段落
-  const mergedSegment = mergedSegments.value.find(s => s.start_time === updatedSegment.start_time && s.end_time === updatedSegment.end_time)
-  if (!mergedSegment) return
-
-  // 为合并段落中的所有子段落设置相同的显示名字
-  const updatedSegments = props.segments.map(s => {
-    if (mergedSegment.subSegments.some(sub => sub.start_time === s.start_time && sub.end_time === s.end_time)) {
-      return {
-        ...s,
-        speakerDisplayName: updatedSegment.speakerDisplayName
-      }
-    }
-    return s
-  })
-
-  // 发出更新事件
-  emit('segment-update', updatedSegments)
+  // 直接发送更新事件给父组件
+  emit('speaker-change', updatedSegment)
 }
 
 // 处理内容编辑
@@ -142,6 +126,7 @@ watch([() => props.segments, () => props.speakers], () => {
   console.log('segments:', props.segments)
   console.log('speakers:', props.speakers)
 })
+
 // 添加合并段落的计算属性
 const mergedSegments = computed(() => {
   console.log('Computing mergedSegments with:', {
@@ -153,8 +138,12 @@ const mergedSegments = computed(() => {
   let currentGroup = null
   
   props.segments.forEach(segment => {
+    // 使用 speakerKey 判断是否是同一个说话人
+    const currentKey = segment.speakerKey
+    const groupKey = currentGroup?.speakerKey
+    
     // 如果是新的说话人或者第一个段落
-    if (!currentGroup || currentGroup.speaker_id !== segment.speaker_id) {
+    if (!currentGroup || groupKey !== currentKey) {
       // 保存当前组
       if (currentGroup) {
         result.push(currentGroup)

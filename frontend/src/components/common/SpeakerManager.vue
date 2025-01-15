@@ -17,12 +17,12 @@
         >
           <div class="speaker-option">
             <el-icon 
-              :color="getSpeakerColor(props.segment.speaker_id)"
+              :color="getSpeakerColor()"
               class="speaker-icon"
             >
               <User />
             </el-icon>
-            {{ getSpeakerName(props.segment.speaker_id) }}
+            {{ getSpeakerName() }}
           </div>
         </el-button>
       </div>
@@ -105,7 +105,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:speakers', 'speaker-select'])
+const emit = defineEmits(['speaker-select'])
 
 // 恢复内部状态
 const dialogVisible = ref(false)
@@ -113,7 +113,7 @@ const newSpeakerName = ref('')
 
 // 添加计算属性获取当前说话人
 const currentSpeaker = computed(() => {
-  const speaker = props.speakers.find(s => s.id === props.segment.speaker_id)
+  const speaker = props.speakers.find(s => s.id === props.segment.speakerKey)
   return speaker || null
 })
 
@@ -138,27 +138,15 @@ const handleButtonClick = () => {
   dialogVisible.value = true
 }
 
-const getSpeakerColor = (id) => {
-  // 如果有自定义显示名，先查找对应的说话人
-  if (props.segment.speakerDisplayName) {
-    const matchedSpeaker = props.speakers.find(s => s.name === props.segment.speakerDisplayName)
-    if (matchedSpeaker) {
-      return matchedSpeaker.color
-    }
-  }
-  // 否则使用原始说话人的颜色
-  const speaker = props.speakers.find(s => s.id === id)
+const getSpeakerColor = () => {
+  // 使用 speakerKey 查找对应的说话人
+  const speaker = props.speakers.find(s => s.id === props.segment.speakerKey)
   return speaker?.color || '#409EFF'
 }
 
-const getSpeakerName = (id) => {
-  // 优先使用自定义显示名字
-  if (props.segment.speakerDisplayName) {
-    return props.segment.speakerDisplayName
-  }
-  // 否则使用原始名字
-  const speaker = props.speakers.find(s => s.id === id)
-  return speaker?.name || (id === 'speaker_0' ? '说话人 1' : '说话人 2')
+const getSpeakerName = () => {
+  // 只使用 speakerDisplayName
+  return props.segment.speakerDisplayName
 }
 
 const handleNameConfirm = () => {
@@ -167,22 +155,33 @@ const handleNameConfirm = () => {
     return
   }
 
-  // 不修改原始的 speakers 数组
-  const updatedSegment = {
-    ...props.segment,
-    speakerDisplayName: newSpeakerName.value.trim()
+  // 生成随机颜色
+  const colors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399']
+  const randomColor = colors[Math.floor(Math.random() * colors.length)]
+
+  // 先添加新说话人
+  const newSpeaker = {
+    id: `custom_${Date.now()}`,  // 使用时间戳生成唯一ID
+    name: newSpeakerName.value.trim(),
+    color: randomColor,
+    selected: true,
+    original_id: null,  // 新添加的说话人没有原始ID
+    original_name: null // 新添加的说话人没有原始名字
   }
 
-  // 发出事件，让父组件处理更新
-  emit('speaker-select', updatedSegment)
-  
-  // 关闭对话框
-  dialogVisible.value = false
-  
+  // 更新本地列表
+  localSpeakers.value = [...localSpeakers.value, {
+    ...newSpeaker,
+    selected: true
+  }]
+
+  // 设置选中的说话人
+  selectedSpeaker.value = newSpeaker
+
   // 清空输入
   newSpeakerName.value = ''
   
-  ElMessage.success('更新成功')
+  ElMessage.success('已添加新说话人并选中，请选择是否批量更新后点击确认')
 }
 
 // 添加 inputRef
@@ -204,8 +203,23 @@ const localSpeakers = ref(props.speakers.map(speaker => ({
   selected: false
 })))
 
+// 修改 watch 以确保深度监听
+watch(() => props.speakers, (newSpeakers) => {
+  console.log('Speakers updated:', newSpeakers)
+  localSpeakers.value = newSpeakers.map(speaker => ({
+    ...speaker,
+    selected: false
+  }))
+}, { deep: true, immediate: true })  // 添加 immediate: true
+
 // 修改选择处理函数
 const handleSpeakerCheck = (speaker, checked) => {
+  // 取消其他说话人的选中状态
+  localSpeakers.value.forEach(s => {
+    if (s.id !== speaker.id) {
+      s.selected = false
+    }
+  })
   selectedSpeaker.value = checked ? speaker : null
 }
 
@@ -216,11 +230,19 @@ const handleConfirm = () => {
     return
   }
 
+  console.log('Current segment:', props.segment)
+  console.log('Selected speaker:', selectedSpeaker.value)
+
   const updatedSegment = {
     ...props.segment,
-    speakerDisplayName: selectedSpeaker.value.name,
+    speaker_id: props.segment.speaker_id,  // 保持原始ID不变
+    speaker_name: props.segment.speaker_name,  // 保持原始名字不变
+    speakerDisplayName: selectedSpeaker.value.name,  // 更新显示名字
+    speakerKey: selectedSpeaker.value.id,  // 使用说话人的ID作为key
     batchUpdate: batchUpdate.value
   }
+
+  console.log('Emitting updated segment:', updatedSegment)
 
   // 发出事件，让父组件处理更新
   emit('speaker-select', updatedSegment)
@@ -240,19 +262,17 @@ const handleConfirm = () => {
 const handleSpeakerItemClick = (speaker) => {
   if (isCurrentSpeaker(speaker)) return
   // 切换选中状态
-  speaker.selected = !speaker.selected
+  localSpeakers.value.forEach(s => {
+    s.selected = s.id === speaker.id
+  })
   // 调用原有的处理函数
-  handleSpeakerCheck(speaker, speaker.selected)
+  handleSpeakerCheck(speaker, true)
 }
 
 // 修改 isCurrentSpeaker 函数
 const isCurrentSpeaker = (speaker) => {
-  // 如果有自定义显示名，先用显示名比较
-  if (props.segment.speakerDisplayName) {
-    return speaker.name === props.segment.speakerDisplayName
-  }
-  // 否则用原始 ID 比较
-  return speaker.id === props.segment.speaker_id
+  // 使用 speakerKey 来判断是否是当前说话人
+  return speaker.id === props.segment.speakerKey
 }
 </script>
 

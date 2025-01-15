@@ -41,7 +41,6 @@
         @speaker-change="handleSpeakerChange"
         @timeupdate="handleTimeUpdate"
         @segment-select="handleSegmentSelect"
-        @speakers-update="handleSpeakersUpdate"
       />
     </div>
 
@@ -98,7 +97,22 @@ const route = useRoute()
 // 状态
 const file = ref(null)
 const segments = ref([])
-const speakers = ref([])
+const speakers = ref([
+  {
+    id: 'speaker_0',
+    name: '说话人 1',
+    color: '#409EFF',
+    original_id: 'speaker_0',
+    original_name: '说话人 1'
+  },
+  {
+    id: 'speaker_1',
+    name: '说话人 2',
+    color: '#F56C6C',
+    original_id: 'speaker_1',
+    original_name: '说话人 2'
+  }
+])
 const saving = ref(false)
 
 // 对话框状态
@@ -200,10 +214,22 @@ const initAudio = async () => {
 const handleSave = async () => {
   saving.value = true
   try {
-    await fileStore.saveFile(route.params.id, {
-      segments: segments.value,
-      speakers: speakers.value
-    })
+    // 保存时可能需要处理数据，确保原始字段正确
+    const saveData = {
+      segments: segments.value.map(segment => ({
+        ...segment,
+        // 确保原始字段不变
+        speaker_id: segment.speaker_id,
+        speaker_name: segment.speaker_name
+      })),
+      speakers: speakers.value.map(speaker => ({
+        ...speaker,
+        // 确保原始字段不变
+        id: speaker.original_id || speaker.id,
+        name: speaker.name
+      }))
+    }
+    await fileStore.saveFile(route.params.id, saveData)
     lastSaveTime.value = new Date()
     ElMessage.success('保存成功')
   } catch (error) {
@@ -217,12 +243,26 @@ const handleSave = async () => {
 const handleSegmentUpdate = async (updatedSegments) => {
   // 如果是数组，说明是批量更新
   if (Array.isArray(updatedSegments)) {
-    segments.value = updatedSegments
+    // 确保每个段落的原始字段不变
+    segments.value = updatedSegments.map(segment => ({
+      ...segment,
+      speaker_id: segment.speaker_id,
+      speaker_name: segment.speaker_name,
+      speakerDisplayName: segment.speakerDisplayName || segment.speaker_name,
+      speakerKey: segment.speakerKey || segment.speaker_id
+    }))
   } else {
     // 单个段落更新
     const index = segments.value.findIndex(s => s.id === updatedSegments.id)
     if (index > -1) {
-      segments.value[index] = updatedSegments
+      // 保持原始字段不变
+      segments.value[index] = {
+        ...updatedSegments,
+        speaker_id: segments.value[index].speaker_id,
+        speaker_name: segments.value[index].speaker_name,
+        speakerDisplayName: updatedSegments.speakerDisplayName || segments.value[index].speaker_name,
+        speakerKey: updatedSegments.speakerKey || segments.value[index].speaker_id
+      }
     }
   }
 }
@@ -280,14 +320,28 @@ const loadFileData = async () => {
   const response = await getFileDetail(route.params.id)
   const formattedData = formatFileData(response)
   file.value = formattedData
-  segments.value = formattedData.segments
-  // 只在 speakers 为空时初始化
+  
+  // 初始化 segments
+  segments.value = formattedData.segments.map(segment => ({
+    ...segment,
+    // 确保所有必要字段都存在
+    speaker_id: segment.speaker_id,
+    speaker_name: segment.speaker_name,
+    speakerDisplayName: segment.speaker_name,
+    speakerKey: segment.speaker_id,
+    // 添加其他可能需要的字段
+    isSelected: false
+  }))
+
+  // 初始化 speakers
   if (!speakers.value.length) {
-    // 为每个说话人设置不同的颜色
-    const colors = ['#409EFF', '#F56C6C'] // 蓝色和红色
+    const colors = ['#409EFF', '#F56C6C']
     speakers.value = formattedData.speakers.map((speaker, index) => ({
       ...speaker,
-      color: colors[index % colors.length]
+      color: colors[index % colors.length],
+      original_id: speaker.id,
+      original_name: speaker.name,
+      selected: false
     }))
   }
   duration.value = formattedData.duration || 0
@@ -332,7 +386,8 @@ const handleBatchReplace = (nameMapping) => {
     if (nameMapping[speaker.name]) {
       return {
         ...speaker,
-        name: nameMapping[speaker.name]
+        name: nameMapping[speaker.name],
+        original_name: speaker.name  // 保存原始名字
       }
     }
     return speaker
@@ -342,10 +397,12 @@ const handleBatchReplace = (nameMapping) => {
   segments.value = segments.value.map(segment => {
     const speaker = speakers.value.find(s => s.id === segment.speaker_id)
     if (speaker && nameMapping[speaker.name]) {
-      // 保持 speaker_id 不变，只更新关联的说话人信息
       return {
         ...segment,
-        speaker_id: segment.speaker_id
+        speaker_id: segment.speaker_id,      // 保持原始ID不变
+        speaker_name: segment.speaker_name,   // 保持原始名字不变
+        speakerDisplayName: speaker.name,    // 更新显示名字
+        speakerKey: speaker.id              // 更新key
       }
     }
     return segment
@@ -358,8 +415,15 @@ const handleReset = () => {
   // 重置说话人列表
   speakers.value = speakers.value.map(speaker => ({
     ...speaker,
-    name: speaker.originalName,
-    color: speaker.originalColor
+    name: speaker.original_name,    // 使用保存的原始名字
+    color: speaker.color           // 保持颜色不变
+  }))
+  
+  // 同时重置所有段落
+  segments.value = segments.value.map(segment => ({
+    ...segment,
+    speakerDisplayName: segment.speaker_name,  // 恢复原始名字作为显示名字
+    speakerKey: segment.speaker_id            // 恢复原始ID作为key
   }))
   
   ElMessage.success('重置成功')
@@ -370,37 +434,67 @@ const currentSpeaker = computed(() => {
   const selectedSegment = segments.value.find(s => s.isSelected)
   if (!selectedSegment) return null
   
-  const speaker = speakers.value.find(s => s.id === selectedSegment.speaker_id)
+  const speaker = speakers.value.find(s => s.id === selectedSegment.speakerKey)
   if (!speaker) return null
 
   return {
     ...speaker,
-    originalName: speaker.name,
-    newName: speaker.name
+    originalName: speaker.original_name,  // 使用保存的原始名字
+    newName: speaker.name                // 使用当前名字
   }
 })
 
-const handleSpeakersUpdate = (updatedSpeakers) => {
-  // 确保只更新当前说话人，不影响其他说话人的状态
-  speakers.value = updatedSpeakers
-}
-
 const handleSegmentSelect = (updatedSegments) => {
-  // 确保只更新选中状态，不影响其他状态
-  segments.value = updatedSegments
+  // 确保更新选中状态时保持原始字段不变
+  segments.value = updatedSegments.map(segment => ({
+    ...segment,
+    speaker_id: segment.speaker_id,
+    speaker_name: segment.speaker_name,
+    speakerDisplayName: segment.speakerDisplayName || segment.speaker_name,
+    speakerKey: segment.speakerKey || segment.speaker_id
+  }))
 }
 
-const handleSpeakerChange = (speakerId, segment) => {
-  // 只更新当前段落的说话人
-  segments.value = segments.value.map(s => {
-    if (s.id === segment.id) {
-      return {
-        ...s,
-        speaker_id: speakerId
+const handleSpeakerChange = (updatedSegment) => {
+  console.log('Handling speaker change:', updatedSegment)
+
+  if (updatedSegment.batchUpdate) {
+    segments.value = segments.value.map(s => {
+      if (s.speakerKey === updatedSegment.speakerKey) {
+        return {
+          ...s,
+          speakerDisplayName: updatedSegment.speakerDisplayName,
+          speakerKey: updatedSegment.speakerKey  // 批量更新时也要更新 key
+        }
       }
-    }
-    return s
-  })
+      return s
+    })
+  } else {
+    // 单个更新
+    segments.value = segments.value.map(s => {
+      // 使用 ID 精确匹配段落
+      if (s.id === updatedSegment.id) {
+        console.log('Updating segment:', {
+          old: s.speakerDisplayName,
+          new: updatedSegment.speakerDisplayName
+        })
+        return {
+          ...s,
+          speakerDisplayName: updatedSegment.speakerDisplayName,
+          speakerKey: updatedSegment.speakerKey  // 同时更新 key
+        }
+      }
+      return s
+    })
+  }
+
+  console.log('Updated segments:', segments.value)
+}
+
+// 修改获取说话人名字的函数
+const getSpeakerName = (segment) => {
+  // 只使用 speakerDisplayName
+  return segment.speakerDisplayName
 }
 </script>
 
