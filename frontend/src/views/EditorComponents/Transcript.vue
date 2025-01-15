@@ -78,8 +78,24 @@ const formatTime = (seconds) => {
 }
 
 // 处理说话人变更
-const handleSpeakerChange = (speakerId, segment) => {
-  emit('speaker-change', speakerId, segment)
+const handleSpeakerChange = (updatedSegment) => {
+  // 获取当前合并段落中的所有子段落
+  const mergedSegment = mergedSegments.value.find(s => s.start_time === updatedSegment.start_time && s.end_time === updatedSegment.end_time)
+  if (!mergedSegment) return
+
+  // 为合并段落中的所有子段落设置相同的显示名字
+  const updatedSegments = props.segments.map(s => {
+    if (mergedSegment.subSegments.some(sub => sub.start_time === s.start_time && sub.end_time === s.end_time)) {
+      return {
+        ...s,
+        speakerDisplayName: updatedSegment.speakerDisplayName
+      }
+    }
+    return s
+  })
+
+  // 发出更新事件
+  emit('segment-update', updatedSegments)
 }
 
 // 处理内容编辑

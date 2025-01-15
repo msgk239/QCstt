@@ -104,6 +104,11 @@ const getSpeakerColor = (id) => {
 }
 
 const getSpeakerName = (id) => {
+  // 优先使用自定义显示名字
+  if (props.segment.speakerDisplayName) {
+    return props.segment.speakerDisplayName
+  }
+  // 否则使用原始名字
   const speaker = props.speakers.find(s => s.id === id)
   return speaker?.name || (id === 'speaker_0' ? '说话人 1' : '说话人 2')
 }
@@ -114,20 +119,21 @@ const handleNameConfirm = () => {
     return
   }
 
-  const updatedSpeakers = props.speakers.map(speaker => {
-    if (speaker === currentSpeaker.value) {
-      return {
-        ...speaker,
-        name: newSpeakerName.value.trim()
-      }
-    }
-    return speaker
-  })
+  // 不修改原始的 speakers 数组
+  const updatedSegment = {
+    ...props.segment,
+    speakerDisplayName: newSpeakerName.value.trim()
+  }
 
-  emit('update:speakers', updatedSpeakers)
-  emit('speaker-select', props.segment.speaker_id)
+  // 发出事件，让父组件处理更新
+  emit('speaker-select', updatedSegment)
+  
+  // 关闭对话框
   dialogVisible.value = false
+  
+  // 清空输入
   newSpeakerName.value = ''
+  
   ElMessage.success('更新成功')
 }
 
@@ -267,12 +273,23 @@ const handleFocus = () => {
 
 .name-editor :deep(.el-input-group__append) {
   padding: 0;
+  position: relative;
+  left: 0;  /* 移除左偏移 */
 }
 
 .name-editor :deep(.el-input-group__append button) {
   border: none;
   height: 32px;
-  padding: 0 15px;
+  padding: 0 24px;  /* 增加内边距 */
+  min-width: 80px;  /* 设置最小宽度 */
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  transition: background-color 0.3s ease;  /* 添加过渡效果 */
+}
+
+.name-editor :deep(.el-input-group__append button:hover) {
+  background-color: var(--el-color-primary) !important;
+  color: white !important;
 }
 </style>
 

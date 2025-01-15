@@ -214,10 +214,16 @@ const handleSave = async () => {
   }
 }
 
-const handleSegmentUpdate = (segment) => {
-  const index = segments.value.findIndex(s => s.id === segment.id)
-  if (index > -1) {
-    segments.value[index] = segment
+const handleSegmentUpdate = async (updatedSegments) => {
+  // 如果是数组，说明是批量更新
+  if (Array.isArray(updatedSegments)) {
+    segments.value = updatedSegments
+  } else {
+    // 单个段落更新
+    const index = segments.value.findIndex(s => s.id === updatedSegments.id)
+    if (index > -1) {
+      segments.value[index] = updatedSegments
+    }
   }
 }
 
