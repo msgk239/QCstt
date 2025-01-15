@@ -33,7 +33,9 @@
         <el-input
           v-model="newSpeakerName"
           size="small"
-          placeholder="请输入新的说话人名字"
+          placeholder="可以修改说话人名字"
+          ref="inputRef"
+          @focus="handleFocus"
         >
           <template #append>
             <el-button @click="handleNameConfirm">确认</el-button>
@@ -45,7 +47,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User } from '@element-plus/icons-vue'
 
@@ -80,17 +82,20 @@ const currentSpeaker = computed(() => {
 watch(dialogVisible, (val) => {
   if (!val) {
     newSpeakerName.value = ''
+  } else {
+    // 当对话框打开时，清空输入框并设置焦点
+    newSpeakerName.value = ''
+    // 使用 nextTick 确保 DOM 更新后再设置焦点
+    nextTick(() => {
+      inputRef.value?.input?.focus()
+    })
   }
 })
 
 const handleButtonClick = () => {
   // 阻止事件冒泡，防止触发父组件的点击事件
   event.stopPropagation()
-  
   dialogVisible.value = true
-  if (currentSpeaker.value) {
-    newSpeakerName.value = currentSpeaker.value.name
-  }
 }
 
 const getSpeakerColor = (id) => {
@@ -124,6 +129,15 @@ const handleNameConfirm = () => {
   dialogVisible.value = false
   newSpeakerName.value = ''
   ElMessage.success('更新成功')
+}
+
+// 添加 inputRef
+const inputRef = ref(null)
+
+// 添加焦点处理函数
+const handleFocus = () => {
+  // 确保输入框为空
+  newSpeakerName.value = ''
 }
 </script>
 
