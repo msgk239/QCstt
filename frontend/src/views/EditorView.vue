@@ -38,6 +38,7 @@
         :speakers="speakers"
         :currentTime="currentTime"
         @segment-update="handleSegmentUpdate"
+        @speaker-change="handleSpeakerChange"
         @timeupdate="handleTimeUpdate"
         @segment-select="handleSegmentSelect"
         @speakers-update="handleSpeakersUpdate"
@@ -369,24 +370,26 @@ const currentSpeaker = computed(() => {
 })
 
 const handleSpeakersUpdate = (updatedSpeakers) => {
+  // 确保只更新当前说话人，不影响其他说话人的状态
   speakers.value = updatedSpeakers
-  // 更新相关段落的说话人信息
-  segments.value = segments.value.map(segment => {
-    const speaker = updatedSpeakers.find(s => s.id === segment.speaker_id)
-    if (speaker) {
-      return {
-        ...segment,
-        speaker_id: speaker.id
-      }
-    }
-    return segment
-  })
-  // 保存更改
-  handleSave()
 }
 
 const handleSegmentSelect = (updatedSegments) => {
+  // 确保只更新选中状态，不影响其他状态
   segments.value = updatedSegments
+}
+
+const handleSpeakerChange = (speakerId, segment) => {
+  // 只更新当前段落的说话人
+  segments.value = segments.value.map(s => {
+    if (s.id === segment.id) {
+      return {
+        ...s,
+        speaker_id: speakerId
+      }
+    }
+    return s
+  })
 }
 </script>
 

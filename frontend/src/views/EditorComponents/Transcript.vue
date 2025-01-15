@@ -10,14 +10,13 @@
           'is-playing': isSegmentPlaying(segment),
           'is-selected': segment.isSelected 
         }"
-        @click="handleSegmentClick(segment)"
       >
         <!-- 说话人信息 -->
         <div class="segment-header">
           <SpeakerManager
-            v-model:visible="speakerManagerVisible"
-            :speakers="speakers"
-            :current-speaker="getCurrentSpeaker(segment)"
+            :segment="segment"
+            :speakers="props.speakers"
+            :manager-id="segment.id"
             @update:speakers="handleSpeakersUpdate"
             @speaker-select="(speakerId) => handleSpeakerChange(speakerId, segment)"
           />
@@ -25,7 +24,10 @@
         </div>
 
         <!-- 转写文本 -->
-        <div class="segment-content">
+        <div 
+          class="segment-content"
+          @click="handleSegmentClick(segment)"
+        >
           <div 
             class="segment-text"
             contenteditable="true"
@@ -77,27 +79,7 @@ const formatTime = (seconds) => {
 
 // 处理说话人变更
 const handleSpeakerChange = (speakerId, segment) => {
-  console.log('handleSpeakerChange in Transcript:', {
-    speakerId,
-    segment,
-    allSpeakers: props.speakers,
-    currentSpeaker: getCurrentSpeaker(segment)
-  })
-  // 更新所有段落
-  const updatedSegments = props.segments.map(s => {
-    if (s.id === segment.id) {
-      return {
-        ...s,
-        speaker_id: speakerId,
-        isSelected: true
-      }
-    }
-    return {
-      ...s,
-      isSelected: false
-    }
-  })
-  emit('segment-select', updatedSegments)
+  emit('speaker-change', speakerId, segment)
 }
 
 // 处理内容编辑
@@ -138,12 +120,6 @@ const isWordPlaying = (word) => {
   return props.currentTime >= (word.start - buffer) && 
          props.currentTime <= (word.end + buffer)
 }
-
-// 添加 speakerName 计算属性
-const speakerName = computed(() => (speakerId) => {
-  const speaker = props.speakers.find(s => s.id === speakerId)
-  return speaker ? speaker.name : '未知说话人'
-})
 
 // 添加调试代码
 watch([() => props.segments, () => props.speakers], () => {
@@ -191,16 +167,6 @@ const mergedSegments = computed(() => {
   return result
 })
 
-// 添加 speakers 的监听
-watch(() => props.speakers, (newSpeakers) => {
-  console.log('Speakers changed:', newSpeakers)
-}, { deep: true })
-
-// 添加 segments 的监听
-watch(() => props.segments, (newSegments) => {
-  console.log('Segments changed:', newSegments)
-}, { deep: true })
-
 // 添加新的方法
 const handleSegmentClick = (segment) => {
   const updatedSegments = props.segments.map(s => ({
@@ -208,22 +174,6 @@ const handleSegmentClick = (segment) => {
     isSelected: s.id === segment.id
   }))
   emit('segment-select', updatedSegments)
-}
-
-const speakerManagerVisible = ref(false)
-
-const getCurrentSpeaker = (segment) => {
-  const speaker = props.speakers.find(s => s.id === segment.speaker_id)
-  return speaker ? {
-    ...speaker,
-    speaker_id: segment.speaker_id,
-    originalName: speaker.name,
-    newName: speaker.name
-  } : null
-}
-
-const handleSpeakersUpdate = (updatedSpeakers) => {
-  emit('speakers-update', updatedSpeakers)
 }
 
 </script>
