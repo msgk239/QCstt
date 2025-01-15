@@ -28,13 +28,6 @@
         @timestamp-insert="insertTimestamp"
       />
       <NoteToolbar />
-      <el-button 
-        type="primary" 
-        @click="speakerDialogVisible = true"
-        icon="User"
-      >
-        说话人管理
-      </el-button>
     </div>
 
     <!-- 主要内容区 -->
@@ -45,8 +38,9 @@
         :speakers="speakers"
         :currentTime="currentTime"
         @segment-update="handleSegmentUpdate"
-        @speaker-change="handleSpeakerChange"
         @timeupdate="handleTimeUpdate"
+        @segment-select="handleSegmentSelect"
+        @speakers-update="handleSpeakersUpdate"
       />
     </div>
 
@@ -69,17 +63,11 @@
     <ReplaceDialog v-model="replaceDialogVisible" />
     <HotwordsDialog v-model="hotwordsDialogVisible" />
     <SpeedMenuDialog v-model="speedMenuVisible" />
-    <SpeakerManagerDialog 
-      v-model="speakerDialogVisible"
-      :speakers="speakers || []"
-      @batch-replace="handleBatchReplace"
-      @reset="handleReset"
-    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getFileDetail, formatFileData, getAudioFile } from '@/api/modules/file'
@@ -95,7 +83,6 @@ import EditToolbar from './EditorComponents/EditToolbar.vue'
 import ReplaceDialog from './EditorComponents/ReplaceDialog.vue'
 import HotwordsDialog from './EditorComponents/HotwordsDialog.vue'
 import SpeedMenuDialog from './EditorComponents/SpeedMenuDialog.vue'
-import SpeakerManagerDialog from './EditorComponents/SpeakerManagerDialog.vue'
 import AutoSaveToolbar from './EditorComponents/AutoSaveToolbar.vue'
 import ExportToolbar from './EditorComponents/ExportToolbar.vue'
 import NoteToolbar from './EditorComponents/NoteToolbar.vue'
@@ -117,7 +104,6 @@ const saving = ref(false)
 const replaceDialogVisible = ref(false)
 const hotwordsDialogVisible = ref(false)
 const speedMenuVisible = ref(false)
-const speakerDialogVisible = ref(false)
 
 // 音频播放器相关
 const audioPlayerRef = ref(null)
@@ -231,47 +217,6 @@ const handleSegmentUpdate = (segment) => {
   const index = segments.value.findIndex(s => s.id === segment.id)
   if (index > -1) {
     segments.value[index] = segment
-  }
-}
-
-const handleSpeakerChange = (speakerId, segment) => {
-  console.log('EditorView handleSpeakerChange:', {
-    speakerId,
-    segment,
-    currentSpeakers: speakers.value
-  })
-
-  if (speakerId === 'new') {
-    speakerDialogVisible.value = true
-    return
-  }
-  
-  // 创建新的数组以触发响应式更新
-  segments.value = segments.value.map(s => {
-    if (s.id === segment.id) {
-      return {
-        ...s,
-        speaker_id: speakerId
-      }
-    }
-    return s
-  })
-  
-  // 确保说话人列表中有这个说话人
-  const existingSpeaker = speakers.value.find(s => s.id === speakerId)
-  if (!existingSpeaker) {
-    // 添加新说话人到列表，使用正确的ID格式
-    const speakerNumber = speakerId.replace('speaker_', '')
-    const newSpeaker = {
-      id: speakerId,
-      name: `说话人${parseInt(speakerNumber) + 1}`,  // 显示时从1开始计数
-      color: '#409EFF',
-      originalName: `说话人${parseInt(speakerNumber) + 1}`,
-      originalColor: '#409EFF'
-    }
-    console.log('Adding new speaker:', newSpeaker)
-    // 创建新的数组以触发响应式更新
-    speakers.value = [...speakers.value, newSpeaker]
   }
 }
 
@@ -406,6 +351,42 @@ const handleReset = () => {
   }))
   
   ElMessage.success('重置成功')
+}
+
+const currentSpeaker = computed(() => {
+  if (!segments.value.length) return null
+  const selectedSegment = segments.value.find(s => s.isSelected)
+  if (!selectedSegment) return null
+  
+  const speaker = speakers.value.find(s => s.id === selectedSegment.speaker_id)
+  if (!speaker) return null
+
+  return {
+    ...speaker,
+    originalName: speaker.name,
+    newName: speaker.name
+  }
+})
+
+const handleSpeakersUpdate = (updatedSpeakers) => {
+  speakers.value = updatedSpeakers
+  // 更新相关段落的说话人信息
+  segments.value = segments.value.map(segment => {
+    const speaker = updatedSpeakers.find(s => s.id === segment.speaker_id)
+    if (speaker) {
+      return {
+        ...segment,
+        speaker_id: speaker.id
+      }
+    }
+    return segment
+  })
+  // 保存更改
+  handleSave()
+}
+
+const handleSegmentSelect = (updatedSegments) => {
+  segments.value = updatedSegments
 }
 </script>
 

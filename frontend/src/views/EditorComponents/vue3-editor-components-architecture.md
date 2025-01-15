@@ -34,7 +34,7 @@
   - 说话人标记
   - 时间戳显示
   - 实时编辑
-- `SpeakerManagerDialog.vue`: 说话人管理对话框
+- `SpeakerManager.vue`: 说话人管理相关
 - `ReplaceDialog.vue`: 查找替换对话框
 - `HotwordsDialog.vue`: 热词管理对话框
 

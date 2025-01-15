@@ -6,23 +6,21 @@
         v-for="segment in mergedSegments" 
         :key="segment.id"
         class="segment"
-        :class="{ 'is-playing': isSegmentPlaying(segment) }"
+        :class="{ 
+          'is-playing': isSegmentPlaying(segment),
+          'is-selected': segment.isSelected 
+        }"
+        @click="handleSegmentClick(segment)"
       >
         <!-- 说话人信息 -->
         <div class="segment-header">
-          <el-select 
-            :model-value="segment.speaker_id"
-            size="small"
-            @update:model-value="(val) => handleSpeakerChange(val, segment)"
-          >
-            <el-option
-              v-for="speaker in speakers"
-              :key="speaker.id"
-              :label="speaker.name"
-              :value="speaker.id"
-            />
-            <el-option key="new" label="+ 添加说话人" value="new" />
-          </el-select>
+          <SpeakerManager
+            v-model:visible="speakerManagerVisible"
+            :speakers="speakers"
+            :current-speaker="getCurrentSpeaker(segment)"
+            @update:speakers="handleSpeakersUpdate"
+            @speaker-select="(speakerId) => handleSpeakerChange(speakerId, segment)"
+          />
           <span class="time">{{ formatTime(segment.start_time) }}</span>
         </div>
 
@@ -50,6 +48,7 @@
 
 <script setup>
 import { ref, watch, watchEffect, computed } from 'vue'
+import SpeakerManager from '@/components/common/SpeakerManager.vue'
 
 const props = defineProps({
   segments: {
@@ -66,7 +65,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['segment-update', 'speaker-change'])
+const emit = defineEmits(['segment-update', 'speaker-change', 'timeupdate', 'segment-select', 'speakers-update'])
 
 const transcriptRef = ref(null)
 
@@ -78,16 +77,27 @@ const formatTime = (seconds) => {
 
 // 处理说话人变更
 const handleSpeakerChange = (speakerId, segment) => {
-  console.log('Transcript handleSpeakerChange:', {
+  console.log('handleSpeakerChange in Transcript:', {
     speakerId,
     segment,
-    allSpeakers: props.speakers
+    allSpeakers: props.speakers,
+    currentSpeaker: getCurrentSpeaker(segment)
   })
-  const updatedSegment = {
-    ...segment,
-    speaker_id: speakerId
-  }
-  emit('speaker-change', speakerId, updatedSegment)
+  // 更新所有段落
+  const updatedSegments = props.segments.map(s => {
+    if (s.id === segment.id) {
+      return {
+        ...s,
+        speaker_id: speakerId,
+        isSelected: true
+      }
+    }
+    return {
+      ...s,
+      isSelected: false
+    }
+  })
+  emit('segment-select', updatedSegments)
 }
 
 // 处理内容编辑
@@ -191,6 +201,31 @@ watch(() => props.segments, (newSegments) => {
   console.log('Segments changed:', newSegments)
 }, { deep: true })
 
+// 添加新的方法
+const handleSegmentClick = (segment) => {
+  const updatedSegments = props.segments.map(s => ({
+    ...s,
+    isSelected: s.id === segment.id
+  }))
+  emit('segment-select', updatedSegments)
+}
+
+const speakerManagerVisible = ref(false)
+
+const getCurrentSpeaker = (segment) => {
+  const speaker = props.speakers.find(s => s.id === segment.speaker_id)
+  return speaker ? {
+    ...speaker,
+    speaker_id: segment.speaker_id,
+    originalName: speaker.name,
+    newName: speaker.name
+  } : null
+}
+
+const handleSpeakersUpdate = (updatedSpeakers) => {
+  emit('speakers-update', updatedSpeakers)
+}
+
 </script>
 
 <style scoped>
@@ -264,5 +299,10 @@ watch(() => props.segments, (newSegments) => {
 }
 .sub-segment:last-child {
   margin-bottom: 0;
+}
+
+.segment.is-selected {
+  border-color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
 }
 </style> 
