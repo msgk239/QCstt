@@ -230,32 +230,23 @@ const handleConfirm = () => {
     return
   }
 
-  console.log('Current segment:', props.segment)
-  console.log('Selected speaker:', selectedSpeaker.value)
-
+  // 确保只有在 batchUpdate 为 true 时才执行批量更新
   const updatedSegment = {
     ...props.segment,
-    speaker_id: props.segment.speaker_id,  // 保持原始ID不变
-    speaker_name: props.segment.speaker_name,  // 保持原始名字不变
     speakerDisplayName: selectedSpeaker.value.name,  // 更新显示名字
-    speakerKey: selectedSpeaker.value.id,  // 使用说话人的ID作为key
-    batchUpdate: batchUpdate.value
+    speakerKey: selectedSpeaker.value.id,              // 使用说话人的ID作为key
+    batchUpdate: batchUpdate.value,                    // 批量更新标志
+    subSegments: props.segment.subSegments             // 传递子段落信息
   }
-
-  console.log('Emitting updated segment:', updatedSegment)
 
   // 发出事件，让父组件处理更新
   emit('speaker-select', updatedSegment)
-  
-  // 关闭对话框
+
+  // 关闭对话框和重置状态
   dialogVisible.value = false
-  
-  // 重置状态
-  selectedSpeaker.value = null
+  newSpeakerName.value = ''
   batchUpdate.value = false
   localSpeakers.value.forEach(speaker => speaker.selected = false)
-  
-  ElMessage.success('更新成功')
 }
 
 // 在 script setup 中添加
@@ -273,6 +264,19 @@ const handleSpeakerItemClick = (speaker) => {
 const isCurrentSpeaker = (speaker) => {
   // 使用 speakerKey 来判断是否是当前说话人
   return speaker.id === props.segment.speakerKey
+}
+
+// 仅在本地管理说话人的状态
+const localSpeakerState = ref({})
+
+const updateSpeaker = (key, newSpeaker) => {
+  if (batchUpdate.value) {
+    // 仅在选项勾选时更新全局状态
+    emit('update-global-speaker', key, newSpeaker)
+  } else {
+    // 否则仅更新本地状态
+    localSpeakerState.value[key] = newSpeaker
+  }
 }
 </script>
 

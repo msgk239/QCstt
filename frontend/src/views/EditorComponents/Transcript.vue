@@ -78,7 +78,7 @@ const formatTime = (seconds) => {
 
 // 处理说话人变更
 const handleSpeakerChange = (updatedSegment) => {
-  // 直接发送更新事件给父组件
+  // 仅通过事件通知父组件更新
   emit('speaker-change', updatedSegment)
 }
 
@@ -129,10 +129,7 @@ watch([() => props.segments, () => props.speakers], () => {
 
 // 添加合并段落的计算属性
 const mergedSegments = computed(() => {
-  console.log('Computing mergedSegments with:', {
-    segments: props.segments,
-    speakers: props.speakers
-  })
+  if (!props.segments) return []
   
   const result = []
   let currentGroup = null
@@ -168,7 +165,6 @@ const mergedSegments = computed(() => {
     result.push(currentGroup)
   }
   
-  console.log('Merged result:', result)
   return result
 })
 

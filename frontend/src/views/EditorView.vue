@@ -243,25 +243,21 @@ const handleSave = async () => {
 const handleSegmentUpdate = async (updatedSegments) => {
   // 如果是数组，说明是批量更新
   if (Array.isArray(updatedSegments)) {
-    // 确保每个段落的原始字段不变
     segments.value = updatedSegments.map(segment => ({
       ...segment,
-      speaker_id: segment.speaker_id,
-      speaker_name: segment.speaker_name,
-      speakerDisplayName: segment.speakerDisplayName || segment.speaker_name,
-      speakerKey: segment.speakerKey || segment.speaker_id
+      speaker_id: segment.speaker_id,  // 保持原始ID不变
+      speaker_name: segment.speaker_name,  // 保持原始名字不变
+      speakerDisplayName: segment.speakerDisplayName,
+      speakerKey: segment.speakerKey
     }))
   } else {
     // 单个段落更新
     const index = segments.value.findIndex(s => s.id === updatedSegments.id)
     if (index > -1) {
-      // 保持原始字段不变
       segments.value[index] = {
         ...updatedSegments,
-        speaker_id: segments.value[index].speaker_id,
-        speaker_name: segments.value[index].speaker_name,
-        speakerDisplayName: updatedSegments.speakerDisplayName || segments.value[index].speaker_name,
-        speakerKey: updatedSegments.speakerKey || segments.value[index].speaker_id
+        speaker_id: segments.value[index].speaker_id,  // 保持原始ID不变
+        speaker_name: segments.value[index].speaker_name  // 保持原始名字不变
       }
     }
   }
@@ -456,39 +452,43 @@ const handleSegmentSelect = (updatedSegments) => {
 }
 
 const handleSpeakerChange = (updatedSegment) => {
-  console.log('Handling speaker change:', updatedSegment)
-
   if (updatedSegment.batchUpdate) {
+    // 批量更新时，修改所有相同 speakerKey 的段落
     segments.value = segments.value.map(s => {
-      if (s.speakerKey === updatedSegment.speakerKey) {
+      if (s.speakerKey === updatedSegment.oldSpeakerKey) {
         return {
           ...s,
           speakerDisplayName: updatedSegment.speakerDisplayName,
-          speakerKey: updatedSegment.speakerKey  // 批量更新时也要更新 key
+          speakerKey: updatedSegment.speakerKey
+        }
+      }
+      return s
+    })
+  } else if (updatedSegment.mergedIds) {
+    // 更新合并段落中的所有子段落
+    segments.value = segments.value.map(s => {
+      if (updatedSegment.mergedIds.includes(s.id)) {
+        return {
+          ...s,
+          speakerDisplayName: updatedSegment.speakerDisplayName,
+          speakerKey: updatedSegment.speakerKey
         }
       }
       return s
     })
   } else {
-    // 单个更新
+    // 单个段落更新
     segments.value = segments.value.map(s => {
-      // 使用 ID 精确匹配段落
       if (s.id === updatedSegment.id) {
-        console.log('Updating segment:', {
-          old: s.speakerDisplayName,
-          new: updatedSegment.speakerDisplayName
-        })
         return {
           ...s,
           speakerDisplayName: updatedSegment.speakerDisplayName,
-          speakerKey: updatedSegment.speakerKey  // 同时更新 key
+          speakerKey: updatedSegment.speakerKey
         }
       }
       return s
     })
   }
-
-  console.log('Updated segments:', segments.value)
 }
 
 // 修改获取说话人名字的函数
