@@ -579,6 +579,9 @@ const handleSpeakerChange = (updatedSegment) => {
             ...segment,
             speakerKey: updatedSegment.speakerKey,
             speakerDisplayName: updatedSegment.speakerDisplayName,
+            segmentId: `${updatedSegment.speakerKey}_${nanoid(6)}`,
+            speaker_id: segment.speaker_id,
+            speaker_name: segment.speaker_name,
             subSegments: segment.subSegments.map(sub => ({
               ...sub,
               speakerKey: updatedSegment.speakerKey  // 更新所有子段落
