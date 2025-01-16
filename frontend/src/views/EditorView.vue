@@ -213,20 +213,21 @@ const initAudio = async () => {
 
 // 方法
 const handleSave = async () => {
+  console.log('开始保存:', {
+    currentSegments: segments.value,
+    currentSpeakers: speakers.value
+  })
+  
   saving.value = true
   try {
-    // 保存时可能需要处理数据，确保原始字段正确
     const saveData = {
       segments: segments.value.map(segment => ({
-        // 原始字段（不变）
         speaker_id: segment.speaker_id,
-        speaker_name: segment.speaker_name,
-        
-        // 时间信息
+        speaker_name: segment.speakerDisplayName,
+        speakerKey: segment.speakerKey,
+        speakerDisplayName: segment.speakerDisplayName,
         start_time: segment.start_time,
         end_time: segment.end_time,
-        
-        // 子段落信息
         subSegments: segment.subSegments.map(sub => ({
           subsegmentId: sub.subsegmentId,
           text: sub.text,
@@ -236,13 +237,17 @@ const handleSave = async () => {
         }))
       })),
       speakers: speakers.value.map(speaker => ({
-        // 原始字段（不变）
-        id: speaker.speaker_id,
-        name: speaker.speaker_name
+        id: speaker.speakerKey,
+        name: speaker.speakerDisplayName
       }))
     }
+    
+    console.log('准备发送到后端的数据:', saveData)
+    
     await fileStore.saveFile(route.params.id, saveData)
     lastSaveTime.value = new Date()
+    
+    console.log('保存成功')
     ElMessage.success('保存成功')
   } catch (error) {
     console.error('保存失败:', error)
@@ -271,7 +276,6 @@ const handleSegmentUpdate = (updatedSegments) => {
       
       return {
         ...safeSegment,
-        segmentId: `${safeSegment.speakerKey}_${nanoid(6)}`,
         subSegments: segment.subSegments?.map(sub => ({
           subsegmentId: `${safeSegment.speaker_id}-${sub.start_time || 0}-${sub.end_time || 0}`,
           text: sub.text || '',
@@ -306,7 +310,6 @@ const handleSegmentUpdate = (updatedSegments) => {
       
       segments.value[index] = {
         ...safeSegment,
-        segmentId: `${safeSegment.speakerKey}_${nanoid(6)}`,
         subSegments: updatedSegments.subSegments?.map(sub => ({
           subsegmentId: `${safeSegment.speaker_id}-${sub.start_time || 0}-${sub.end_time || 0}`,
           text: sub.text || '',
@@ -471,34 +474,30 @@ const handleTimeUpdate = (time) => {
 }
 
 const handleBatchReplace = (nameMapping) => {
-  // 更新说话人列表
   speakers.value = speakers.value.map(speaker => {
-    if (nameMapping[speaker.name]) {
-      return {
+    if (nameMapping[speaker.speakerDisplayName]) {  // 使用 speakerDisplayName
+      const updatedSpeaker = {
         ...speaker,
-        name: nameMapping[speaker.name],
-        original_name: speaker.name  // 保存原始名字
+        speakerDisplayName: nameMapping[speaker.speakerDisplayName],  // 更新显示名字
+        original_name: speaker.speakerDisplayName
       }
+      return updatedSpeaker
     }
     return speaker
   })
-  
-  // 更新所有相关片段的说话人
+
   segments.value = segments.value.map(segment => {
-    const speaker = speakers.value.find(s => s.id === segment.speaker_id)
-    if (speaker && nameMapping[speaker.name]) {
-      return {
+    const speaker = speakers.value.find(s => s.speakerKey === segment.speakerKey)  // 使用 speakerKey
+    if (speaker && nameMapping[speaker.speakerDisplayName]) {  // 使用 speakerDisplayName
+      const updatedSegment = {
         ...segment,
-        speaker_id: segment.speaker_id,      // 保持原始ID不变
-        speaker_name: segment.speaker_name,   // 保持原始名字不变
-        speakerDisplayName: speaker.name,    // 更新显示名字
-        speakerKey: speaker.id              // 更新key
+        speakerDisplayName: speaker.speakerDisplayName,  // 使用显示名字
+        speakerKey: speaker.speakerKey  // 使用 speakerKey
       }
+      return updatedSegment
     }
     return segment
   })
-  
-  ElMessage.success('批量替换成功')
 }
 
 const handleReset = () => {
@@ -546,30 +545,53 @@ const handleSegmentSelect = (updatedSegments) => {
 }
 
 const handleSpeakerChange = (updatedSegment) => {
-  // 如果需要批量更新
   if (updatedSegment.batchUpdate) {
-    // 更新所有相同说话人的段落
+    // 批量更新的逻辑保持不变
     segments.value = segments.value.map(segment => {
       if (segment.speakerKey === updatedSegment.speakerKey) {
-        return {
+        const updatedSegmentData = {
           ...segment,
           speakerKey: updatedSegment.speakerKey,
           speakerDisplayName: updatedSegment.speakerDisplayName,
-          segmentId: `${updatedSegment.speakerKey}_${nanoid(6)}`  // 使用新的 ID 格式
+          speaker_id: segment.speaker_id,
+          speaker_name: segment.speaker_name,
+          segmentId: `${updatedSegment.speakerKey}_${nanoid(6)}`
         }
+        return updatedSegmentData
       }
       return segment
     })
   } else {
-    // 只更新单个段落
+    // 单个段落更新
     const index = segments.value.findIndex(s => s.segmentId === updatedSegment.segmentId)
+    
     if (index > -1) {
-      segments.value[index] = {
-        ...segments.value[index],
-        speakerKey: updatedSegment.speakerKey,
-        speakerDisplayName: updatedSegment.speakerDisplayName,
-        segmentId: updatedSegment.segmentId
-      }
+      const oldSegment = segments.value[index]
+      console.log('更新前:', {
+        speakerKey: oldSegment.speakerKey,
+        subSegments: oldSegment.subSegments.map(s => s.speakerKey)
+      })
+      
+      // 更新整个 segments 数组，确保每个子段落都更新 speakerKey
+      segments.value = segments.value.map(segment => {
+        if (segment.segmentId === updatedSegment.segmentId) {
+          return {
+            ...segment,
+            speakerKey: updatedSegment.speakerKey,
+            speakerDisplayName: updatedSegment.speakerDisplayName,
+            subSegments: segment.subSegments.map(sub => ({
+              ...sub,
+              speakerKey: updatedSegment.speakerKey  // 更新所有子段落
+            }))
+          }
+        }
+        return segment
+      })
+      
+      console.log('更新后:', {
+        speakerKey: segments.value[index].speakerKey,
+        subSegments: segments.value[index].subSegments.map(s => s.speakerKey)
+      })
     }
   }
 }

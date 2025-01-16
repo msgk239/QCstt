@@ -256,24 +256,31 @@ const handleSpeakerCheck = (speaker, checked) => {
 
 // 修改确认处理函数
 const handleConfirm = () => {
+  console.log('确认修改:', {
+    selectedSpeaker: selectedSpeaker.value,
+    batchUpdate: batchUpdate.value,
+    currentSegment: props.segment
+  })
+
   if (!selectedSpeaker.value) {
     ElMessage.warning('请先选择一个说话人')
     return
   }
 
-  // 确保只有在 batchUpdate 为 true 时才执行批量更新
   const updatedSegment = {
     ...props.segment,
-    speakerKey: selectedSpeaker.value.speakerKey,                  // 使用speakerKey
-    speakerDisplayName: selectedSpeaker.value.speakerDisplayName,  // 使用speakerDisplayName
-    segmentId: `${selectedSpeaker.value.speakerKey}_${nanoid(6)}`, // 生成新的segmentId
-    batchUpdate: batchUpdate.value                                 // 批量更新标志
+    speakerKey: selectedSpeaker.value.speakerKey,
+    speakerDisplayName: selectedSpeaker.value.speakerDisplayName,
+    segmentId: props.segment.segmentId,
+    batchUpdate: batchUpdate.value
   }
 
-  // 发出事件，让父组件处理更新
-  emit('speaker-select', updatedSegment)
+  console.log('准备发送更新:', {
+    before: props.segment,
+    after: updatedSegment
+  })
 
-  // 关闭对话框和重置状态
+  emit('speaker-select', updatedSegment)
   dialogVisible.value = false
   newSpeakerName.value = ''
   batchUpdate.value = false
@@ -282,6 +289,12 @@ const handleConfirm = () => {
 
 // 修改 handleSpeakerItemClick
 const handleSpeakerItemClick = (speaker) => {
+  console.log('点击说话人:', {
+    clickedSpeaker: speaker,
+    currentSegment: props.segment,
+    isCurrentSpeaker: isCurrentSpeaker(speaker)
+  })
+  
   if (isCurrentSpeaker(speaker)) return
   
   // 更新选中的说话人
@@ -297,8 +310,13 @@ const handleSpeakerItemClick = (speaker) => {
     ...props.segment,
     speakerKey: speaker.speakerKey,
     speakerDisplayName: speaker.speakerDisplayName,
-    segmentId: `${speaker.speakerKey}_${nanoid(6)}`,  // 生成新的segmentId
+    segmentId: props.segment.segmentId,
   }
+  
+  console.log('准备发送更新:', {
+    before: props.segment,
+    after: updatedSegment
+  })
   
   // 发出事件，让父组件处理更新
   emit('speaker-select', updatedSegment)
