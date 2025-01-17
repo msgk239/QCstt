@@ -271,7 +271,8 @@ const handleSegmentUpdate = (updatedSegments) => {
         start_time: segment.start_time || 0,
         end_time: segment.end_time || 0,
         text: segment.text || '',
-        timestamps: segment.timestamps || []
+        timestamps: segment.timestamps || [],
+        subsegmentId: `${segment.speaker_id || `speaker_${index}`}-${segment.start_time || 0}-${segment.end_time || 0}`
       }
       
       return {
@@ -305,7 +306,8 @@ const handleSegmentUpdate = (updatedSegments) => {
         start_time: updatedSegments.start_time || 0,
         end_time: updatedSegments.end_time || 0,
         text: updatedSegments.text || '',
-        timestamps: updatedSegments.timestamps || []
+        timestamps: updatedSegments.timestamps || [],
+        subSegments: null
       }
       
       segments.value[index] = {
@@ -378,49 +380,43 @@ watch([autoSaveEnabled, autoSaveInterval], () => {
 
 // 提取加载文件数据的方法
 const loadFileData = async () => {
+  console.log('开始加载文件数据')
   const response = await getFileDetail(route.params.id)
+  console.log('getFileDetail 返回:', response)
   const formattedData = formatFileData(response)
+  console.log('formatFileData 处理后:', formattedData)
   file.value = formattedData
+  
   
   // 初始化 segments
   segments.value = formattedData.segments.map((segment, index) => {
+    console.log('原始段落数据:', {
+      index,
+      segment,
+      keys: Object.keys(segment)  // 看看原始段落有哪些字段
+    })
+    
     // 确保基本字段存在
     const safeSegment = {
-      // 原始字段（不变）
-      speaker_id: segment.speaker_id || `speaker_${index}`,
-      speaker_name: segment.speaker_name || `说话人 ${index + 1}`,
-      
-      // 前端使用的字段（可变）
+      ...segment,  // 包含了所有原始字段
       speakerKey: segment.speaker_id || `speaker_${index}`,
       speakerDisplayName: segment.speaker_name || `说话人 ${index + 1}`,
       color: segment.color || '#409EFF',
+      isSelected: false,
       
-      // 段落标识（可变）
-      segmentId: `${segment.speaker_id || `speaker_${index}`}_${nanoid(6)}`,
-      
-      // 时间信息（可变）
-      start_time: segment.start_time || 0,
-      end_time: segment.end_time || 0,
-      
-      // 子段落信息
-      text: segment.text || '',
-      timestamps: segment.timestamps || [],
-      
-      // 其他状态
-      isSelected: false
+      // 原始段落的 ID（后面合并时会成为子段落的 ID）
+      subsegmentId: `${segment.speaker_id || `speaker_${index}`}-${segment.start_time || 0}-${segment.end_time || 0}`
     }
     
-    return {
-      ...safeSegment,
-      subSegments: [{
-        subsegmentId: `${safeSegment.speaker_id}-${safeSegment.start_time}-${safeSegment.end_time}`,
-        text: safeSegment.text,
-        start_time: safeSegment.start_time,
-        end_time: safeSegment.end_time,
-        timestamps: safeSegment.timestamps
-      }]
-    }
+    console.log('处理后的段落:', {
+      index,
+      safeSegment,
+      keys: Object.keys(safeSegment)  // 看看处理后有哪些字段
+    })
+    
+    return safeSegment
   })
+
 
   // 只在第一次加载时初始化 speakers
   if (!speakers.value.length) {
@@ -569,12 +565,38 @@ const handleSpeakerChange = (updatedSegment) => {
       const oldSegment = segments.value[index]
       console.log('更新前:', {
         speakerKey: oldSegment.speakerKey,
-        subSegments: oldSegment.subSegments.map(s => s.speakerKey)
+        subsegmentId: oldSegment.subsegmentId,
+        text: oldSegment.text?.substring(0, 10) + '...'
+      })
+      
+      console.log('收到的更新:', {
+        segmentId: updatedSegment.segmentId,
+        speakerKey: updatedSegment.speakerKey,
+        subSegments: updatedSegment.subSegments?.map(s => ({
+          subsegmentId: s.subsegmentId,
+          speakerKey: s.speakerKey,
+          text: s.text?.substring(0, 10) + '...'
+        }))
+      })
+      
+      console.log('查找段落:', {
+        targetSegmentId: updatedSegment.segmentId,
+        allSegments: segments.value.map(s => ({
+          segmentId: s.segmentId,
+          subSegmentsCount: s.subSegments?.length,
+          speakerKey: s.speakerKey
+        }))
       })
       
       // 更新整个 segments 数组，确保每个子段落都更新 speakerKey
       segments.value = segments.value.map(segment => {
         if (segment.segmentId === updatedSegment.segmentId) {
+          console.log('找到要更新的段落:', {
+            segmentId: segment.segmentId,
+            oldSpeakerKey: segment.speakerKey,
+            newSpeakerKey: updatedSegment.speakerKey
+          })
+          
           return {
             ...segment,
             speakerKey: updatedSegment.speakerKey,
@@ -582,9 +604,9 @@ const handleSpeakerChange = (updatedSegment) => {
             segmentId: `${updatedSegment.speakerKey}_${nanoid(6)}`,
             speaker_id: segment.speaker_id,
             speaker_name: segment.speaker_name,
-            subSegments: segment.subSegments.map(sub => ({
+            subSegments: updatedSegment.subSegments?.map(sub => ({
               ...sub,
-              speakerKey: updatedSegment.speakerKey  // 更新所有子段落
+              speakerKey: updatedSegment.speakerKey
             }))
           }
         }
@@ -593,7 +615,11 @@ const handleSpeakerChange = (updatedSegment) => {
       
       console.log('更新后:', {
         speakerKey: segments.value[index].speakerKey,
-        subSegments: segments.value[index].subSegments.map(s => s.speakerKey)
+        subSegments: segments.value[index].subSegments.map(s => ({
+          subsegmentId: s.subsegmentId,
+          speakerKey: s.speakerKey,
+          text: s.text?.substring(0, 10) + '...'
+        }))
       })
     }
   }

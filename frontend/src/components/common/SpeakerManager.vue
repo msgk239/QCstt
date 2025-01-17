@@ -268,11 +268,30 @@ const handleConfirm = () => {
   }
 
   const updatedSegment = {
-    ...props.segment,
+    // 保留原始字段
+    speaker_id: props.segment.speaker_id,
+    speaker_name: props.segment.speaker_name,
+    
+    // 更新的字段
     speakerKey: selectedSpeaker.value.speakerKey,
     speakerDisplayName: selectedSpeaker.value.speakerDisplayName,
+    
+    // 其他字段
     segmentId: props.segment.segmentId,
-    batchUpdate: batchUpdate.value
+    color: props.segment.color,
+    start_time: props.segment.start_time,
+    end_time: props.segment.end_time,
+    text: props.segment.text,
+    
+    // 批量更新标志
+    batchUpdate: batchUpdate.value,
+    
+    // 完整复制所有子段落并更新它们的 speakerKey
+    subSegments: props.segment.subSegments?.map(sub => ({
+      ...sub,
+      subsegmentId: sub.subsegmentId,
+      speakerKey: selectedSpeaker.value.speakerKey
+    }))
   }
 
   console.log('准备发送更新:', {
@@ -307,10 +326,27 @@ const handleSpeakerItemClick = (speaker) => {
 
   // 更新段落信息
   const updatedSegment = {
-    ...props.segment,
+    // 保留原始字段
+    speaker_id: props.segment.speaker_id,
+    speaker_name: props.segment.speaker_name,
+    
+    // 更新的字段
     speakerKey: speaker.speakerKey,
     speakerDisplayName: speaker.speakerDisplayName,
+    
+    // 其他字段
     segmentId: props.segment.segmentId,
+    color: props.segment.color,
+    start_time: props.segment.start_time,
+    end_time: props.segment.end_time,
+    text: props.segment.text,
+    
+    // 完整复制所有子段落并更新它们的 speakerKey
+    subSegments: props.segment.subSegments?.map(sub => ({
+      ...sub,
+      subsegmentId: sub.subsegmentId,
+      speakerKey: speaker.speakerKey
+    }))
   }
   
   console.log('准备发送更新:', {

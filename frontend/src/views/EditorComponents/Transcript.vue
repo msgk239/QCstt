@@ -160,7 +160,7 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
       }))
     })
 
-    const currentKey = segment.speakerKey
+    const currentKey = segment.subSegments?.[0]?.speakerKey || segment.speakerKey
     const groupKey = currentGroup?.speakerKey
     
     if (!currentGroup || groupKey !== currentKey) {
@@ -196,7 +196,7 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
         // 子段落信息
         subSegments: [{
           subsegmentId: segment.subsegmentId,
-          speakerKey: segment.speakerKey,  // 添加 speakerKey
+          speakerKey: segment.subSegments?.[0]?.speakerKey || segment.speakerKey,  // 使用子段落自己的 speakerKey
           text: segment.text || '',
           start_time: segment.start_time,
           end_time: segment.end_time,
@@ -207,7 +207,7 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
       // 添加到当前组时也保留 speakerKey
       currentGroup.subSegments.push({
         subsegmentId: segment.subsegmentId,
-        speakerKey: segment.speakerKey,  // 添加 speakerKey
+        speakerKey: segment.subSegments?.[currentGroup.subSegments.length]?.speakerKey || segment.speakerKey,  // 使用子段落自己的 speakerKey
         text: segment.text || '',
         start_time: segment.start_time,
         end_time: segment.end_time,
