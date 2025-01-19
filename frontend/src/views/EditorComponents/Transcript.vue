@@ -142,34 +142,15 @@ const generateSegmentId = (segment, isFirstMerge) => {
 
 // 2. 纯合并逻辑
 const mergeSegments = (rawSegments, isFirstMerge = false) => {
-  console.log('开始合并段落:', {
-    rawSegments,
-    speakers: props.speakers
-  })
-  
   const result = []
   let currentGroup = null
   
   rawSegments.forEach((segment, index) => {
-    console.log('处理原始段落:', {
-      index,
-      speakerKey: segment.speakerKey,
-      subsegmentId: segment.subsegmentId  // 记录原始段落的 subsegmentId
-    })
-
     const currentKey = segment.speakerKey
     const groupKey = currentGroup?.speakerKey
     
     if (!currentGroup || groupKey !== currentKey) {
       if (currentGroup) {
-        console.log('保存当前组:', {
-          speakerKey: currentGroup.speakerKey,
-          segmentId: currentGroup.segmentId,
-          subSegments: currentGroup.subSegments.map(sub => ({
-            subsegmentId: sub.subsegmentId,
-            speakerKey: sub.speakerKey
-          }))
-        })
         result.push(currentGroup)
       }
       
@@ -193,7 +174,7 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
         
         // 子段落信息，保留原始段落的 subsegmentId
         subSegments: [{
-          subsegmentId: segment.subsegmentId,  // 保留原始的 subsegmentId
+          subsegmentId: segment.subsegmentId,
           speakerKey: segment.speakerKey,
           text: segment.text || '',
           start_time: segment.start_time,
@@ -204,7 +185,7 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
     } else {
       // 添加到当前组，保留原始段落的 subsegmentId
       currentGroup.subSegments.push({
-        subsegmentId: segment.subsegmentId,  // 保留原始的 subsegmentId
+        subsegmentId: segment.subsegmentId,
         speakerKey: segment.speakerKey,
         text: segment.text || '',
         start_time: segment.start_time,
@@ -220,15 +201,6 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
   if (currentGroup) {
     result.push(currentGroup)
   }
-  
-  console.log('合并段落完成:', {
-    result: result.map(group => ({
-      segmentId: group.segmentId,
-      speakerKey: group.speakerKey,
-      subSegmentsCount: group.subSegments.length
-    })),
-    segmentCount: result.length
-  })
   
   return result
 }

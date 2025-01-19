@@ -31,14 +31,9 @@ class FileService:
         self.uploads_dir = config.uploads_dir
     
     def save_uploaded_file(self, file_content, filename, options=None):
-        """保存上传的文件，生成标准文件ID
-        Args:
-            file_content: 文件内容
-            filename: 原始文件名
-            options: 选项，包含language等
-        """
+        """保存上传的文件，生成标准文件ID"""
         try:
-            logger.info(f"=== 开始处理文件上传 ===")
+            logger.info(f"开始处理文件上传")
             
             # 验证参数
             if not file_content:
@@ -152,12 +147,7 @@ class FileService:
         """获取文件详情，包括识别结果"""
         logger.info(f"获取文件详情: {file_id}")
         try:
-            logger.debug(f"\n=== 获取文件详情 ===")
-            logger.debug(f"请求的文件ID: {file_id}")
-            
-            # 获取文件基本信息
             file_info = self.get_file_path(file_id)
-            logger.debug(f"文件基本信息: {file_info}")
             
             if file_info["code"] != 200:
                 return file_info
@@ -166,9 +156,8 @@ class FileService:
             logger.debug(f"文件路径: {file_path}")
             
             # 获取转写结果
-            logger.debug("\n获取转写结果...")
+
             transcripts = transcript_manager.get_transcript(file_id)
-            logger.debug(f"转写结果: {transcripts}")
             
             # 获取两种元数据
             # 1. 从 转写metadata 获取的元数据
@@ -179,7 +168,6 @@ class FileService:
             
             # 合并元数据：优先使用 transcript_metadata 的值
             metadata = {**metadata_result, **transcript_metadata}
-            logger.debug(f"合并后的元数据: {metadata}")
             
             # 构建响应
             status = metadata.get("status", "未识别") if metadata else "未识别"
@@ -188,11 +176,9 @@ class FileService:
             # 检查转写结果
             if transcripts and "original" in transcripts:
                 recognition_result = transcripts["original"]
-                logger.debug(f"\n原始识别结果: {recognition_result}")
                 # 如果original中包含data字段，则取data
                 if isinstance(recognition_result, dict) and "data" in recognition_result:
                     recognition_result = recognition_result["data"]
-                    logger.debug(f"处理后的识别结果: {recognition_result}")
                 
             # 从元数据中获取原始文件名
             original_filename = metadata.get("original_filename") if metadata else file_id
@@ -299,12 +285,16 @@ class FileService:
                 
             file_path = file_info["data"]["path"]
             
+            # 直接从 metadata 获取语言设置，默认为中文
+            metadata = self.metadata.get_by_file_id(file_id) or {}
+            language = metadata.get("options", {}).get("language", "zh")
+            
             # 读取音频文件
             with open(file_path, "rb") as f:
                 audio_content = f.read()
             
             # 调用语音识别服务
-            result = speech_service.process_audio(audio_content, "auto")
+            result = speech_service.process_audio(audio_content, language)
             
             # 如果识别成功，更新文件状态和保存结果
             if result["code"] == 200:

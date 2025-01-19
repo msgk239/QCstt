@@ -339,52 +339,84 @@ const startRecognition = async (file) => {
   }
 
   try {
+    // 检查文件状态
+    if (file.status !== '已上传') {
+      ElMessage.warning('只能对已上传的文件进行识别')
+      return
+    }
+
     console.log('发送识别请求, ID:', file.file_id)
     const response = await fileStore.startRecognition(file.file_id)
     console.log('识别请求响应:', response)
     
-    if (response.code === 200) {
-      // 使用 Promise 和 async/await 优化轮询逻辑
-      const pollRecognitionStatus = async () => {
+    if (!response || response.code !== 200) {
+      // 如果是文件不存在的错误
+      if (response?.code === 500 && (
+        response?.message?.includes("'NoneType' object") ||
+        response?.message?.includes("文件不存在")
+      )) {
+        ElMessage.error('文件不存在或已被删除，请刷新页面')
+        await fileStore.fetchFileList()
+        return
+      }
+      throw new Error(response?.message || '开始识别失败')
+    }
+    
+    // 使用 Promise 和 async/await 优化轮询逻辑
+    const pollRecognitionStatus = async () => {
+      try {
         const progress = await asrApi.getRecognizeProgress(file.file_id)
         console.log('识别进度响应:', progress)
         
-        if (progress.code === 200) {
-          const { status } = progress.data
-          console.log('当前识别状态:', status)
-          
-          if (status === '已完成') {
-            ElMessage.success('识别完成')
-            try {
-              console.log('准备跳转到编辑页面，file_id:', file.file_id)
-              await router.push({
-                name: 'editor',
-                params: { id: file.file_id }
-              })
-              console.log('跳转成功')
-              return true
-            } catch (error) {
-              console.error('路由跳转失败:', error)
-              ElMessage.error('跳转到编辑页面失败')
-              throw error
-            }
-          } else if (status === '识别中') {
-            await new Promise(resolve => setTimeout(resolve, 1000))
-            return pollRecognitionStatus()
-          } else {
-            throw new Error(`识别异常：${status}`)
+        if (!progress || progress.code !== 200) {
+          if (progress?.code === 500 && progress?.message?.includes("'NoneType' object")) {
+            throw new Error('文件不存在或已被删除')
           }
+          throw new Error(progress?.message || '获取识别状态失败')
         }
-        throw new Error(progress.message || '获取识别状态失败')
+
+        const { status } = progress.data || {}
+        if (!status) {
+          throw new Error('无效的识别状态响应')
+        }
+
+        console.log('当前识别状态:', status)
+        
+        if (status === '已完成') {
+          ElMessage.success('识别完成')
+          try {
+            console.log('准备跳转到编辑页面，file_id:', file.file_id)
+            await router.push({
+              name: 'editor',
+              params: { id: file.file_id }
+            })
+            console.log('跳转成功')
+            return true
+          } catch (error) {
+            console.error('路由跳转失败:', error)
+            ElMessage.error('跳转到编辑页面失败')
+            throw error
+          }
+        } else if (status === '识别中') {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          return pollRecognitionStatus()
+        } else if (status === '失败') {
+          throw new Error('识别失败')
+        } else {
+          throw new Error(`未知的识别状态：${status}`)
+        }
+      } catch (error) {
+        console.error('轮询识别状态失败:', error)
+        throw error
       }
-      
-      await pollRecognitionStatus()
-    } else {
-      throw new Error(response.message || '开始识别失败')
     }
+    
+    await pollRecognitionStatus()
   } catch (error) {
     console.error('识别请求失败:', error)
     ElMessage.error(error.message || '识别失败，请重试')
+    // 更新文件状态为失败
+    await fileStore.fetchFileList()
   }
 }
 

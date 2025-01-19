@@ -148,7 +148,7 @@ const dialogVisible = computed({
 const uploadRef = ref(null)
 const fileList = ref([])
 const isUploading = ref(false)
-const language = ref('auto')
+const language = ref('zh')
 const transcribingFiles = ref([])
 const showProgress = ref(false)
 

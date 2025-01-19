@@ -158,9 +158,7 @@ async def upload_file(
 
 @app.get("/api/v1/files/{file_id}", response_model=FileResponse)
 async def get_file(file_id: str):
-    logger.info(f"获取文件详情: {file_id}")
     result = file_service.get_file_detail(file_id)
-    logger.info(f"文件详情返回数据: {result}")
     return result
 
 @app.delete("/api/v1/files/{file_id}", response_model=BaseResponse)
