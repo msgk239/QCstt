@@ -7,6 +7,7 @@ from funasr.utils.postprocess_utils import rich_transcription_postprocess
 from .models import model
 import logging
 import re
+from .audio_utils import AudioConverter  # 添加导入
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,12 @@ class SpeechService:
             logger.info(f"=== 开始语音识别 ===")
             logger.info(f"输入参数 - 目标语言: {language}, 音频大小: {len(audio_file)} bytes")
             
-            # 1. 使用已正确配置的model进行识别
+            # 1. 音频格式转换
+            logger.info("开始音频格式转换...")
+            audio_file = AudioConverter.convert_audio(audio_file)
+            logger.info(f"音频转换完成，转换后大小: {len(audio_file)} bytes")
+            
+            # 2. 使用已正确配置的model进行识别
             logger.info("开始调用模型进行识别...")
             res = model.generate(
                 input=audio_file,
