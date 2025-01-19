@@ -545,15 +545,11 @@ const handleSpeakerChange = (updatedSegment) => {
     // 批量更新的逻辑保持不变
     segments.value = segments.value.map(segment => {
       if (segment.speakerKey === updatedSegment.speakerKey) {
-        const updatedSegmentData = {
+        return {
           ...segment,
           speakerKey: updatedSegment.speakerKey,
-          speakerDisplayName: updatedSegment.speakerDisplayName,
-          speaker_id: segment.speaker_id,
-          speaker_name: segment.speaker_name,
-          segmentId: `${updatedSegment.speakerKey}_${nanoid(6)}`
+          speakerDisplayName: updatedSegment.speakerDisplayName
         }
-        return updatedSegmentData
       }
       return segment
     })
@@ -562,64 +558,15 @@ const handleSpeakerChange = (updatedSegment) => {
     const index = segments.value.findIndex(s => s.segmentId === updatedSegment.segmentId)
     
     if (index > -1) {
-      const oldSegment = segments.value[index]
-      console.log('更新前:', {
-        speakerKey: oldSegment.speakerKey,
-        subsegmentId: oldSegment.subsegmentId,
-        text: oldSegment.text?.substring(0, 10) + '...'
-      })
-      
-      console.log('收到的更新:', {
-        segmentId: updatedSegment.segmentId,
-        speakerKey: updatedSegment.speakerKey,
-        subSegments: updatedSegment.subSegments?.map(s => ({
-          subsegmentId: s.subsegmentId,
-          speakerKey: s.speakerKey,
-          text: s.text?.substring(0, 10) + '...'
-        }))
-      })
-      
-      console.log('查找段落:', {
-        targetSegmentId: updatedSegment.segmentId,
-        allSegments: segments.value.map(s => ({
-          segmentId: s.segmentId,
-          subSegmentsCount: s.subSegments?.length,
-          speakerKey: s.speakerKey
-        }))
-      })
-      
-      // 更新整个 segments 数组，确保每个子段落都更新 speakerKey
       segments.value = segments.value.map(segment => {
         if (segment.segmentId === updatedSegment.segmentId) {
-          console.log('找到要更新的段落:', {
-            segmentId: segment.segmentId,
-            oldSpeakerKey: segment.speakerKey,
-            newSpeakerKey: updatedSegment.speakerKey
-          })
-          
           return {
             ...segment,
             speakerKey: updatedSegment.speakerKey,
-            speakerDisplayName: updatedSegment.speakerDisplayName,
-            segmentId: `${updatedSegment.speakerKey}_${nanoid(6)}`,
-            speaker_id: segment.speaker_id,
-            speaker_name: segment.speaker_name,
-            subSegments: updatedSegment.subSegments?.map(sub => ({
-              ...sub,
-              speakerKey: updatedSegment.speakerKey
-            }))
+            speakerDisplayName: updatedSegment.speakerDisplayName
           }
         }
         return segment
-      })
-      
-      console.log('更新后:', {
-        speakerKey: segments.value[index].speakerKey,
-        subSegments: segments.value[index].subSegments.map(s => ({
-          subsegmentId: s.subsegmentId,
-          speakerKey: s.speakerKey,
-          text: s.text?.substring(0, 10) + '...'
-        }))
       })
     }
   }

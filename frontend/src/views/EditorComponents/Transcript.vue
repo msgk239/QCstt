@@ -154,19 +154,17 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
     console.log('处理原始段落:', {
       index,
       speakerKey: segment.speakerKey,
-      subSegments: segment.subSegments?.map(sub => ({
-        subsegmentId: sub.subsegmentId,
-        speakerKey: sub.speakerKey  // 看看子段落是否有 speakerKey
-      }))
+      subsegmentId: segment.subsegmentId  // 记录原始段落的 subsegmentId
     })
 
-    const currentKey = segment.subSegments?.[0]?.speakerKey || segment.speakerKey
+    const currentKey = segment.speakerKey
     const groupKey = currentGroup?.speakerKey
     
     if (!currentGroup || groupKey !== currentKey) {
       if (currentGroup) {
         console.log('保存当前组:', {
           speakerKey: currentGroup.speakerKey,
+          segmentId: currentGroup.segmentId,
           subSegments: currentGroup.subSegments.map(sub => ({
             subsegmentId: sub.subsegmentId,
             speakerKey: sub.speakerKey
@@ -175,7 +173,7 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
         result.push(currentGroup)
       }
       
-      // 创建新组时保留 speakerKey
+      // 创建新组，生成新的 segmentId
       currentGroup = {
         // 原始字段（不变）
         speaker_id: segment.speaker_id,
@@ -186,17 +184,17 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
         speakerDisplayName: segment.speakerDisplayName,
         color: segment.color,
         
-        // 使用独立的方法生成 segmentId
+        // 使用独立的方法生成父段落的 segmentId
         segmentId: generateSegmentId(segment, isFirstMerge),
         
         // 时间信息（可变）
         start_time: segment.start_time,
         end_time: segment.end_time,
         
-        // 子段落信息
+        // 子段落信息，保留原始段落的 subsegmentId
         subSegments: [{
-          subsegmentId: segment.subsegmentId,
-          speakerKey: segment.subSegments?.[0]?.speakerKey || segment.speakerKey,  // 使用子段落自己的 speakerKey
+          subsegmentId: segment.subsegmentId,  // 保留原始的 subsegmentId
+          speakerKey: segment.speakerKey,
           text: segment.text || '',
           start_time: segment.start_time,
           end_time: segment.end_time,
@@ -204,10 +202,10 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
         }]
       }
     } else {
-      // 添加到当前组时也保留 speakerKey
+      // 添加到当前组，保留原始段落的 subsegmentId
       currentGroup.subSegments.push({
-        subsegmentId: segment.subsegmentId,
-        speakerKey: segment.subSegments?.[currentGroup.subSegments.length]?.speakerKey || segment.speakerKey,  // 使用子段落自己的 speakerKey
+        subsegmentId: segment.subsegmentId,  // 保留原始的 subsegmentId
+        speakerKey: segment.speakerKey,
         text: segment.text || '',
         start_time: segment.start_time,
         end_time: segment.end_time,
@@ -224,7 +222,11 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
   }
   
   console.log('合并段落完成:', {
-    result,
+    result: result.map(group => ({
+      segmentId: group.segmentId,
+      speakerKey: group.speakerKey,
+      subSegmentsCount: group.subSegments.length
+    })),
     segmentCount: result.length
   })
   
