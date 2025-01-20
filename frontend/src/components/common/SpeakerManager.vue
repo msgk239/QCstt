@@ -267,7 +267,19 @@ const handleConfirm = () => {
     return
   }
 
+  // 先打印日志
+  console.log('原段落的所有信息:', {
+    originalSegment: props.segment,
+    keys: Object.keys(props.segment),
+    segmentId: props.segment.segmentId,
+    speakerKey: props.segment.speakerKey,
+    subSegments: props.segment.subSegments?.length
+  })
+
+  // 然后创建对象
   const updatedSegment = {
+    ...props.segment,           // 保留原段落的所有信息
+    
     // 保留原始字段
     speaker_id: props.segment.speaker_id,
     speaker_name: props.segment.speaker_name,
@@ -325,7 +337,27 @@ const handleSpeakerItemClick = (speaker) => {
   })
 
   // 更新段落信息
+  console.log('原段落的所有信息:', {
+    originalSegment: props.segment,
+    keys: Object.keys(props.segment),  // 看看有哪些字段
+    segmentId: props.segment.segmentId,
+    speakerKey: props.segment.speakerKey,
+    subSegments: props.segment.subSegments?.length
+  })
+
+  // 先打印日志
+  console.log('原段落的所有信息:', {
+    originalSegment: props.segment,
+    keys: Object.keys(props.segment),
+    segmentId: props.segment.segmentId,
+    speakerKey: props.segment.speakerKey,
+    subSegments: props.segment.subSegments?.length
+  })
+
+  // 然后创建对象
   const updatedSegment = {
+    ...props.segment,           // 保留原段落的所有信息
+    
     // 保留原始字段
     speaker_id: props.segment.speaker_id,
     speaker_name: props.segment.speaker_name,

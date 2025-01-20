@@ -125,23 +125,38 @@ const isWordPlaying = (word) => {
 }
 
 // 添加调试代码
-watch([() => props.segments, () => props.speakers], () => {
-  console.log('segments:', props.segments)
-  console.log('speakers:', props.speakers)
-})
+watch(() => props.segments, (newVal) => {
+    console.log('segments 发生变化:', {
+        segments: newVal,
+        firstThreeSegments: newVal.slice(0, 3).map(s => ({
+            speakerKey: s.speakerKey,
+            text: s.text
+        }))
+    })
+}, { deep: true })
 
 // 1. 添加一个用于存储合并后段落的 ref
 const mergedSegmentsCache = ref([])
 
 // 1. 生成 segmentId 的方法
-const generateSegmentId = (segment, isFirstMerge) => {
-  return isFirstMerge
-    ? `${segment.speakerKey}_${nanoid(6)}`  // 第一次合并时生成新的
-    : segment.segmentId                      // 后续合并时保留现有的
+const generateSegmentId = (segment, isFirstMerge = false) => {
+  // 如果没有 segmentId 就生成新的，保持向后兼容
+  if (!segment.segmentId || isFirstMerge) {
+    return `${segment.speakerKey}_${nanoid(6)}`
+  }
+  return segment.segmentId
 }
 
 // 2. 纯合并逻辑
 const mergeSegments = (rawSegments, isFirstMerge = false) => {
+  console.log('开始合并段落:', {
+    rawSegmentsCount: rawSegments.length,
+    firstThreeRawSegments: rawSegments.slice(0, 3).map(s => ({
+      speakerKey: s.speakerKey,
+      text: s.text?.slice(0, 20) // 只显示前20个字符
+    }))
+  })
+
   const result = []
   let currentGroup = null
   
@@ -154,7 +169,13 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
         result.push(currentGroup)
       }
       
-      // 创建新组，生成新的 segmentId
+      // 创建新组时记录日志
+      console.log('创建新组:', {
+        index,
+        speakerKey: currentKey,
+        previousGroupKey: groupKey
+      })
+
       currentGroup = {
         // 原始字段（不变）
         speaker_id: segment.speaker_id,
@@ -183,7 +204,13 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
         }]
       }
     } else {
-      // 添加到当前组，保留原始段落的 subsegmentId
+      // 添加到当前组时记录日志
+      console.log('添加到现有组:', {
+        index,
+        speakerKey: currentKey,
+        subSegmentsCount: currentGroup.subSegments.length
+      })
+      
       currentGroup.subSegments.push({
         subsegmentId: segment.subsegmentId,
         speakerKey: segment.speakerKey,
@@ -201,43 +228,52 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
   if (currentGroup) {
     result.push(currentGroup)
   }
+
+  console.log('合并完成:', {
+    resultCount: result.length,
+    firstGroupInfo: result[0] ? {
+      speakerKey: result[0].speakerKey,
+      subSegmentsCount: result[0].subSegments.length
+    } : null
+  })
   
   return result
 }
 
 // 3. 修改计算属性，使用缓存的结果
 const mergedSegments = computed(() => {
-  console.log('mergedSegments computed 触发:', {
-    segments: props.segments,
-    cache: mergedSegmentsCache.value,
-    isEqual: props.segments === mergedSegmentsCache.value
-  })
-  
-  if (!props.segments) return []
-  
-  if (props.segments !== mergedSegmentsCache.value) {
-    console.log('需要重新合并段落，原因:', {
-      oldCache: mergedSegmentsCache.value,
-      newSegments: props.segments,
-      diff: props.segments.map((s, i) => ({
-        index: i,
-        segmentId: s.segmentId,
-        speakerKey: s.speakerKey,
-        isDifferent: s !== mergedSegmentsCache.value?.[i]
-      }))
+    console.log('mergedSegments computed 触发:', {
+        segments: props.segments,
+        cache: mergedSegmentsCache.value,
+        isEqual: props.segments === mergedSegmentsCache.value
     })
     
-    mergedSegmentsCache.value = mergeSegments(props.segments)
+    if (!props.segments) return []
     
-    console.log('合并后的结果:', {
-      newCache: mergedSegmentsCache.value,
-      segmentCount: mergedSegmentsCache.value.length
-    })
-  } else {
-    console.log('使用缓存的合并结果')
-  }
-  
-  return mergedSegmentsCache.value
+    if (props.segments !== mergedSegmentsCache.value) {
+        console.log('需要重新合并段落，原因:', {
+            oldCache: mergedSegmentsCache.value,
+            newSegments: props.segments,
+            diff: props.segments.map((s, i) => ({
+                index: i,
+                segmentId: s.segmentId,
+                speakerKey: s.speakerKey,
+                isDifferent: s !== mergedSegmentsCache.value?.[i]
+            }))
+        })
+        
+        const isFirstMerge = !mergedSegmentsCache.value.length
+        mergedSegmentsCache.value = mergeSegments(props.segments, isFirstMerge)
+        
+        console.log('合并后的结果:', {
+            newCache: mergedSegmentsCache.value,
+            segmentCount: mergedSegmentsCache.value.length
+        })
+    } else {
+        console.log('使用缓存的合并结果')
+    }
+    
+    return mergedSegmentsCache.value
 })
 
 // 4. 添加新的方法
@@ -249,6 +285,10 @@ const handleSegmentClick = (segment) => {
   emit('segment-select', updatedSegments)
 }
 
+// 暴露 mergedSegments 给父组件
+defineExpose({
+  mergedSegments
+})
 </script>
 
 <style scoped>

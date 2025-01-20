@@ -139,6 +139,9 @@ const lastSaveTime = ref(null)
 // 添加定时器变量
 let autoSaveTimer = null
 
+// 定义组件引用
+const transcriptRef = ref(null)
+
 // 初始化音频
 const initAudio = async () => {
   try {
@@ -554,11 +557,46 @@ const handleSpeakerChange = (updatedSegment) => {
       return segment
     })
   } else {
-    // 单个段落更新
-    const index = segments.value.findIndex(s => s.segmentId === updatedSegment.segmentId)
+    // 单个说话人更新（单个父段落）
+    console.log('开始单个说话人更新:', {
+      updatedSegment: {
+        segmentId: updatedSegment.segmentId,
+        speakerKey: updatedSegment.speakerKey,
+        speakerDisplayName: updatedSegment.speakerDisplayName
+      }
+    })
+
+    // 添加新的调试日志
+    console.log('查找段落详情:', {
+      updatedSegmentId: updatedSegment.segmentId,
+      allSegmentIds: segments.value.map(s => s.segmentId),
+      firstThreeSegments: segments.value.slice(0, 3)
+    })
+
+    // 从合并后的段落中查找
+    const mergedSegment = transcriptRef.value?.mergedSegments?.find(
+      s => s.segmentId === updatedSegment.segmentId
+    )
     
-    if (index > -1) {
+    console.log('查找结果:', {
+      found: !!mergedSegment,
+      foundSegment: mergedSegment ? {
+        segmentId: mergedSegment.segmentId,
+        speakerKey: mergedSegment.speakerKey
+      } : null
+    })
+    
+    if (mergedSegment) {
       segments.value = segments.value.map(segment => {
+        const willUpdate = segment.segmentId === updatedSegment.segmentId
+        console.log('检查段落:', {
+          currentSegmentId: segment.segmentId,
+          updatedSegmentId: updatedSegment.segmentId,
+          willUpdate,
+          currentSpeakerKey: segment.speakerKey,
+          newSpeakerKey: updatedSegment.speakerKey
+        })
+
         if (segment.segmentId === updatedSegment.segmentId) {
           return {
             ...segment,
