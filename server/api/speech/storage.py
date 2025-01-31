@@ -73,12 +73,10 @@ class TranscriptManager:
                         print("使用完整数据")
                 else:
                     result[key] = data
-                print(f"最终 {key} 数据: {result[key]}")
             else:
                 print(f"未找到 {key} 数据")
                 
         print(f"\n=== 转写结果获取完成 ===")
-        print(f"最终结果: {result}")
         return result if result else None
 
     def delete_transcript(self, file_id: str) -> bool:

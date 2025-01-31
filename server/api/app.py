@@ -242,7 +242,8 @@ async def get_system_status():
 @app.get("/api/hotwords")
 async def get_hotwords():
     try:
-        # ...处理逻辑
+        # 这里应该从数据库或其他存储中获取热词列表
+        hotwords = []  # 临时使用空列表，实际应该实现获取热词的逻辑
         return JSONResponse(
             status_code=200,
             content={"data": hotwords}

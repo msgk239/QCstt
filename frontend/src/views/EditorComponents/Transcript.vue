@@ -48,7 +48,7 @@
 </template>
 
 <script setup>
-import { ref, watch, watchEffect, computed } from 'vue'
+import { ref, watch, watchEffect, computed, onMounted } from 'vue'
 import SpeakerManager from '@/components/common/SpeakerManager.vue'
 import { nanoid } from 'nanoid'
 
@@ -87,12 +87,24 @@ const handleSpeakerChange = (updatedSegment) => {
 
 // 处理内容编辑
 const handleContentChange = (event, segment) => {
+  console.log('内容变更事件:', {
+    newText: event.target.textContent,
+    segmentId: segment.segmentId,
+    originalText: segment.text
+  })
+  
   const text = event.target.textContent
   const updatedSegment = {
     ...segment,
     text: text,
   }
+  console.log('准备发送 segment-update:', {
+    segment,
+    segmentId: updatedSegment.segmentId,
+    isFirstMerge: false
+  })
   emit('segment-update', updatedSegment)
+  console.log('已发送 segment-update')
 }
 
 // 优化 isSegmentPlaying 函数
@@ -103,23 +115,67 @@ const isSegmentPlaying = (segment) => {
 
 // 将文本按时间戳分割
 const splitTextWithTimestamps = (segment) => {
-  if (!segment.timestamps || !segment.text) return [{ text: segment.text }]
+  console.log('splitTextWithTimestamps 详细输入:', {
+    segment,
+    hasTimestamps: !!segment?.timestamps,
+    hasText: !!segment?.text,
+    textLength: segment?.text?.length,
+    timestampsLength: segment?.timestamps?.length,
+    segmentContent: segment?.text,
+    firstTimestamp: segment?.timestamps?.[0]
+  })
+
+  // 添加数据完整性检查
+  if (!segment || typeof segment !== 'object') {
+    console.warn('segment 对象无效:', segment)
+    return [{ text: '' }]
+  }
+
+  if (!segment.timestamps || !segment.text) {
+    console.warn('缺少必要的数据:', {
+      text: segment.text,
+      hasTimestamps: !!segment.timestamps
+    })
+    // 如果只有文本没有时间戳，至少显示文本
+    return [{ text: segment.text || '' }]
+  }
   
   const text = segment.text
   const timestamps = segment.timestamps
   const minLength = Math.min(text.length, timestamps.length)
   
-  return Array.from({ length: minLength }, (_, index) => ({
+  const result = Array.from({ length: minLength }, (_, index) => ({
     text: text[index],
     start: timestamps[index].start,
     end: timestamps[index].end
   }))
+
+  console.log('splitTextWithTimestamps 处理结果:', {
+    inputTextLength: text.length,
+    inputTimestampsLength: timestamps.length,
+    outputLength: result.length,
+    sampleOutput: result.slice(0, 3)
+  })
+  
+  return result
 }
 
 // 判断单个词是否正在播放
+const lastLogTime = ref(0)
 const isWordPlaying = (word) => {
+  const now = Date.now()
+  if (now - lastLogTime.value > 1000) { // 每秒最多记录一次
+    console.log('检查单词播放状态:', {
+      word,
+      currentTime: props.currentTime,
+      isPlaying: props.currentTime >= (word.start - 0.05) && 
+                 props.currentTime <= (word.end + 0.05)
+    })
+    lastLogTime.value = now
+  }
+  
   if (!word.start || !word.end) return false
-  const buffer = 0.05 // 50ms 缓冲
+  const buffer = 0.05
   return props.currentTime >= (word.start - buffer) && 
          props.currentTime <= (word.end + buffer)
 }
@@ -138,22 +194,36 @@ watch(() => props.segments, (newVal) => {
 // 1. 添加一个用于存储合并后段落的 ref
 const mergedSegmentsCache = ref([])
 
-// 1. 生成 segmentId 的方法
-const generateSegmentId = (segment, isFirstMerge = false) => {
-  // 如果没有 segmentId 就生成新的，保持向后兼容
-  if (!segment.segmentId || isFirstMerge) {
-    return `${segment.speakerKey}_${nanoid(6)}`
-  }
-  return segment.segmentId
+// 批量生成逻辑
+const generateSegmentIds = (segments, isFirstMerge = false) => {
+  return segments.map(segment => {
+    if (!segment.segmentId || isFirstMerge) {
+      return {
+        ...segment,
+        segmentId: `${segment.speakerKey}_${nanoid(6)}`
+      }
+    }
+    return segment
+  })
 }
 
 // 2. 纯合并逻辑
 const mergeSegments = (rawSegments, isFirstMerge = false) => {
+  if (!rawSegments || rawSegments.length === 0) {
+    console.log('跳过合并：rawSegments为空')
+    return []
+  }
+
   console.log('开始合并段落:', {
     rawSegmentsCount: rawSegments.length,
+    isFirstMerge,
     firstThreeRawSegments: rawSegments.slice(0, 3).map(s => ({
       speakerKey: s.speakerKey,
-      text: s.text?.slice(0, 20) // 只显示前20个字符
+      segmentId: s.segmentId,
+      subsegmentId: s.subsegmentId,
+      text: s.text?.slice(0, 20),
+      hasTimestamps: !!s.timestamps,
+      timestampsCount: s.timestamps?.length
     }))
   })
 
@@ -168,112 +238,70 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
       if (currentGroup) {
         result.push(currentGroup)
       }
-      
-      // 创建新组时记录日志
-      console.log('创建新组:', {
-        index,
-        speakerKey: currentKey,
-        previousGroupKey: groupKey
-      })
 
+      const segmentId = `${currentKey}_${nanoid(6)}`
+      
+      // 保留更多原始数据
       currentGroup = {
-        // 原始字段（不变）
-        speaker_id: segment.speaker_id,
-        speaker_name: segment.speaker_name,
-        
-        // 前端使用的字段（可变）
-        speakerKey: segment.speakerKey,
+        segmentId,
+        speakerKey: currentKey,
         speakerDisplayName: segment.speakerDisplayName,
-        color: segment.color,
-        
-        // 使用独立的方法生成父段落的 segmentId
-        segmentId: generateSegmentId(segment, isFirstMerge),
-        
-        // 时间信息（可变）
         start_time: segment.start_time,
         end_time: segment.end_time,
-        
-        // 子段落信息，保留原始段落的 subsegmentId
+        text: segment.text, // 保留原始文本
+        timestamps: segment.timestamps, // 保留原始时间戳
         subSegments: [{
+          ...segment,
+          segmentId,
           subsegmentId: segment.subsegmentId,
-          speakerKey: segment.speakerKey,
-          text: segment.text || '',
-          start_time: segment.start_time,
-          end_time: segment.end_time,
+          text: segment.text,
           timestamps: segment.timestamps
         }]
       }
-    } else {
-      // 添加到当前组时记录日志
-      console.log('添加到现有组:', {
-        index,
-        speakerKey: currentKey,
-        subSegmentsCount: currentGroup.subSegments.length
-      })
-      
-      currentGroup.subSegments.push({
+
+      console.log('子段落数据:', {
+        segmentId,
         subsegmentId: segment.subsegmentId,
-        speakerKey: segment.speakerKey,
-        text: segment.text || '',
-        start_time: segment.start_time,
-        end_time: segment.end_time,
+        text: segment.text?.slice(0, 20),
+        hasTimestamps: !!segment.timestamps,
+        timestampsLength: segment.timestamps?.length,
+        rawSegment: segment
+      })
+
+    } else {
+      currentGroup.subSegments.push({
+        ...segment,
+        segmentId: currentGroup.segmentId,
+        subsegmentId: segment.subsegmentId,
+        text: segment.text,
         timestamps: segment.timestamps
       })
-      currentGroup.text = currentGroup.subSegments.map(sub => sub.text).join('\n').trim()
-      currentGroup.end_time = segment.end_time  // 更新合并后的 end_time
+      // 更新结束时间
+      currentGroup.end_time = segment.end_time
     }
   })
   
-  // 添加最后一组
   if (currentGroup) {
     result.push(currentGroup)
   }
 
-  console.log('合并完成:', {
-    resultCount: result.length,
-    firstGroupInfo: result[0] ? {
-      speakerKey: result[0].speakerKey,
-      subSegmentsCount: result[0].subSegments.length
-    } : null
-  })
-  
   return result
 }
 
 // 3. 修改计算属性，使用缓存的结果
 const mergedSegments = computed(() => {
-    console.log('mergedSegments computed 触发:', {
-        segments: props.segments,
-        cache: mergedSegmentsCache.value,
-        isEqual: props.segments === mergedSegmentsCache.value
-    })
-    
-    if (!props.segments) return []
-    
-    if (props.segments !== mergedSegmentsCache.value) {
-        console.log('需要重新合并段落，原因:', {
-            oldCache: mergedSegmentsCache.value,
-            newSegments: props.segments,
-            diff: props.segments.map((s, i) => ({
-                index: i,
-                segmentId: s.segmentId,
-                speakerKey: s.speakerKey,
-                isDifferent: s !== mergedSegmentsCache.value?.[i]
-            }))
-        })
-        
-        const isFirstMerge = !mergedSegmentsCache.value.length
-        mergedSegmentsCache.value = mergeSegments(props.segments, isFirstMerge)
-        
-        console.log('合并后的结果:', {
-            newCache: mergedSegmentsCache.value,
-            segmentCount: mergedSegmentsCache.value.length
-        })
-    } else {
-        console.log('使用缓存的合并结果')
-    }
-    
+  // 使用缓存避免重复计算
+  if (mergedSegmentsCache.value.length > 0 && !props.segments.some(s => !s.segmentId)) {
     return mergedSegmentsCache.value
+  }
+
+  const isFirstMerge = !mergedSegmentsCache.value.length
+  const result = mergeSegments(props.segments, isFirstMerge)
+  
+  // 缓存结果
+  mergedSegmentsCache.value = result
+  
+  return result
 })
 
 // 4. 添加新的方法
@@ -288,6 +316,43 @@ const handleSegmentClick = (segment) => {
 // 暴露 mergedSegments 给父组件
 defineExpose({
   mergedSegments
+})
+
+// 添加初始化检查
+onMounted(() => {
+  console.log('Transcript 组件挂载完成')
+  if (props.segments && props.segments.length > 0) {
+    console.log('Transcript 初始化合并开始:', {
+      segmentsCount: props.segments.length,
+      firstThreeSegments: props.segments.slice(0, 3).map(s => ({
+        segmentId: s.segmentId,
+        speakerKey: s.speakerKey,
+        subsegmentId: s.subsegmentId
+      }))
+    })
+    const value = mergedSegments.value // 触发首次合并
+    console.log('Transcript 初始化合并完成:', {
+      resultCount: value.length,
+      firstThreeResults: value.slice(0, 3).map(s => ({
+        segmentId: s.segmentId,
+        speakerKey: s.speakerKey,
+        subSegmentsCount: s.subSegments.length
+      }))
+    })
+  }
+})
+
+// 3. 在模板渲染前添加调试日志
+watchEffect(() => {
+  console.log('模板渲染数据状态:', {
+    mergedSegmentsLength: mergedSegments.value?.length,
+    firstSegmentInfo: mergedSegments.value?.[0] ? {
+      segmentId: mergedSegments.value[0].segmentId,
+      hasSubSegments: !!mergedSegments.value[0].subSegments,
+      subSegmentsLength: mergedSegments.value[0].subSegments?.length,
+      firstSubSegmentText: mergedSegments.value[0].subSegments?.[0]?.text?.slice(0, 50)
+    } : null
+  })
 })
 </script>
 

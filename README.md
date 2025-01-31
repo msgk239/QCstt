@@ -147,3 +147,6 @@ file_path = self.audio_dir + "/" + filename
    - 批量操作
    - 高级搜索
 
+
+## 系统要求
+需要安装 FFmpeg（用于音频处理）：`winget install Gyan.FFmpeg`

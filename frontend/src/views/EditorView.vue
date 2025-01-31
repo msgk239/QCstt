@@ -139,9 +139,6 @@ const lastSaveTime = ref(null)
 // 添加定时器变量
 let autoSaveTimer = null
 
-// 定义组件引用
-const transcriptRef = ref(null)
-
 // 初始化音频
 const initAudio = async () => {
   try {
@@ -261,76 +258,99 @@ const handleSave = async () => {
 }
 
 const handleSegmentUpdate = (updatedSegments) => {
+  // 处理批量更新
   if (Array.isArray(updatedSegments)) {
-    segments.value = updatedSegments.map((segment, index) => {
-      // 确保基本字段存在
-      const safeSegment = {
-        ...segment,
-        speaker_id: segment.speaker_id || `speaker_${index}`,
-        speaker_name: segment.speaker_name || `说话人 ${index + 1}`,
-        speakerKey: segment.speakerKey || segment.speaker_id || `speaker_${index}`,
-        speakerDisplayName: segment.speakerDisplayName || segment.speaker_name || `说话人 ${index + 1}`,
-        color: segment.color || '#409EFF',
-        start_time: segment.start_time || 0,
-        end_time: segment.end_time || 0,
-        text: segment.text || '',
-        timestamps: segment.timestamps || [],
-        subsegmentId: `${segment.speaker_id || `speaker_${index}`}-${segment.start_time || 0}-${segment.end_time || 0}`
-      }
-      
-      return {
-        ...safeSegment,
-        subSegments: segment.subSegments?.map(sub => ({
-          subsegmentId: `${safeSegment.speaker_id}-${sub.start_time || 0}-${sub.end_time || 0}`,
-          text: sub.text || '',
-          start_time: sub.start_time || 0,
-          end_time: sub.end_time || 0,
-          timestamps: sub.timestamps || []
-        })) || [{
-          subsegmentId: `${safeSegment.speaker_id}-${safeSegment.start_time}-${safeSegment.end_time}`,
-          text: safeSegment.text,
-          start_time: safeSegment.start_time,
-          end_time: safeSegment.end_time,
-          timestamps: safeSegment.timestamps
-        }]
-      }
+    console.log('处理批量更新:', {
+      updatedSegmentsCount: updatedSegments.length,
+      firstThreeUpdatedSegments: updatedSegments.slice(0, 3).map(s => ({
+        segmentId: s.segmentId,
+        speakerKey: s.speakerKey,
+        subSegmentsCount: s.subSegments?.length
+      }))
     })
-  } else {
+
+    // 如果是合并后的结果（包含 subSegments），直接替换
+    if (updatedSegments[0]?.subSegments) {
+      console.log('检测到合并后的数据结构，直接更新')
+      segments.value = updatedSegments
+      return
+    }
+    
+    // 原有的更新逻辑保持不变
+    const updatedSegmentIds = new Set(updatedSegments.map(s => s.segmentId))
+    console.log('更新前的 segments:', {
+      count: segments.value.length,
+      firstThreeSegments: segments.value.slice(0, 3).map(s => ({
+        segmentId: s.segmentId,
+        speakerKey: s.speakerKey,
+        subsegmentId: s.subsegmentId
+      }))
+    })
+    
+    segments.value = segments.value.map(segment => {
+      if (updatedSegmentIds.has(segment.segmentId)) {
+        const updatedSegment = updatedSegments.find(s => s.segmentId === segment.segmentId)
+        console.log('更新段落:', {
+          oldSegmentId: segment.segmentId,
+          newSegmentId: updatedSegment.segmentId,
+          speakerKey: segment.speakerKey
+        })
+        return {
+          ...segment,
+          ...updatedSegment
+        }
+      }
+      return segment
+    })
+    
+    // 添加新段落（如果有）
+    const newSegments = updatedSegments.filter(s => !updatedSegmentIds.has(s.segmentId))
+    if (newSegments.length > 0) {
+      console.log('添加新段落:', {
+        count: newSegments.length,
+        firstThreeNewSegments: newSegments.slice(0, 3).map(s => ({
+          segmentId: s.segmentId,
+          speakerKey: s.speakerKey
+        }))
+      })
+      segments.value = [...segments.value, ...newSegments]
+    }
+  } 
+  // 处理单个段落更新（保持兼容）
+  else {
+    console.log('处理单个段落更新:', {
+      segmentId: updatedSegments.segmentId,
+      speakerKey: updatedSegments.speakerKey
+    })
+    
     const index = segments.value.findIndex(s => s.segmentId === updatedSegments.segmentId)
     if (index > -1) {
-      // 确保基本字段存在
-      const safeSegment = {
-        ...updatedSegments,
-        speaker_id: updatedSegments.speaker_id || segments.value[index].speaker_id,
-        speaker_name: updatedSegments.speaker_name || segments.value[index].speaker_name,
-        speakerKey: updatedSegments.speakerKey || updatedSegments.speaker_id || segments.value[index].speakerKey,
-        speakerDisplayName: updatedSegments.speakerDisplayName || updatedSegments.speaker_name || segments.value[index].speakerDisplayName,
-        color: updatedSegments.color || segments.value[index].color || '#409EFF',
-        start_time: updatedSegments.start_time || 0,
-        end_time: updatedSegments.end_time || 0,
-        text: updatedSegments.text || '',
-        timestamps: updatedSegments.timestamps || [],
-        subSegments: null
-      }
-      
+      console.log('找到要更新的段落:', {
+        index,
+        oldSegment: {
+          segmentId: segments.value[index].segmentId,
+          speakerKey: segments.value[index].speakerKey
+        },
+        newSegment: {
+          segmentId: updatedSegments.segmentId,
+          speakerKey: updatedSegments.speakerKey
+        }
+      })
       segments.value[index] = {
-        ...safeSegment,
-        subSegments: updatedSegments.subSegments?.map(sub => ({
-          subsegmentId: `${safeSegment.speaker_id}-${sub.start_time || 0}-${sub.end_time || 0}`,
-          text: sub.text || '',
-          start_time: sub.start_time || 0,
-          end_time: sub.end_time || 0,
-          timestamps: sub.timestamps || []
-        })) || [{
-          subsegmentId: `${safeSegment.speaker_id}-${safeSegment.start_time}-${safeSegment.end_time}`,
-          text: safeSegment.text,
-          start_time: safeSegment.start_time,
-          end_time: safeSegment.end_time,
-          timestamps: safeSegment.timestamps
-        }]
+        ...segments.value[index],
+        ...updatedSegments
       }
     }
   }
+  
+  console.log('更新后的 segments:', {
+    count: segments.value.length,
+    firstThreeSegments: segments.value.slice(0, 3).map(s => ({
+      segmentId: s.segmentId,
+      speakerKey: s.speakerKey,
+      text: s.text?.slice(0, 20) + '...'
+    }))
+  })
 }
 
 // 播放控制方法
@@ -545,9 +565,19 @@ const handleSegmentSelect = (updatedSegments) => {
 
 const handleSpeakerChange = (updatedSegment) => {
   if (updatedSegment.batchUpdate) {
+    console.log('处理批量说话人更新:', {
+      speakerKey: updatedSegment.speakerKey,
+      speakerDisplayName: updatedSegment.speakerDisplayName
+    })
     // 批量更新的逻辑保持不变
     segments.value = segments.value.map(segment => {
       if (segment.speakerKey === updatedSegment.speakerKey) {
+        console.log('更新段落说话人:', {
+          segmentId: segment.segmentId,
+          oldSpeakerKey: segment.speakerKey,
+          newSpeakerKey: updatedSegment.speakerKey,
+          newDisplayName: updatedSegment.speakerDisplayName
+        })
         return {
           ...segment,
           speakerKey: updatedSegment.speakerKey,
@@ -557,54 +587,65 @@ const handleSpeakerChange = (updatedSegment) => {
       return segment
     })
   } else {
-    // 单个说话人更新（单个父段落）
-    console.log('开始单个说话人更新:', {
-      updatedSegment: {
-        segmentId: updatedSegment.segmentId,
-        speakerKey: updatedSegment.speakerKey,
-        speakerDisplayName: updatedSegment.speakerDisplayName
-      }
-    })
-
-    // 添加新的调试日志
-    console.log('查找段落详情:', {
-      updatedSegmentId: updatedSegment.segmentId,
-      allSegmentIds: segments.value.map(s => s.segmentId),
-      firstThreeSegments: segments.value.slice(0, 3)
-    })
-
-    // 从合并后的段落中查找
-    const mergedSegment = transcriptRef.value?.mergedSegments?.find(
-      s => s.segmentId === updatedSegment.segmentId
-    )
-    
-    console.log('查找结果:', {
-      found: !!mergedSegment,
-      foundSegment: mergedSegment ? {
-        segmentId: mergedSegment.segmentId,
-        speakerKey: mergedSegment.speakerKey
-      } : null
+    // 单个段落更新
+    console.log('开始更新单个段落说话人:', {
+      segmentId: updatedSegment.segmentId,
+      newSpeakerKey: updatedSegment.speakerKey,
+      newSpeakerDisplayName: updatedSegment.speakerDisplayName
     })
     
-    if (mergedSegment) {
+    // 添加当前 segments 状态日志
+    console.log('当前 segments 状态:', {
+      count: segments.value.length,
+      firstThreeSegments: segments.value.map(s => ({
+        segmentId: s.segmentId,
+        speakerKey: s.speakerKey,
+        speakerDisplayName: s.speakerDisplayName
+      })).slice(0, 3)
+    })
+    
+    const index = segments.value.findIndex(s => s.segmentId === updatedSegment.segmentId)
+    
+    if (index > -1) {
+      console.log('找到要更新的段落:', {
+        index,
+        oldSegment: {
+          segmentId: segments.value[index].segmentId,
+          speakerKey: segments.value[index].speakerKey,
+          speakerDisplayName: segments.value[index].speakerDisplayName
+        }
+      })
+      
       segments.value = segments.value.map(segment => {
-        const willUpdate = segment.segmentId === updatedSegment.segmentId
-        console.log('检查段落:', {
-          currentSegmentId: segment.segmentId,
-          updatedSegmentId: updatedSegment.segmentId,
-          willUpdate,
-          currentSpeakerKey: segment.speakerKey,
-          newSpeakerKey: updatedSegment.speakerKey
-        })
-
         if (segment.segmentId === updatedSegment.segmentId) {
-          return {
+          const updated = {
             ...segment,
             speakerKey: updatedSegment.speakerKey,
             speakerDisplayName: updatedSegment.speakerDisplayName
           }
+          console.log('更新后的段落:', {
+            segmentId: updated.segmentId,
+            speakerKey: updated.speakerKey,
+            speakerDisplayName: updated.speakerDisplayName
+          })
+          return updated
         }
         return segment
+      })
+      
+      // 添加更新后的 segments 状态日志
+      console.log('更新后的 segments 状态:', {
+        count: segments.value.length,
+        firstThreeSegments: segments.value.map(s => ({
+          segmentId: s.segmentId,
+          speakerKey: s.speakerKey,
+          speakerDisplayName: s.speakerDisplayName
+        })).slice(0, 3)
+      })
+    } else {
+      console.warn('未找到要更新的段落:', {
+        segmentId: updatedSegment.segmentId,
+        allSegmentIds: segments.value.map(s => s.segmentId)
       })
     }
   }
