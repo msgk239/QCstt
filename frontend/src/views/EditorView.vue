@@ -351,6 +351,16 @@ const handleSegmentUpdate = (updatedSegments) => {
       text: s.text?.slice(0, 20) + '...'
     }))
   })
+
+  // 在更新后添加完整的段落信息日志
+  console.log('更新后的完整段落信息:', segments.value.find(s => s.segmentId === updatedSegments.segmentId))
+
+  // 验证更新后的数据完整性
+  const updatedSegment = segments.value.find(s => s.segmentId === updatedSegments.segmentId)
+  console.log('数据完整性检查:', {
+    hasSegmentId: !!updatedSegment?.segmentId,
+    allProperties: Object.keys(updatedSegment || {})
+  })
 }
 
 // 播放控制方法
@@ -591,7 +601,8 @@ const handleSpeakerChange = (updatedSegment) => {
     console.log('开始更新单个段落说话人:', {
       segmentId: updatedSegment.segmentId,
       newSpeakerKey: updatedSegment.speakerKey,
-      newSpeakerDisplayName: updatedSegment.speakerDisplayName
+      newSpeakerDisplayName: updatedSegment.speakerDisplayName,
+      updatedSegmentFull: updatedSegment  // 添加完整的更新数据日志
     })
     
     // 添加当前 segments 状态日志
@@ -600,7 +611,8 @@ const handleSpeakerChange = (updatedSegment) => {
       firstThreeSegments: segments.value.map(s => ({
         segmentId: s.segmentId,
         speakerKey: s.speakerKey,
-        speakerDisplayName: s.speakerDisplayName
+        speakerDisplayName: s.speakerDisplayName,
+        fullSegment: s  // 添加完整的段落数据日志
       })).slice(0, 3)
     })
     
@@ -609,11 +621,8 @@ const handleSpeakerChange = (updatedSegment) => {
     if (index > -1) {
       console.log('找到要更新的段落:', {
         index,
-        oldSegment: {
-          segmentId: segments.value[index].segmentId,
-          speakerKey: segments.value[index].speakerKey,
-          speakerDisplayName: segments.value[index].speakerDisplayName
-        }
+        oldSegment: segments.value[index],  // 记录完整的旧段落数据
+        updatedSegment: updatedSegment  // 记录完整的更新数据
       })
       
       segments.value = segments.value.map(segment => {
@@ -621,26 +630,39 @@ const handleSpeakerChange = (updatedSegment) => {
           const updated = {
             ...segment,
             speakerKey: updatedSegment.speakerKey,
-            speakerDisplayName: updatedSegment.speakerDisplayName
+            speakerDisplayName: updatedSegment.speakerDisplayName,
+            speaker_name: updatedSegment.speakerDisplayName  // 同时更新 speaker_name
           }
-          console.log('更新后的段落:', {
-            segmentId: updated.segmentId,
-            speakerKey: updated.speakerKey,
-            speakerDisplayName: updated.speakerDisplayName
+          console.log('段落更新前后对比:', {
+            before: {
+              segmentId: segment.segmentId,
+              speakerKey: segment.speakerKey,
+              speakerDisplayName: segment.speakerDisplayName,
+              speaker_name: segment.speaker_name
+            },
+            after: {
+              segmentId: updated.segmentId,
+              speakerKey: updated.speakerKey,
+              speakerDisplayName: updated.speakerDisplayName,
+              speaker_name: updated.speaker_name
+            }
           })
           return updated
         }
         return segment
       })
       
-      // 添加更新后的 segments 状态日志
-      console.log('更新后的 segments 状态:', {
-        count: segments.value.length,
-        firstThreeSegments: segments.value.map(s => ({
-          segmentId: s.segmentId,
-          speakerKey: s.speakerKey,
-          speakerDisplayName: s.speakerDisplayName
-        })).slice(0, 3)
+      // 添加更新后的完整段落信息日志
+      const updatedSegmentInfo = segments.value.find(s => s.segmentId === updatedSegment.segmentId)
+      console.log('更新后的完整段落信息:', {
+        segment: updatedSegmentInfo,
+        allFields: Object.keys(updatedSegmentInfo || {}),
+        displayFields: {
+          segmentId: updatedSegmentInfo?.segmentId,
+          speakerKey: updatedSegmentInfo?.speakerKey,
+          speakerDisplayName: updatedSegmentInfo?.speakerDisplayName,
+          speaker_name: updatedSegmentInfo?.speaker_name
+        }
       })
     } else {
       console.warn('未找到要更新的段落:', {

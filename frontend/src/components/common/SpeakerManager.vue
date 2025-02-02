@@ -148,7 +148,31 @@ const getSpeakerColor = () => {
 }
 
 const getSpeakerName = () => {
-  return props.segment.speakerDisplayName
+  console.log('获取说话人名字:', {
+    segment: props.segment,
+    speakerDisplayName: props.segment.speakerDisplayName,
+    speaker_name: props.segment.speaker_name,
+    currentSpeaker: currentSpeaker.value,
+    speakerKey: props.segment.speakerKey
+  })
+  
+  // 优先使用 speakerDisplayName
+  if (props.segment.speakerDisplayName) {
+    return props.segment.speakerDisplayName
+  }
+  
+  // 如果没有 speakerDisplayName，尝试从 currentSpeaker 获取
+  if (currentSpeaker.value?.speakerDisplayName) {
+    return currentSpeaker.value.speakerDisplayName
+  }
+  
+  // 最后尝试使用 speaker_name
+  if (props.segment.speaker_name) {
+    return props.segment.speaker_name
+  }
+  
+  // 如果都没有，返回默认值
+  return '未知说话人'
 }
 
 const handleNameConfirm = () => {
@@ -276,45 +300,57 @@ const handleConfirm = () => {
     subSegments: props.segment.subSegments?.length
   })
 
-  // 然后创建对象
+  // 创建更新对象
   const updatedSegment = {
     ...props.segment,           // 保留原段落的所有信息
     
-    // 保留原始字段
-    speaker_id: props.segment.speaker_id,
-    speaker_name: props.segment.speaker_name,
-    
-    // 更新的字段
+    // 更新所有相关字段
     speakerKey: selectedSpeaker.value.speakerKey,
     speakerDisplayName: selectedSpeaker.value.speakerDisplayName,
-    
-    // 其他字段
-    segmentId: props.segment.segmentId,
-    color: props.segment.color,
-    start_time: props.segment.start_time,
-    end_time: props.segment.end_time,
-    text: props.segment.text,
+    speaker_name: selectedSpeaker.value.speakerDisplayName,  // 同步更新 speaker_name
+    speaker_id: selectedSpeaker.value.speakerKey,  // 同步更新 speaker_id
+    color: selectedSpeaker.value.color,  // 使用新说话人的颜色
     
     // 批量更新标志
     batchUpdate: batchUpdate.value,
-    
-    // 完整复制所有子段落并更新它们的 speakerKey
-    subSegments: props.segment.subSegments?.map(sub => ({
+  }
+
+  // 如果有子段落，也更新子段落
+  if (props.segment.subSegments) {
+    updatedSegment.subSegments = props.segment.subSegments.map(sub => ({
       ...sub,
-      subsegmentId: sub.subsegmentId,
-      speakerKey: selectedSpeaker.value.speakerKey
+      speakerKey: selectedSpeaker.value.speakerKey,
+      speakerDisplayName: selectedSpeaker.value.speakerDisplayName,
+      speaker_name: selectedSpeaker.value.speakerDisplayName,
+      speaker_id: selectedSpeaker.value.speakerKey
     }))
   }
 
   console.log('准备发送更新:', {
-    before: props.segment,
-    after: updatedSegment
+    before: {
+      speakerKey: props.segment.speakerKey,
+      speakerDisplayName: props.segment.speakerDisplayName,
+      speaker_name: props.segment.speaker_name,
+      speaker_id: props.segment.speaker_id,
+      color: props.segment.color
+    },
+    after: {
+      speakerKey: updatedSegment.speakerKey,
+      speakerDisplayName: updatedSegment.speakerDisplayName,
+      speaker_name: updatedSegment.speaker_name,
+      speaker_id: updatedSegment.speaker_id,
+      color: updatedSegment.color
+    }
   })
 
+  // 发送更新事件
   emit('speaker-select', updatedSegment)
+  
+  // 重置状态
   dialogVisible.value = false
   newSpeakerName.value = ''
   batchUpdate.value = false
+  selectedSpeaker.value = null
   localSpeakers.value.forEach(speaker => speaker.selected = false)
 }
 
@@ -336,58 +372,50 @@ const handleSpeakerItemClick = (speaker) => {
     s.selected = s.speakerKey === speaker.speakerKey
   })
 
-  // 更新段落信息
-  console.log('原段落的所有信息:', {
-    originalSegment: props.segment,
-    keys: Object.keys(props.segment),  // 看看有哪些字段
-    segmentId: props.segment.segmentId,
-    speakerKey: props.segment.speakerKey,
-    subSegments: props.segment.subSegments?.length
-  })
-
-  // 先打印日志
-  console.log('原段落的所有信息:', {
-    originalSegment: props.segment,
-    keys: Object.keys(props.segment),
-    segmentId: props.segment.segmentId,
-    speakerKey: props.segment.speakerKey,
-    subSegments: props.segment.subSegments?.length
-  })
-
-  // 然后创建对象
+  // 创建更新对象
   const updatedSegment = {
     ...props.segment,           // 保留原段落的所有信息
     
-    // 保留原始字段
-    speaker_id: props.segment.speaker_id,
-    speaker_name: props.segment.speaker_name,
-    
-    // 更新的字段
+    // 更新所有相关字段
     speakerKey: speaker.speakerKey,
     speakerDisplayName: speaker.speakerDisplayName,
-    
-    // 其他字段
-    segmentId: props.segment.segmentId,
-    color: props.segment.color,
-    start_time: props.segment.start_time,
-    end_time: props.segment.end_time,
-    text: props.segment.text,
-    
-    // 完整复制所有子段落并更新它们的 speakerKey
-    subSegments: props.segment.subSegments?.map(sub => ({
+    speaker_name: speaker.speakerDisplayName,  // 同步更新 speaker_name
+    speaker_id: speaker.speakerKey,  // 同步更新 speaker_id
+    color: speaker.color,  // 使用新说话人的颜色
+  }
+
+  // 如果有子段落，也更新子段落
+  if (props.segment.subSegments) {
+    updatedSegment.subSegments = props.segment.subSegments.map(sub => ({
       ...sub,
-      subsegmentId: sub.subsegmentId,
-      speakerKey: speaker.speakerKey
+      speakerKey: speaker.speakerKey,
+      speakerDisplayName: speaker.speakerDisplayName,
+      speaker_name: speaker.speakerDisplayName,
+      speaker_id: speaker.speakerKey
     }))
   }
-  
+
   console.log('准备发送更新:', {
-    before: props.segment,
-    after: updatedSegment
+    before: {
+      speakerKey: props.segment.speakerKey,
+      speakerDisplayName: props.segment.speakerDisplayName,
+      speaker_name: props.segment.speaker_name,
+      speaker_id: props.segment.speaker_id,
+      color: props.segment.color
+    },
+    after: {
+      speakerKey: updatedSegment.speakerKey,
+      speakerDisplayName: updatedSegment.speakerDisplayName,
+      speaker_name: updatedSegment.speaker_name,
+      speaker_id: updatedSegment.speaker_id,
+      color: updatedSegment.color
+    }
   })
-  
-  // 发出事件，让父组件处理更新
+
+  // 发送更新事件
   emit('speaker-select', updatedSegment)
+  
+  // 关闭对话框
   dialogVisible.value = false
 }
 

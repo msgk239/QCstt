@@ -79,10 +79,73 @@ const formatTime = (seconds) => {
 
 // 处理说话人变更
 const handleSpeakerChange = (updatedSegment) => {
-  console.log('Transcript 收到说话人变更:', updatedSegment)
+  console.log('Transcript 收到说话人变更:', {
+    segmentId: updatedSegment.segmentId,
+    oldSpeaker: {
+      key: updatedSegment.speakerKey,
+      name: updatedSegment.speakerDisplayName
+    },
+    newSpeaker: {
+      key: updatedSegment.speakerKey,
+      name: updatedSegment.speakerDisplayName
+    }
+  })
   
-  // 仅通过事件通知父组件更新
+  // 更新当前段落的说话人信息
+  const currentSegmentIndex = mergedSegmentsCache.value.findIndex(
+    segment => segment.segmentId === updatedSegment.segmentId
+  )
+
+  if (currentSegmentIndex !== -1) {
+    // 更新主段落
+    const updatedMergedSegment = {
+      ...mergedSegmentsCache.value[currentSegmentIndex],
+      speakerKey: updatedSegment.speakerKey,
+      speakerDisplayName: updatedSegment.speakerDisplayName,
+      speaker_name: updatedSegment.speakerDisplayName
+    }
+
+    // 更新子段落
+    updatedMergedSegment.subSegments = updatedMergedSegment.subSegments.map(sub => ({
+      ...sub,
+      speakerKey: updatedSegment.speakerKey,
+      speakerDisplayName: updatedSegment.speakerDisplayName,
+      speaker_name: updatedSegment.speakerDisplayName
+    }))
+
+    // 更新缓存
+    mergedSegmentsCache.value = [
+      ...mergedSegmentsCache.value.slice(0, currentSegmentIndex),
+      updatedMergedSegment,
+      ...mergedSegmentsCache.value.slice(currentSegmentIndex + 1)
+    ]
+
+    console.log('更新后的段落:', {
+      segmentId: updatedMergedSegment.segmentId,
+      speakerKey: updatedMergedSegment.speakerKey,
+      speakerDisplayName: updatedMergedSegment.speakerDisplayName,
+      subSegmentsCount: updatedMergedSegment.subSegments.length
+    })
+  }
+  
+  // 通知父组件更新
   emit('speaker-change', updatedSegment)
+}
+
+// 添加一个辅助函数来更新说话人信息
+const updateSpeakerInfo = (segment, newSpeakerInfo) => {
+  return {
+    ...segment,
+    speakerKey: newSpeakerInfo.speakerKey,
+    speakerDisplayName: newSpeakerInfo.speakerDisplayName,
+    speaker_name: newSpeakerInfo.speakerDisplayName,
+    subSegments: segment.subSegments?.map(sub => ({
+      ...sub,
+      speakerKey: newSpeakerInfo.speakerKey,
+      speakerDisplayName: newSpeakerInfo.speakerDisplayName,
+      speaker_name: newSpeakerInfo.speakerDisplayName
+    }))
+  }
 }
 
 // 处理内容编辑
@@ -239,23 +302,28 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
         result.push(currentGroup)
       }
 
-      const segmentId = `${currentKey}_${nanoid(6)}`
+      // 使用第一个子段落的 segmentId 或生成新的
+      const segmentId = segment.segmentId || `${currentKey}_${nanoid(6)}`
       
       // 保留更多原始数据
       currentGroup = {
         segmentId,
         speakerKey: currentKey,
         speakerDisplayName: segment.speakerDisplayName,
+        speaker_name: segment.speaker_name,  // 保留 speaker_name
         start_time: segment.start_time,
         end_time: segment.end_time,
-        text: segment.text, // 保留原始文本
-        timestamps: segment.timestamps, // 保留原始时间戳
+        text: segment.text,
+        timestamps: segment.timestamps,
         subSegments: [{
           ...segment,
           segmentId,
-          subsegmentId: segment.subsegmentId,
+          subsegmentId: segment.subsegmentId || `${segmentId}_sub_${nanoid(6)}`,
           text: segment.text,
-          timestamps: segment.timestamps
+          timestamps: segment.timestamps,
+          speakerKey: currentKey,
+          speakerDisplayName: segment.speakerDisplayName,
+          speaker_name: segment.speaker_name
         }]
       }
 
@@ -265,16 +333,23 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
         text: segment.text?.slice(0, 20),
         hasTimestamps: !!segment.timestamps,
         timestampsLength: segment.timestamps?.length,
-        rawSegment: segment
+        speakerInfo: {
+          speakerKey: currentKey,
+          speakerDisplayName: segment.speakerDisplayName,
+          speaker_name: segment.speaker_name
+        }
       })
 
     } else {
       currentGroup.subSegments.push({
         ...segment,
         segmentId: currentGroup.segmentId,
-        subsegmentId: segment.subsegmentId,
+        subsegmentId: segment.subsegmentId || `${currentGroup.segmentId}_sub_${nanoid(6)}`,
         text: segment.text,
-        timestamps: segment.timestamps
+        timestamps: segment.timestamps,
+        speakerKey: currentKey,
+        speakerDisplayName: segment.speakerDisplayName,
+        speaker_name: segment.speaker_name
       })
       // 更新结束时间
       currentGroup.end_time = segment.end_time
@@ -290,19 +365,60 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
 
 // 3. 修改计算属性，使用缓存的结果
 const mergedSegments = computed(() => {
-  // 使用缓存避免重复计算
-  if (mergedSegmentsCache.value.length > 0 && !props.segments.some(s => !s.segmentId)) {
+  console.log('mergedSegments 计算开始:', {
+    rawSegments: props.segments.map(s => ({
+      segmentId: s.segmentId,
+      speakerKey: s.speakerKey,
+      speakerDisplayName: s.speakerDisplayName
+    })),
+    cacheStatus: {
+      hasCache: mergedSegmentsCache.value.length > 0,
+      cacheLength: mergedSegmentsCache.value.length
+    }
+  })
+
+  // 如果有缓存，直接返回
+  if (mergedSegmentsCache.value.length > 0) {
+    console.log('使用缓存的 mergedSegments')
     return mergedSegmentsCache.value
   }
 
-  const isFirstMerge = !mergedSegmentsCache.value.length
-  const result = mergeSegments(props.segments, isFirstMerge)
+  console.log('重新计算 mergedSegments')
+  const result = mergeSegments(props.segments, !mergedSegmentsCache.value.length)
   
-  // 缓存结果
+  // 更新缓存
   mergedSegmentsCache.value = result
+
+  console.log('mergedSegments 计算结果:', {
+    resultCount: result.length,
+    firstThreeResults: result.slice(0, 3).map(s => ({
+      segmentId: s.segmentId,
+      speakerKey: s.speakerKey,
+      speakerDisplayName: s.speakerDisplayName,
+      subSegmentsCount: s.subSegments.length
+    }))
+  })
   
   return result
 })
+
+// 添加对 segments 的深度监听
+watch(() => props.segments, (newSegments) => {
+  // 检查是否有说话人信息变化
+  const hasChanges = newSegments.some((segment, index) => {
+    const cached = mergedSegmentsCache.value.find(m => 
+      m.subSegments.some(sub => sub.subsegmentId === segment.subsegmentId)
+    )
+    return !cached || 
+           cached.speakerKey !== segment.speakerKey || 
+           cached.speakerDisplayName !== segment.speakerDisplayName
+  })
+
+  if (hasChanges) {
+    console.log('检测到说话人变化，清除缓存')
+    mergedSegmentsCache.value = []
+  }
+}, { deep: true })
 
 // 4. 添加新的方法
 const handleSegmentClick = (segment) => {
