@@ -148,14 +148,6 @@ const getSpeakerColor = () => {
 }
 
 const getSpeakerName = () => {
-  console.log('获取说话人名字:', {
-    segment: props.segment,
-    speakerDisplayName: props.segment.speakerDisplayName,
-    speaker_name: props.segment.speaker_name,
-    currentSpeaker: currentSpeaker.value,
-    speakerKey: props.segment.speakerKey
-  })
-  
   // 优先使用 speakerDisplayName
   if (props.segment.speakerDisplayName) {
     return props.segment.speakerDisplayName
@@ -246,7 +238,6 @@ const localSpeakers = ref(props.speakers.map(speaker => ({
 
 // 修改 watch 以确保深度监听
 watch(() => props.speakers, (newSpeakers) => {
-  console.log('Speakers updated:', newSpeakers)
   localSpeakers.value = newSpeakers.map(speaker => ({
     // 前端使用的字段（可变）
     speakerKey: speaker.speakerKey,
@@ -280,25 +271,10 @@ const handleSpeakerCheck = (speaker, checked) => {
 
 // 修改确认处理函数
 const handleConfirm = () => {
-  console.log('确认修改:', {
-    selectedSpeaker: selectedSpeaker.value,
-    batchUpdate: batchUpdate.value,
-    currentSegment: props.segment
-  })
-
   if (!selectedSpeaker.value) {
     ElMessage.warning('请先选择一个说话人')
     return
   }
-
-  // 先打印日志
-  console.log('原段落的所有信息:', {
-    originalSegment: props.segment,
-    keys: Object.keys(props.segment),
-    segmentId: props.segment.segmentId,
-    speakerKey: props.segment.speakerKey,
-    subSegments: props.segment.subSegments?.length
-  })
 
   // 创建更新对象
   const updatedSegment = {
@@ -326,23 +302,6 @@ const handleConfirm = () => {
     }))
   }
 
-  console.log('准备发送更新:', {
-    before: {
-      speakerKey: props.segment.speakerKey,
-      speakerDisplayName: props.segment.speakerDisplayName,
-      speaker_name: props.segment.speaker_name,
-      speaker_id: props.segment.speaker_id,
-      color: props.segment.color
-    },
-    after: {
-      speakerKey: updatedSegment.speakerKey,
-      speakerDisplayName: updatedSegment.speakerDisplayName,
-      speaker_name: updatedSegment.speaker_name,
-      speaker_id: updatedSegment.speaker_id,
-      color: updatedSegment.color
-    }
-  })
-
   // 发送更新事件
   emit('speaker-select', updatedSegment)
   
@@ -356,12 +315,6 @@ const handleConfirm = () => {
 
 // 修改 handleSpeakerItemClick
 const handleSpeakerItemClick = (speaker) => {
-  console.log('点击说话人:', {
-    clickedSpeaker: speaker,
-    currentSegment: props.segment,
-    isCurrentSpeaker: isCurrentSpeaker(speaker)
-  })
-  
   if (isCurrentSpeaker(speaker)) return
   
   // 更新选中的说话人
@@ -394,23 +347,6 @@ const handleSpeakerItemClick = (speaker) => {
       speaker_id: speaker.speakerKey
     }))
   }
-
-  console.log('准备发送更新:', {
-    before: {
-      speakerKey: props.segment.speakerKey,
-      speakerDisplayName: props.segment.speakerDisplayName,
-      speaker_name: props.segment.speaker_name,
-      speaker_id: props.segment.speaker_id,
-      color: props.segment.color
-    },
-    after: {
-      speakerKey: updatedSegment.speakerKey,
-      speakerDisplayName: updatedSegment.speakerDisplayName,
-      speaker_name: updatedSegment.speaker_name,
-      speaker_id: updatedSegment.speaker_id,
-      color: updatedSegment.color
-    }
-  })
 
   // 发送更新事件
   emit('speaker-select', updatedSegment)

@@ -79,12 +79,8 @@ const formatTime = (seconds) => {
 
 // 处理说话人变更
 const handleSpeakerChange = (updatedSegment) => {
-  console.log('Transcript 收到说话人变更:', {
+  console.log('说话人变更:', {
     segmentId: updatedSegment.segmentId,
-    oldSpeaker: {
-      key: updatedSegment.speakerKey,
-      name: updatedSegment.speakerDisplayName
-    },
     newSpeaker: {
       key: updatedSegment.speakerKey,
       name: updatedSegment.speakerDisplayName
@@ -119,13 +115,6 @@ const handleSpeakerChange = (updatedSegment) => {
       updatedMergedSegment,
       ...mergedSegmentsCache.value.slice(currentSegmentIndex + 1)
     ]
-
-    console.log('更新后的段落:', {
-      segmentId: updatedMergedSegment.segmentId,
-      speakerKey: updatedMergedSegment.speakerKey,
-      speakerDisplayName: updatedMergedSegment.speakerDisplayName,
-      subSegmentsCount: updatedMergedSegment.subSegments.length
-    })
   }
   
   // 通知父组件更新
@@ -150,24 +139,12 @@ const updateSpeakerInfo = (segment, newSpeakerInfo) => {
 
 // 处理内容编辑
 const handleContentChange = (event, segment) => {
-  console.log('内容变更事件:', {
-    newText: event.target.textContent,
-    segmentId: segment.segmentId,
-    originalText: segment.text
-  })
-  
   const text = event.target.textContent
   const updatedSegment = {
     ...segment,
     text: text,
   }
-  console.log('准备发送 segment-update:', {
-    segment,
-    segmentId: updatedSegment.segmentId,
-    isFirstMerge: false
-  })
   emit('segment-update', updatedSegment)
-  console.log('已发送 segment-update')
 }
 
 // 优化 isSegmentPlaying 函数
@@ -178,16 +155,6 @@ const isSegmentPlaying = (segment) => {
 
 // 将文本按时间戳分割
 const splitTextWithTimestamps = (segment) => {
-  console.log('splitTextWithTimestamps 详细输入:', {
-    segment,
-    hasTimestamps: !!segment?.timestamps,
-    hasText: !!segment?.text,
-    textLength: segment?.text?.length,
-    timestampsLength: segment?.timestamps?.length,
-    segmentContent: segment?.text,
-    firstTimestamp: segment?.timestamps?.[0]
-  })
-
   // 添加数据完整性检查
   if (!segment || typeof segment !== 'object') {
     console.warn('segment 对象无效:', segment)
@@ -199,7 +166,6 @@ const splitTextWithTimestamps = (segment) => {
       text: segment.text,
       hasTimestamps: !!segment.timestamps
     })
-    // 如果只有文本没有时间戳，至少显示文本
     return [{ text: segment.text || '' }]
   }
   
@@ -207,20 +173,11 @@ const splitTextWithTimestamps = (segment) => {
   const timestamps = segment.timestamps
   const minLength = Math.min(text.length, timestamps.length)
   
-  const result = Array.from({ length: minLength }, (_, index) => ({
+  return Array.from({ length: minLength }, (_, index) => ({
     text: text[index],
     start: timestamps[index].start,
     end: timestamps[index].end
   }))
-
-  console.log('splitTextWithTimestamps 处理结果:', {
-    inputTextLength: text.length,
-    inputTimestampsLength: timestamps.length,
-    outputLength: result.length,
-    sampleOutput: result.slice(0, 3)
-  })
-  
-  return result
 }
 
 // 判断单个词是否正在播放
@@ -277,19 +234,6 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
     return []
   }
 
-  console.log('开始合并段落:', {
-    rawSegmentsCount: rawSegments.length,
-    isFirstMerge,
-    firstThreeRawSegments: rawSegments.slice(0, 3).map(s => ({
-      speakerKey: s.speakerKey,
-      segmentId: s.segmentId,
-      subsegmentId: s.subsegmentId,
-      text: s.text?.slice(0, 20),
-      hasTimestamps: !!s.timestamps,
-      timestampsCount: s.timestamps?.length
-    }))
-  })
-
   const result = []
   let currentGroup = null
   
@@ -326,20 +270,6 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
           speaker_name: segment.speaker_name
         }]
       }
-
-      console.log('子段落数据:', {
-        segmentId,
-        subsegmentId: segment.subsegmentId,
-        text: segment.text?.slice(0, 20),
-        hasTimestamps: !!segment.timestamps,
-        timestampsLength: segment.timestamps?.length,
-        speakerInfo: {
-          speakerKey: currentKey,
-          speakerDisplayName: segment.speakerDisplayName,
-          speaker_name: segment.speaker_name
-        }
-      })
-
     } else {
       currentGroup.subSegments.push({
         ...segment,
@@ -365,39 +295,15 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
 
 // 3. 修改计算属性，使用缓存的结果
 const mergedSegments = computed(() => {
-  console.log('mergedSegments 计算开始:', {
-    rawSegments: props.segments.map(s => ({
-      segmentId: s.segmentId,
-      speakerKey: s.speakerKey,
-      speakerDisplayName: s.speakerDisplayName
-    })),
-    cacheStatus: {
-      hasCache: mergedSegmentsCache.value.length > 0,
-      cacheLength: mergedSegmentsCache.value.length
-    }
-  })
-
   // 如果有缓存，直接返回
   if (mergedSegmentsCache.value.length > 0) {
-    console.log('使用缓存的 mergedSegments')
     return mergedSegmentsCache.value
   }
 
-  console.log('重新计算 mergedSegments')
   const result = mergeSegments(props.segments, !mergedSegmentsCache.value.length)
   
   // 更新缓存
   mergedSegmentsCache.value = result
-
-  console.log('mergedSegments 计算结果:', {
-    resultCount: result.length,
-    firstThreeResults: result.slice(0, 3).map(s => ({
-      segmentId: s.segmentId,
-      speakerKey: s.speakerKey,
-      speakerDisplayName: s.speakerDisplayName,
-      subSegmentsCount: s.subSegments.length
-    }))
-  })
   
   return result
 })
@@ -438,37 +344,8 @@ defineExpose({
 onMounted(() => {
   console.log('Transcript 组件挂载完成')
   if (props.segments && props.segments.length > 0) {
-    console.log('Transcript 初始化合并开始:', {
-      segmentsCount: props.segments.length,
-      firstThreeSegments: props.segments.slice(0, 3).map(s => ({
-        segmentId: s.segmentId,
-        speakerKey: s.speakerKey,
-        subsegmentId: s.subsegmentId
-      }))
-    })
-    const value = mergedSegments.value // 触发首次合并
-    console.log('Transcript 初始化合并完成:', {
-      resultCount: value.length,
-      firstThreeResults: value.slice(0, 3).map(s => ({
-        segmentId: s.segmentId,
-        speakerKey: s.speakerKey,
-        subSegmentsCount: s.subSegments.length
-      }))
-    })
+    mergedSegments.value // 触发首次合并
   }
-})
-
-// 3. 在模板渲染前添加调试日志
-watchEffect(() => {
-  console.log('模板渲染数据状态:', {
-    mergedSegmentsLength: mergedSegments.value?.length,
-    firstSegmentInfo: mergedSegments.value?.[0] ? {
-      segmentId: mergedSegments.value[0].segmentId,
-      hasSubSegments: !!mergedSegments.value[0].subSegments,
-      subSegmentsLength: mergedSegments.value[0].subSegments?.length,
-      firstSubSegmentText: mergedSegments.value[0].subSegments?.[0]?.text?.slice(0, 50)
-    } : null
-  })
 })
 </script>
 
