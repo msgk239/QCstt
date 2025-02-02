@@ -37,6 +37,8 @@
                 v-for="(word, wordIndex) in splitTextWithTimestamps(subSegment)"
                 :key="`${subSegment.subsegmentId}-${wordIndex}`"
                 :class="{ 'word-highlight': isWordPlaying(word) }"
+                @click="handleWordClick(word, $event)"
+                style="cursor: pointer"
               >{{ word.text }}</span>
               <br v-if="subIndex < segment.subSegments.length - 1">
             </template>
@@ -328,11 +330,34 @@ watch(() => props.segments, (newSegments) => {
 
 // 4. 添加新的方法
 const handleSegmentClick = (segment) => {
-  const updatedSegments = props.segments.map(s => ({
-    ...s,
-    isSelected: s.segmentId === segment.segmentId
-  }))
-  emit('segment-select', updatedSegments)
+  if (segment && segment.start_time !== undefined) {
+    // 更新当前选中的段落
+    mergedSegmentsCache.value = mergedSegmentsCache.value.map(s => ({
+      ...s,
+      isSelected: s.segmentId === segment.segmentId
+    }))
+    emit('timeupdate', segment.start_time)
+  }
+}
+
+// 处理单词点击
+const handleWordClick = (word, event) => {
+  event.stopPropagation() // 防止触发段落的点击事件
+  if (word && word.start !== undefined) {
+    // 找到并更新当前选中的段落
+    const parentSegment = mergedSegmentsCache.value.find(segment => 
+      segment.subSegments.some(sub => 
+        splitTextWithTimestamps(sub).some(w => w === word)
+      )
+    )
+    if (parentSegment) {
+      mergedSegmentsCache.value = mergedSegmentsCache.value.map(s => ({
+        ...s,
+        isSelected: s.segmentId === parentSegment.segmentId
+      }))
+    }
+    emit('timeupdate', word.start)
+  }
 }
 
 // 暴露 mergedSegments 给父组件
@@ -424,6 +449,21 @@ onMounted(() => {
 
 .segment.is-selected {
   border-color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
+}
+
+.segment-text span {
+  cursor: pointer;
+  user-select: none;
+}
+
+.segment-text span.current-position {
+  background-color: var(--el-color-primary-light-8);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.segment-text span:hover {
   background-color: var(--el-color-primary-light-9);
 }
 </style> 

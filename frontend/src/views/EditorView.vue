@@ -305,20 +305,34 @@ const handleSegmentUpdate = (updatedSegments) => {
   }
 }
 
-// 播放控制方法
-const togglePlay = () => {
-  if (playing.value) {
-    audio.value.pause()
-  } else {
-    audio.value.play()
+// 音频播放器相关方法
+const handleTimeUpdate = (time) => {
+  if (audio.value) {
+    audio.value.currentTime = time
+    currentTime.value = time
+    // 只有在当前正在播放时，点击才会继续播放
+    if (playing.value) {
+      // 如果已经在播放，就继续播放
+      audio.value.play()
+    }
   }
-  playing.value = !playing.value
+}
+
+const togglePlay = () => {
+  if (audio.value) {
+    if (playing.value) {
+      audio.value.pause()
+    } else {
+      audio.value.play()
+    }
+    playing.value = !playing.value
+  }
 }
 
 const seekTo = (time) => {
-  if (audio.value.readyState >= 1) {  // 确保音频已加载
+  if (audio.value) {
     audio.value.currentTime = time
-    currentTime.value = time  // 立即更新当前时间，避免延迟
+    currentTime.value = time
   }
 }
 
@@ -417,10 +431,6 @@ const formatDisplayName = (fullName) => {
   if (!fullName) return ''
   const match = fullName.match(/\d{8}_\d{6}_(.+)/)
   return match ? match[1] : fullName
-}
-
-const handleTimeUpdate = (time) => {
-  currentTime.value = time
 }
 
 const handleBatchReplace = (nameMapping) => {
