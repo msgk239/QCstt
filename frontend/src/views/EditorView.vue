@@ -507,16 +507,20 @@ const handleSegmentSelect = (updatedSegments) => {
 const handleSpeakerChange = (updatedSegment) => {
   if (updatedSegment.batchUpdate) {
     console.log('处理批量说话人更新:', {
-      speakerKey: updatedSegment.speakerKey,
-      speakerDisplayName: updatedSegment.speakerDisplayName
+      oldSpeakerKey: updatedSegment.oldSpeakerKey,
+      newSpeakerKey: updatedSegment.speakerKey,
+      speakerDisplayName: updatedSegment.speakerDisplayName,
+      updatedSegmentsCount: updatedSegment.updatedSegments?.length
     })
     
+    // 批量更新所有相同说话人的段落
     segments.value = segments.value.map(segment => {
-      if (segment.speakerKey === updatedSegment.speakerKey) {
+      if (segment.speakerKey === updatedSegment.oldSpeakerKey) {
         return {
           ...segment,
           speakerKey: updatedSegment.speakerKey,
-          speakerDisplayName: updatedSegment.speakerDisplayName
+          speakerDisplayName: updatedSegment.speakerDisplayName,
+          speaker_name: updatedSegment.speakerDisplayName
         }
       }
       return segment

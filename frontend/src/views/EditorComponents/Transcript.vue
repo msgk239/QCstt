@@ -80,47 +80,88 @@ const formatTime = (seconds) => {
 }
 
 // 处理说话人变更
-const handleSpeakerChange = (updatedSegment) => {
+const handleSpeakerChange = (updatedData) => {
   console.log('说话人变更:', {
-    segmentId: updatedSegment.segmentId,
+    segmentId: updatedData.segmentId,
     newSpeaker: {
-      key: updatedSegment.speakerKey,
-      name: updatedSegment.speakerDisplayName
-    }
+      key: updatedData.speakerKey,
+      name: updatedData.speakerDisplayName
+    },
+    batchUpdate: updatedData.batchUpdate
   })
   
-  // 更新当前段落的说话人信息
-  const currentSegmentIndex = mergedSegmentsCache.value.findIndex(
-    segment => segment.segmentId === updatedSegment.segmentId
-  )
+  if (updatedData.batchUpdate) {
+    // 批量更新：找到所有相同说话人的段落进行更新
+    const oldSpeakerKey = mergedSegmentsCache.value.find(
+      segment => segment.segmentId === updatedData.segmentId
+    )?.speakerKey
 
-  if (currentSegmentIndex !== -1) {
-    // 更新主段落
-    const updatedMergedSegment = {
-      ...mergedSegmentsCache.value[currentSegmentIndex],
-      speakerKey: updatedSegment.speakerKey,
-      speakerDisplayName: updatedSegment.speakerDisplayName,
-      speaker_name: updatedSegment.speakerDisplayName
+    if (oldSpeakerKey) {
+      // 创建一个包含所有需要更新的段落的数组
+      const updatedSegments = mergedSegmentsCache.value.map(segment => {
+        if (segment.speakerKey === oldSpeakerKey) {
+          // 更新主段落
+          return {
+            ...segment,
+            speakerKey: updatedData.speakerKey,
+            speakerDisplayName: updatedData.speakerDisplayName,
+            speaker_name: updatedData.speakerDisplayName,
+            // 更新子段落
+            subSegments: segment.subSegments.map(sub => ({
+              ...sub,
+              speakerKey: updatedData.speakerKey,
+              speakerDisplayName: updatedData.speakerDisplayName,
+              speaker_name: updatedData.speakerDisplayName
+            }))
+          }
+        }
+        return segment
+      })
+
+      // 更新缓存
+      mergedSegmentsCache.value = updatedSegments
+
+      // 发送批量更新事件给父组件
+      emit('speaker-change', {
+        ...updatedData,
+        batchUpdate: true,
+        oldSpeakerKey,
+        updatedSegments: updatedSegments.filter(seg => seg.speakerKey === updatedData.speakerKey)
+      })
     }
+  } else {
+    // 单独更新：只更新指定的段落
+    const currentSegmentIndex = mergedSegmentsCache.value.findIndex(
+      segment => segment.segmentId === updatedData.segmentId
+    )
 
-    // 更新子段落
-    updatedMergedSegment.subSegments = updatedMergedSegment.subSegments.map(sub => ({
-      ...sub,
-      speakerKey: updatedSegment.speakerKey,
-      speakerDisplayName: updatedSegment.speakerDisplayName,
-      speaker_name: updatedSegment.speakerDisplayName
-    }))
+    if (currentSegmentIndex !== -1) {
+      // 更新主段落
+      const updatedMergedSegment = {
+        ...mergedSegmentsCache.value[currentSegmentIndex],
+        speakerKey: updatedData.speakerKey,
+        speakerDisplayName: updatedData.speakerDisplayName,
+        speaker_name: updatedData.speakerDisplayName,
+        // 更新子段落
+        subSegments: mergedSegmentsCache.value[currentSegmentIndex].subSegments.map(sub => ({
+          ...sub,
+          speakerKey: updatedData.speakerKey,
+          speakerDisplayName: updatedData.speakerDisplayName,
+          speaker_name: updatedData.speakerDisplayName
+        }))
+      }
 
-    // 更新缓存
-    mergedSegmentsCache.value = [
-      ...mergedSegmentsCache.value.slice(0, currentSegmentIndex),
-      updatedMergedSegment,
-      ...mergedSegmentsCache.value.slice(currentSegmentIndex + 1)
-    ]
+      // 更新缓存
+      mergedSegmentsCache.value = [
+        ...mergedSegmentsCache.value.slice(0, currentSegmentIndex),
+        updatedMergedSegment,
+        ...mergedSegmentsCache.value.slice(currentSegmentIndex + 1)
+      ]
+
+      // 发送单个更新事件给父组件
+      emit('speaker-change', updatedMergedSegment)
+    }
   }
-  
-  // 通知父组件更新
-  emit('speaker-change', updatedSegment)
 }
 
 // 添加一个辅助函数来更新说话人信息
