@@ -16,11 +16,15 @@ class FileConfig:
         # 添加识别结果存储目录
         self.transcripts_dir = os.path.join(self.storage_root, "transcripts")
         
+        # 添加版本存储目录
+        self.versions_dir = os.path.join(self.storage_root, "versions")
+        
         # 确保目录存在
         os.makedirs(self.uploads_dir, exist_ok=True)
         os.makedirs(self.audio_dir, exist_ok=True)
         os.makedirs(self.trash_dir, exist_ok=True)
         os.makedirs(self.transcripts_dir, exist_ok=True)
+        os.makedirs(self.versions_dir, exist_ok=True)
 
 # 创建全局配置实例
 config = FileConfig() 

@@ -95,13 +95,24 @@ def safe_write_json(file_path: str, data: dict, ensure_path: bool = True) -> boo
     """
     try:
         if ensure_path:
-            ensure_dir(os.path.dirname(file_path))
+            dir_path = os.path.dirname(file_path)
+            logger.info(f"确保目录存在: {dir_path}")
+            if not ensure_dir(dir_path):
+                logger.error(f"创建目录失败: {dir_path}")
+                return False
+        
+        logger.info(f"开始写入文件: {file_path}")
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.info(f"文件写入成功: {file_path}")
         return True
     except Exception as e:
-        print(f"Error writing JSON file {file_path}: {str(e)}")
-        return False 
+        logger.error(f"写入JSON文件失败: {file_path}", exc_info=True)
+        logger.error(f"错误详情: {str(e)}")
+        logger.error(f"文件路径: {file_path}")
+        logger.error(f"目录是否存在: {os.path.exists(os.path.dirname(file_path))}")
+        logger.error(f"目录权限: {oct(os.stat(os.path.dirname(file_path)).st_mode)[-3:]}")
+        return False
 
 def get_audio_metadata(file_path: str, metadata_path: str) -> dict:
     """获取音频文件的元数据

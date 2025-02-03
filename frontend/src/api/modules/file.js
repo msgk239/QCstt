@@ -172,12 +172,48 @@ export function getFileProgress(fileId) {
  *   data: Object
  * }>}
  */
-export function updateFile(fileId, data) {
-  return request({
+export async function updateFile(fileId, data) {
+  console.log('发送更新请求:', {
+    fileId,
     url: `/api/v1/files/${fileId}`,
     method: 'put',
+    dataSize: JSON.stringify(data).length,
     data
   })
+  
+  try {
+    const response = await request({
+      url: `/api/v1/files/${fileId}`,
+      method: 'put',
+      data,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    console.log('更新响应:', {
+      status: response?.status,
+      code: response?.code,
+      message: response?.message,
+      data: response?.data,
+      fullResponse: response
+    })
+    
+    // 检查响应格式
+    if (!response || typeof response !== 'object') {
+      throw new Error('响应格式错误')
+    }
+    
+    return response
+  } catch (error) {
+    console.error('更新请求失败:', {
+      error,
+      message: error.message,
+      response: error.response,
+      stack: error.stack
+    })
+    throw error
+  }
 }
 
 /**
@@ -358,6 +394,82 @@ export function updateTranscript(fileId, data) {
   })
 }
 
+/**
+ * 保存文件版本
+ * @param {string} fileId - 文件ID
+ * @param {Object} data - 版本数据，包含content、type和note
+ * @returns {Promise<{
+ *   code: number,
+ *   message: string,
+ *   data: {
+ *     id: string,
+ *     timestamp: string,
+ *     content: Object,
+ *     type: string,
+ *     note: string
+ *   }
+ * }>}
+ */
+export function saveVersion(fileId, data) {
+  console.log('发送版本保存请求:', {
+    fileId,
+    url: `/api/v1/files/${fileId}/versions`,
+    method: 'post',
+    dataSize: JSON.stringify(data).length,
+    data
+  })
+  
+  return request({
+    url: `/api/v1/files/${fileId}/versions`,
+    method: 'post',
+    data,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+}
+
+/**
+ * 获取文件版本列表
+ * @param {string} fileId - 文件ID
+ * @returns {Promise<{
+ *   code: number,
+ *   message: string,
+ *   data: Array<{
+ *     id: string,
+ *     timestamp: string,
+ *     content: Object
+ *   }>
+ * }>}
+ */
+export function getVersions(fileId) {
+  return request({
+    url: `/api/v1/files/${fileId}/versions`,
+    method: 'get'
+  })
+}
+
+/**
+ * 获取指定版本的内容
+ * @param {string} fileId - 文件ID
+ * @param {string} versionId - 版本ID
+ * @returns {Promise<{
+ *   code: number,
+ *   message: string,
+ *   data: {
+ *     id: string,
+ *     timestamp: string,
+ *     content: Object
+ *   }
+ * }>}
+ */
+export function getVersion(fileId, versionId) {
+  return request({
+    url: `/api/v1/files/${fileId}/versions/${versionId}`,
+    method: 'get'
+  })
+}
+
 export const fileApi = {
   upload: uploadFile,
   getList: getFileList,
@@ -371,5 +483,8 @@ export const fileApi = {
   batchDelete: batchDeleteFiles,
   getTranscript,
   updateTranscript,
-  formatData: formatFileData
+  formatData: formatFileData,
+  saveVersion,
+  getVersions,
+  getVersion
 }

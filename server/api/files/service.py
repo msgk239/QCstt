@@ -1,5 +1,5 @@
 # 标准库导入
-from typing import Dict
+from typing import Dict, List, Optional
 from ..logger import get_logger
 import os
 from datetime import datetime
@@ -7,28 +7,34 @@ from email.utils import formatdate
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi import HTTPException
 from pydub import AudioSegment
+import time
 
 # 内部模块导入
 from .config import config
 from .metadata import MetadataManager
 from .operations import FileOperations
 from .trash import TrashManager
+from .storage import File, FileStorage
+from .exceptions import FileNotFoundError, FileServiceError
 
 # 相关服务导入
 from ..speech.storage import transcript_manager
 from ..speech.recognize import speech_service
-from ..utils import generate_target_filename, get_audio_metadata
+from ..utils import generate_target_filename, get_audio_metadata, safe_write_json, ensure_dir
 
 logger = get_logger(__name__)
 
 class FileService:
     """文件服务主类"""
-    def __init__(self):
+    def __init__(self, storage_dir: str):
         self.config = config
         self.metadata = MetadataManager()
         self.operations = FileOperations()
         self.trash = TrashManager()
         self.uploads_dir = config.uploads_dir
+        self.storage_dir = config.storage_root  # 使用storage_root而不是uploads_dir
+        self.storage = FileStorage(storage_dir)
+        ensure_dir(storage_dir)
     
     def save_uploaded_file(self, file_content, filename, options=None):
         """保存上传的文件，生成标准文件ID"""
@@ -268,12 +274,19 @@ class FileService:
         return speech_service.get_languages()
     
     def get_file_info(self, file_id):
-        # ...
-        return {
-            "filename": file.name,  # 返回原始文件名
-            "speech_type": file.speech_type,  # 单独返回语音类型
-            # ...
-        }
+        try:
+            # 先从数据库获取文件对象
+            file = self.db.query(File).filter(File.id == file_id).first()
+            if not file:
+                raise FileNotFoundError(f"文件不存在: {file_id}")
+            
+            return {
+                "filename": file.name,  # 返回原始文件名
+                "speech_type": file.speech_type,  # 单独返回语音类型
+                # ...
+            }
+        except Exception as e:
+            raise FileServiceError(f"获取文件信息失败: {str(e)}")
     
     def start_recognition(self, file_id: str) -> Dict:
         """开始语音识别"""
@@ -452,5 +465,239 @@ class FileService:
                 detail=str(e)
             )
 
+    def save_version(self, file_id: str, data: dict) -> dict:
+        """保存新版本
+        Args:
+            file_id: 文件ID
+            data: 版本内容
+        """
+        try:
+            logger.info(f"保存版本 - file_id: {file_id}")
+            
+            # 检查参数
+            if not file_id or not isinstance(file_id, str):
+                return {"code": 400, "message": f"无效的文件ID: {file_id}"}
+            
+            if not data or not isinstance(data, dict):
+                return {"code": 400, "message": "无效的数据内容"}
+            
+            # 构建版本目录
+            version_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            version_dir = os.path.join(self.config.versions_dir, file_id, version_timestamp)
+            
+            # 确保目录存在
+            if not ensure_dir(version_dir):
+                return {"code": 500, "message": "创建版本目录失败"}
+            
+            # 保存内容和元数据
+            content_path = os.path.join(version_dir, 'content.json')
+            metadata_path = os.path.join(version_dir, 'metadata.json')
+            
+            # 构建元数据
+            metadata = {
+                'version': version_timestamp,
+                'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'type': data.get('type', 'manual'),
+                'note': data.get('note', '')
+            }
+            
+            if 'content' in data:
+                content = data['content']
+                metadata.update({
+                    'segments_count': len(content.get('segments', [])),
+                    'speakers_count': len(content.get('speakers', []))
+                })
+            
+            # 保存文件
+            if not safe_write_json(content_path, data):
+                return {"code": 500, "message": "保存内容失败"}
+                
+            if not safe_write_json(metadata_path, metadata):
+                return {"code": 500, "message": "保存元数据失败"}
+            
+            logger.info(f"版本保存成功 - {version_timestamp}")
+            return {
+                "code": 200,
+                "message": "success",
+                "data": {
+                    "file_id": file_id,
+                    "version": version_timestamp,
+                    "path": content_path,
+                    "metadata": metadata
+                }
+            }
+                
+        except Exception as e:
+            logger.error(f"保存版本失败: {str(e)}", exc_info=True)
+            return {
+                "code": 500,
+                "message": f"保存版本失败: {str(e)}"
+            }
+
+    def get_versions(self, file_id: str) -> dict:
+        """获取版本列表"""
+        try:
+            # 验证文件是否存在
+            file_found = self.operations._find_file(file_id)
+            if not file_found:
+                return {"code": 404, "message": "文件不存在"}
+            
+            # 获取元数据
+            file_meta = self.metadata.get(file_found)
+            versions = file_meta.get("versions", [])
+            
+            return {
+                "code": 200,
+                "message": "success",
+                "data": {
+                    "versions": versions
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"获取版本列表失败: {str(e)}", exc_info=True)
+            return {"code": 500, "message": f"获取版本列表失败: {str(e)}"}
+
+    def get_version(self, file_id: str, version_id: str) -> dict:
+        """获取指定版本内容"""
+        try:
+            # 验证文件是否存在
+            file_found = self.operations._find_file(file_id)
+            if not file_found:
+                return {"code": 404, "message": "文件不存在"}
+            
+            # 获取元数据
+            file_meta = self.metadata.get(file_found)
+            versions = file_meta.get("versions", [])
+            
+            # 查找指定版本
+            version = next((v for v in versions if v["id"] == version_id), None)
+            if not version:
+                return {"code": 404, "message": "版本不存在"}
+            
+            return {
+                "code": 200,
+                "message": "success",
+                "data": version
+            }
+            
+        except Exception as e:
+            logger.error(f"获取版本内容失败: {str(e)}", exc_info=True)
+            return {"code": 500, "message": f"获取版本内容失败: {str(e)}"}
+
+    def restore_version(self, file_id: str, version_id: str) -> dict:
+        """还原到指定版本"""
+        try:
+            # 验证文件是否存在
+            file_found = self.operations._find_file(file_id)
+            if not file_found:
+                return {"code": 404, "message": "文件不存在"}
+            
+            # 获取元数据
+            file_meta = self.metadata.get(file_found)
+            versions = file_meta.get("versions", [])
+            
+            # 查找指定版本
+            version = next((v for v in versions if v["id"] == version_id), None)
+            if not version:
+                return {"code": 404, "message": "版本不存在"}
+            
+            # 创建新版本（记录还原操作）
+            restore_version = {
+                "id": f"{int(time.time())}",
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "content": version["content"],
+                "type": "restore",
+                "note": f"还原自版本 {version_id}",
+                "restored_from": version_id
+            }
+            
+            # 添加新版本到列表开头
+            versions.insert(0, restore_version)
+            
+            # 限制版本数量
+            MAX_VERSIONS = 50
+            if len(versions) > MAX_VERSIONS:
+                versions = versions[:MAX_VERSIONS]
+            
+            # 更新元数据
+            file_meta["versions"] = versions
+            self.metadata.update(file_found, file_meta)
+            
+            return {
+                "code": 200,
+                "message": "success",
+                "data": restore_version
+            }
+            
+        except Exception as e:
+            logger.error(f"还原版本失败: {str(e)}", exc_info=True)
+            return {"code": 500, "message": f"还原版本失败: {str(e)}"}
+
+    def save_file(self, file_id: str, data: Dict) -> Dict:
+        """保存文件内容
+        Args:
+            file_id: 文件ID
+            data: 文件数据，包含 segments 和 speakers
+        Returns:
+            Dict: 包含保存结果的响应
+        """
+        try:
+            logger.info(f"开始保存文件版本 - file_id: {file_id}")
+            logger.debug(f"保存的数据内容: {data}")
+            
+            # 使用config中的versions_dir
+            version_dir = os.path.join(self.config.versions_dir, file_id)
+            logger.info(f"版本目录路径: {version_dir}")
+            ensure_dir(version_dir)
+            
+            # 生成版本时间戳
+            version_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            current_version_dir = os.path.join(version_dir, version_timestamp)
+            logger.info(f"当前版本目录: {current_version_dir}")
+            ensure_dir(current_version_dir)
+            
+            # 构建文件路径
+            file_path = os.path.join(current_version_dir, 'content.json')
+            logger.info(f"文件保存路径: {file_path}")
+            
+            # 保存文件内容
+            if safe_write_json(file_path, data):
+                logger.info("文件内容保存成功")
+                # 更新元数据
+                metadata_path = os.path.join(current_version_dir, 'metadata.json')
+                metadata = {
+                    'version': version_timestamp,
+                    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'segments_count': len(data.get('segments', [])),
+                    'speakers_count': len(data.get('speakers', [])),
+                    'status': 'saved'
+                }
+                safe_write_json(metadata_path, metadata)
+                logger.info("元数据保存成功")
+                
+                response = {
+                    "code": 200,
+                    "message": "版本保存成功",
+                    "data": {
+                        "file_id": file_id,
+                        "version": version_timestamp,
+                        "path": file_path,
+                        "metadata": metadata
+                    }
+                }
+                logger.info(f"保存完成，返回响应: {response}")
+                return response
+            else:
+                logger.error("文件内容保存失败")
+                raise FileServiceError("保存版本失败")
+                
+        except Exception as e:
+            logger.error(f"保存版本失败: {str(e)}", exc_info=True)
+            return {
+                "code": 500,
+                "message": f"保存版本失败: {str(e)}"
+            }
+
 # 创建全局实例
-file_service = FileService()
+file_service = FileService(config.uploads_dir)

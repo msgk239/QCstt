@@ -96,14 +96,60 @@ export const useFileStore = defineStore('file', () => {
 
   const saveFile = async (fileId, data) => {
     saving.value = true
+    lastSaveTime.value = new Date()
+    
     try {
-      return await handleStoreAction(
-        () => fileApi.updateFile(fileId, data),
-        '保存文件失败'
-      )
+      console.log('开始保存文件:', {
+        fileId,
+        dataSize: JSON.stringify(data).length,
+        data: data // 打印完整数据用于调试
+      })
+      
+      const response = await fileApi.update(fileId, data)
+      console.log('保存响应:', {
+        code: response?.code,
+        message: response?.message,
+        data: response?.data,
+        fullResponse: response
+      })
+      
+      // 检查响应是否为空或无效
+      if (!response) {
+        throw new Error('服务器返回空响应')
+      }
+      
+      // 检查响应格式
+      if (typeof response !== 'object') {
+        throw new Error(`响应格式错误: ${typeof response}`)
+      }
+      
+      // 检查响应状态 - 现在同时检查 code 和 status
+      if (response.code === 200 || (response.code === undefined && response.status === 200)) {
+        ElMessage.success('保存成功')
+        return response
+      }
+      
+      // 处理非 200 状态码
+      console.error('保存失败，响应详情:', {
+        code: response.code,
+        status: response.status,
+        message: response.message,
+        data: response.data
+      })
+      
+      throw new Error(response.message || '保存失败')
+    } catch (error) {
+      console.error('保存出错:', {
+        error,
+        message: error.message,
+        stack: error.stack,
+        response: error.response
+      })
+      
+      ElMessage.error(error.message || '保存失败')
+      throw error
     } finally {
       saving.value = false
-      lastSaveTime.value = new Date()
     }
   }
 

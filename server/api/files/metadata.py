@@ -35,7 +35,6 @@ class MetadataManager:
         try:
             logger.info(f"=== 开始保存元数据文件 ===")
             logger.debug(f"保存路径: {self.metadata_file}")
-            logger.debug(f"保存内容: {self.metadata}")
             
             with open(self.metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(self.metadata, f, ensure_ascii=False, indent=2)
@@ -51,7 +50,6 @@ class MetadataManager:
         
         logger.info(f"=== 开始更新元数据 ===")
         logger.debug(f"文件名: {filename}")
-        logger.debug(f"更新数据: {data}")
         
         self.metadata[filename] = data
         self.save()

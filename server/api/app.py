@@ -11,7 +11,7 @@ logger = Logger.get_logger(__name__)
 
 # 第三方库
 import uvicorn
-from fastapi import FastAPI, UploadFile, File, Form, Query, Request
+from fastapi import FastAPI, UploadFile, File, Form, Query, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -167,9 +167,14 @@ async def delete_file(file_id: str):
     return file_service.delete_file(file_id)
 
 @app.put("/api/v1/files/{file_id}")
-async def update_file(file_id: str):
-    # TODO: 实现文件更新
-    pass
+async def update_file(file_id: str, data: dict = Body(...)):
+    """
+    接收到前端传来的更新数据后调用 file_service.save_file 将数据保存为 JSON 文件。
+    数据格式需能够被 JSON 序列化，文件保存路径为 storage_dir/{file_id}.json
+    """
+    logger.info(f"更新文件内容: {file_id}")
+    logger.debug(f"更新数据: {data}")
+    return file_service.save_file(file_id, data)
 
 # 文件资源
 @app.get("/api/v1/files/{file_id}/audio")
@@ -294,6 +299,29 @@ async def import_hotword_library():
 @app.get("/api/v1/asr/hotword-libraries/{id}/export")
 async def export_hotword_library():
     pass
+
+# 版本管理 API
+@app.post("/api/v1/files/{file_id}/versions")
+async def save_version(file_id: str, data: dict = Body(...)):
+    """保存文件版本"""
+    logger.info(f"保存文件版本: {file_id}")
+    logger.debug(f"版本数据: {data}")
+    return file_service.save_version(file_id, data)
+
+@app.get("/api/v1/files/{file_id}/versions", response_model=BaseResponse)
+async def get_versions(file_id: str):
+    """获取版本列表"""
+    return file_service.get_versions(file_id)
+
+@app.get("/api/v1/files/{file_id}/versions/{version_id}", response_model=BaseResponse)
+async def get_version(file_id: str, version_id: str):
+    """获取指定版本内容"""
+    return file_service.get_version(file_id, version_id)
+
+@app.post("/api/v1/files/{file_id}/versions/{version_id}/restore", response_model=BaseResponse)
+async def restore_version(file_id: str, version_id: str):
+    """还原到指定版本"""
+    return file_service.restore_version(file_id, version_id)
 
 def standard_response(data=None, error=None, code=200):
     return JSONResponse(

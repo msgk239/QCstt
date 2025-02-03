@@ -9,24 +9,42 @@ import { handleBusinessError, handleNetworkError } from '@/api/request'
  * @returns {Promise<any>} 处理结果
  */
 export const handleStoreAction = async (action, errorMessage, options = {}) => {
+  const {
+    showSuccess = false,
+    successMessage = '操作成功',
+    throwOnError = true,
+    validateResponse = (response) => response.code === 200
+  } = options
+
   try {
     const response = await action()
     
-    // 使用 request.js 的业务错误处理
-    if (handleBusinessError(response, errorMessage)) {
-      throw new Error(response.message || errorMessage)
+    // 使用自定义的响应验证
+    if (!validateResponse(response)) {
+      const error = new Error(response.message || errorMessage)
+      error.response = response
+      throw error
     }
     
     // 成功时可以显示成功提示
-    if (options.showSuccess) {
-      ElMessage.success(options.successMessage || '操作成功')
+    if (showSuccess) {
+      ElMessage.success(successMessage)
     }
     
-    return response.data
+    return response
   } catch (error) {
     // 使用 request.js 的网络错误处理
     handleNetworkError(error, errorMessage)
-    throw error
+    
+    if (throwOnError) {
+      throw error
+    }
+    
+    return {
+      code: error.response?.code || 500,
+      message: error.message || errorMessage,
+      data: null
+    }
   }
 }
 

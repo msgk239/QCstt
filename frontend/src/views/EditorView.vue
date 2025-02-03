@@ -70,7 +70,7 @@
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getFileDetail, formatFileData, getAudioFile } from '@/api/modules/file'
+import { getFileDetail, formatFileData, getAudioFile, fileApi } from '@/api/modules/file'
 import { useFileStore } from '@/stores/fileStore'
 import { nanoid } from 'nanoid'
 
@@ -91,6 +91,9 @@ import ShareToolbar from './EditorComponents/ShareToolbar.vue'
 import StyleTemplateToolbar from './EditorComponents/StyleTemplateToolbar.vue'
 import UndoRedoToolbar from './EditorComponents/UndoRedoToolbar.vue'
 import VersionHistoryToolbar from './EditorComponents/VersionHistoryToolbar.vue'
+
+// 导入事件总线
+import { editorBus, EVENT_TYPES } from './EditorComponents/eventBus'
 
 // 路由
 const route = useRoute()
@@ -220,38 +223,58 @@ const handleSave = async () => {
   
   saving.value = true
   try {
+    // 确保数据存在且是数组
+    if (!Array.isArray(segments.value) || !Array.isArray(speakers.value)) {
+      console.error('数据格式错误:', {
+        segments: segments.value,
+        speakers: speakers.value
+      })
+      throw new Error('数据格式错误')
+    }
+
     const saveData = {
-      segments: segments.value.map(segment => ({
-        speaker_id: segment.speaker_id,
-        speaker_name: segment.speakerDisplayName,
-        speakerKey: segment.speakerKey,
-        speakerDisplayName: segment.speakerDisplayName,
-        start_time: segment.start_time,
-        end_time: segment.end_time,
-        subSegments: segment.subSegments.map(sub => ({
-          subsegmentId: sub.subsegmentId,
-          text: sub.text,
-          start_time: sub.start_time,
-          end_time: sub.end_time,
-          timestamps: sub.timestamps
-        }))
-      })),
+      segments: segments.value.map(segment => {
+        // 确保每个 segment 都有必要的属性
+        const safeSegment = {
+          speaker_id: segment.speaker_id || '',
+          speaker_name: segment.speakerDisplayName || '',
+          speakerKey: segment.speakerKey || '',
+          speakerDisplayName: segment.speakerDisplayName || '',
+          start_time: segment.start_time || 0,
+          end_time: segment.end_time || 0,
+          text: segment.text || '',  // 添加文本内容
+          timestamps: segment.timestamps || [], // 添加时间戳数组
+          subSegments: segment.subSegments || []
+        }
+        return safeSegment
+      }),
       speakers: speakers.value.map(speaker => ({
-        id: speaker.speakerKey,
-        name: speaker.speakerDisplayName
+        id: speaker.speakerKey || '',
+        name: speaker.speakerDisplayName || ''
       }))
     }
     
     console.log('准备发送到后端的数据:', saveData)
     
-    await fileStore.saveFile(route.params.id, saveData)
-    lastSaveTime.value = new Date()
+    // 使用 saveVersion 接口
+    const response = await fileApi.saveVersion(route.params.id, {
+      content: saveData,
+      type: 'manual',
+      note: '手动保存'
+    })
     
-    console.log('保存成功')
-    ElMessage.success('保存成功')
+    if (response.code === 200) {
+      lastSaveTime.value = new Date()
+      console.log('保存成功')
+      ElMessage.success('保存成功')
+      // 触发版本保存成功事件
+      editorBus.emit(EVENT_TYPES.VERSION_SAVED, response.data)
+    } else {
+      throw new Error(response.message || '保存失败')
+    }
   } catch (error) {
     console.error('保存失败:', error)
-    ElMessage.error('保存失败')
+    ElMessage.error(error.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -409,6 +432,67 @@ onMounted(async () => {
   try {
     await loadFileData()
     await initAudio()
+    
+    // 监听版本保存事件
+    editorBus.on(EVENT_TYPES.SAVE_VERSION, async () => {
+      try {
+        // 先保存当前内容
+        await handleSave()
+        
+        // 确保数据存在
+        if (!segments.value || !speakers.value) {
+          throw new Error('数据不完整')
+        }
+        
+        // 保存版本
+        const versionData = {
+          segments: segments.value.map(segment => ({
+            ...segment,
+            subSegments: segment.subSegments || []
+          })),
+          speakers: speakers.value.map(speaker => ({
+            ...speaker
+          })),
+          timestamp: new Date()
+        }
+        
+        const response = await fileApi.saveVersion(route.params.id, versionData)
+        
+        if (response.code === 200) {
+          // 触发保存完成事件
+          editorBus.emit(EVENT_TYPES.VERSION_SAVED, response.data)
+          ElMessage.success('版本保存成功')
+        } else {
+          throw new Error(response.message || '保存版本失败')
+        }
+      } catch (error) {
+        console.error('保存版本失败:', error)
+        ElMessage.error(error.message || '保存版本失败')
+      }
+    })
+    
+    // 监听版本加载事件
+    editorBus.on(EVENT_TYPES.LOAD_VERSION, async (version) => {
+      try {
+        if (version.content) {
+          if (version.mode === 'preview') {
+            // TODO: 实现预览模式
+            ElMessage.info('预览功能开发中')
+          } else if (version.mode === 'restore') {
+            // 还原版本
+            segments.value = version.content.segments
+            speakers.value = version.content.speakers
+            
+            // 保存还原后的状态
+            await handleSave()
+            ElMessage.success('还原版本成功')
+          }
+        }
+      } catch (error) {
+        console.error('加载版本失败:', error)
+        ElMessage.error('加载版本失败')
+      }
+    })
   } catch (error) {
     console.error('Failed to load file:', error)
     ElMessage.error('加载失败')

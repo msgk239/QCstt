@@ -1,5 +1,30 @@
+import os
+import json
+from datetime import datetime
 from ..logger import get_logger
 logger = get_logger(__name__)
+
+class File:
+    """文件模型类"""
+    def __init__(self, id, name, speech_type=None):
+        self.id = id
+        self.name = name
+        self.speech_type = speech_type
+
+def ensure_dir(dir_path):
+    """确保目录存在，如果不存在则创建"""
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+def safe_write_json(file_path, data):
+    """安全地写入 JSON 文件"""
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"写入 JSON 文件失败: {str(e)}")
+        return False
 
 class FileStorage:
     def __init__(self, base_dir):

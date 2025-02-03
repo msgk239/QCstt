@@ -43,51 +43,106 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   response => {
-    // 如果是二进制数据（如文件下载），直接返回 data
+    console.log('收到响应:', {
+      url: response.config.url,
+      method: response.config.method,
+      status: response.status,
+      headers: response.headers,
+      data: response.data
+    })
+    
+    // 处理空响应
+    if (response.data === null || response.data === '') {
+      // 如果状态码是 200，认为操作成功
+      if (response.status === 200) {
+        return {
+          code: 200,
+          message: 'success',
+          data: null
+        }
+      }
+      
+      return {
+        code: response.status,
+        message: '服务器返回空响应',
+        data: null
+      }
+    }
+    
+    // 处理二进制响应
     if (response.config.responseType === 'blob') {
       console.log('Blob response:', {
-        type: response.data?.type,
-        size: response.data?.size,
+        type: response.data.type,
+        size: response.data.size,
         headers: response.headers
       })
-      return response.data  // 直接返回 blob 数据
+      return response.data
     }
 
-    const res = response.data
-    if (res.code !== 200) {
-      return res
+    // 检查响应格式
+    const responseData = response.data
+    if (typeof responseData !== 'object') {
+      console.error('响应格式错误:', responseData)
+      return {
+        code: 500,
+        message: '响应格式错误',
+        data: null
+      }
     }
-    return res
+
+    // 如果响应没有 code 字段，但状态码是 200，则认为成功
+    if (responseData.code === undefined && response.status === 200) {
+      return {
+        code: 200,
+        message: 'success',
+        data: responseData
+      }
+    }
+
+    return responseData
   },
   error => {
-    const errorCodes = {
-      400: '请求参数错误',
+    // 修改错误处理部分
+    const errorResponse = error.response || {}
+    const status = errorResponse.status || 500
+    const responseData = errorResponse.data || {}
+
+    console.error('请求错误:', {
+      status,
+      url: error.config?.url,
+      method: error.config?.method,
+      response: errorResponse,
+      data: responseData,
+      error
+    })
+
+    // 统一使用安全访问
+    const errorMessages = {
+      400: responseData?.code ? `参数错误 (${responseData.code})` : '无效请求参数',
       401: '未授权访问',
       403: '禁止访问',
       404: '资源不存在',
       422: '请求验证错误',
       500: '服务器内部错误'
     }
+
+    let message = errorMessages[status] || '网络错误'
     
-    let message = errorCodes[error.response?.status] || '网络错误'
-    // 详细的错误信息处理
-    if (error.response) {
-      // 服务器返回了错误状态码
-      const status = error.response.status
-      const data = error.response.data
-      message = (data && data.message) || `请求失败(${status})`
-    } else if (error.request) {
-      // 请求发出但没有收到响应
-      message = '服务器无响应'
-    } else {
-      // 请求配置出错
-      message = error.message
+    // 优先使用服务器返回的错误信息
+    if (responseData.message) {
+      message = responseData.message
+    }
+
+    // 特殊网络错误处理
+    if (!error.response) {
+      message = error.request ? '服务器无响应' : error.message
     }
     
-    // 让调用方处理错误消息的显示
     return Promise.reject({
-      code: error.response?.status || 500,
-      message: message
+      code: status,
+      message: message,
+      data: responseData,
+      raw: error  // 保留原始错误对象
     })
   }
 )
