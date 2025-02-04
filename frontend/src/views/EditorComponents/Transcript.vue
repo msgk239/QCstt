@@ -194,12 +194,19 @@ const updateSegmentText = (segment, newText) => {
     text: newText,
     // 保留原有的时间戳
     timestamps: segment.timestamps || [],
-    subSegments: segment.subSegments.map(sub => ({
-      ...sub,
-      text: newText,
-      // 保留子段落的时间戳
-      timestamps: sub.timestamps || []
-    }))
+    // 保持其他子段落不变，只更新当前编辑的子段落
+    subSegments: segment.subSegments.map(sub => {
+      // 只更新与主段落文本相同的子段落
+      if (sub.text === segment.text) {
+        return {
+          ...sub,
+          text: newText,
+          timestamps: sub.timestamps || []
+        }
+      }
+      // 保持其他子段落不变
+      return sub
+    })
   }
 
   // 更新缓存
