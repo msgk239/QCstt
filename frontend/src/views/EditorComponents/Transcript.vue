@@ -182,11 +182,22 @@ const updateSpeakerInfo = (segment, newSpeakerInfo) => {
 
 // 处理内容编辑
 const handleContentChange = (event, segment) => {
-  const text = event.target.textContent
+  const newText = event.target.textContent
   const updatedSegment = {
     ...segment,
-    text: text,
+    text: newText,
+    subSegments: segment.subSegments.map(sub => ({
+      ...sub,
+      text: newText
+    }))
   }
+  
+  // 更新缓存
+  const index = mergedSegmentsCache.value.findIndex(s => s.segmentId === segment.segmentId)
+  if (index > -1) {
+    mergedSegmentsCache.value[index] = updatedSegment
+  }
+  
   emit('segment-update', updatedSegment)
 }
 

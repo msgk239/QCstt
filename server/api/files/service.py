@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi import HTTPException
 from pydub import AudioSegment
 import time
+import json
 
 # 内部模块导入
 from .config import config
@@ -162,7 +163,6 @@ class FileService:
             logger.debug(f"文件路径: {file_path}")
             
             # 获取转写结果
-
             transcripts = transcript_manager.get_transcript(file_id)
             
             # 获取两种元数据
@@ -179,22 +179,64 @@ class FileService:
             status = metadata.get("status", "未识别") if metadata else "未识别"
             recognition_result = None
             
-            # 检查转写结果
-            if transcripts and "original" in transcripts:
-                recognition_result = transcripts["original"]
-                # 如果original中包含data字段，则取data
-                if isinstance(recognition_result, dict) and "data" in recognition_result:
-                    recognition_result = recognition_result["data"]
+            # 检查是否存在最新版本
+            versions_dir = os.path.join(self.config.versions_dir, file_id)
+            latest_version = None
+            latest_version_metadata = None
+            if os.path.exists(versions_dir):
+                version_dirs = [d for d in os.listdir(versions_dir) if os.path.isdir(os.path.join(versions_dir, d))]
+                if version_dirs:
+                    latest_dir = sorted(version_dirs, reverse=True)[0]
+                    content_path = os.path.join(versions_dir, latest_dir, 'content.json')
+                    metadata_path = os.path.join(versions_dir, latest_dir, 'metadata.json')
+                    
+                    if os.path.exists(content_path):
+                        try:
+                            with open(content_path, 'r', encoding='utf-8') as f:
+                                latest_version = json.load(f)
+                                logger.info(f"找到最新版本: {latest_dir}")
+                                
+                            # 读取版本的metadata
+                            if os.path.exists(metadata_path):
+                                with open(metadata_path, 'r', encoding='utf-8') as f:
+                                    latest_version_metadata = json.load(f)
+                                    logger.info(f"找到最新版本metadata")
+                        except Exception as e:
+                            logger.error(f"读取最新版本失败: {str(e)}")
+            
+            # 如果有最新版本，使用最新版本的内容和metadata
+            if latest_version and "data" in latest_version:
+                recognition_result = latest_version["data"]
+                if latest_version_metadata:
+                    # 只更新版本相关的metadata，保留其他元数据
+                    metadata.update({
+                        "version": latest_version_metadata.get("version"),
+                        "version_created_at": latest_version_metadata.get("created_at"),
+                        "version_type": latest_version_metadata.get("type"),
+                        "version_note": latest_version_metadata.get("note")
+                    })
+                logger.info("使用最新版本内容")
+            else:
+                # 如果没有最新版本，使用original.json的内容
+                logger.info("使用original.json内容")
+                if transcripts and "original" in transcripts:
+                    recognition_result = transcripts["original"]
+                    # 如果original中包含data字段，则取data
+                    if isinstance(recognition_result, dict) and "data" in recognition_result:
+                        recognition_result = recognition_result["data"]
                 
             # 从元数据中获取原始文件名
             original_filename = metadata.get("original_filename") if metadata else file_id
             
+            # 构建最终响应
             response = {
                 "code": 200,
                 "message": "success",
                 "data": {
-                    **recognition_result,
-                    **metadata
+                    **(recognition_result or {}),  # 先放recognition_result
+                    **metadata,  # 再放metadata，这样可以覆盖recognition_result中的重复字段
+                    "status": status,  # 确保状态字段存在
+                    "original_filename": original_filename  # 确保原始文件名字段存在
                 }
             }
             logger.debug(f"\n最终响应: {response}")
@@ -501,14 +543,7 @@ class FileService:
                 'note': data.get('note', '')
             }
             
-            if 'content' in data:
-                content = data['content']
-                metadata.update({
-                    'segments_count': len(content.get('segments', [])),
-                    'speakers_count': len(content.get('speakers', []))
-                })
-            
-            # 保存文件
+            # 直接保存前端传来的数据
             if not safe_write_json(content_path, data):
                 return {"code": 500, "message": "保存内容失败"}
                 
