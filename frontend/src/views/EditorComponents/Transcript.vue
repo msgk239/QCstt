@@ -180,24 +180,46 @@ const updateSpeakerInfo = (segment, newSpeakerInfo) => {
   }
 }
 
-// 处理内容编辑
-const handleContentChange = (event, segment) => {
-  const newText = event.target.textContent
+// 更新文本内容
+const updateSegmentText = (segment, newText) => {
+  console.log('开始更新文本:', {
+    segmentId: segment.segmentId,
+    oldText: segment.text,
+    newText: newText
+  })
+
+  // 创建更新后的段落对象
   const updatedSegment = {
     ...segment,
     text: newText,
+    // 保留原有的时间戳
+    timestamps: segment.timestamps || [],
     subSegments: segment.subSegments.map(sub => ({
       ...sub,
-      text: newText
+      text: newText,
+      // 保留子段落的时间戳
+      timestamps: sub.timestamps || []
     }))
   }
-  
+
   // 更新缓存
   const index = mergedSegmentsCache.value.findIndex(s => s.segmentId === segment.segmentId)
   if (index > -1) {
     mergedSegmentsCache.value[index] = updatedSegment
+    console.log('缓存更新成功，准备发送到父组件:', {
+      updatedSegment,
+      hasTimestamps: !!updatedSegment.timestamps,
+      subSegmentsCount: updatedSegment.subSegments?.length
+    })
   }
-  
+
+  return updatedSegment
+}
+
+// 处理内容编辑
+const handleContentChange = (event, segment) => {
+  const newText = event.target.textContent
+  const updatedSegment = updateSegmentText(segment, newText)
   emit('segment-update', updatedSegment)
 }
 

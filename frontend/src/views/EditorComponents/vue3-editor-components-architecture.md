@@ -39,13 +39,8 @@
 - `HotwordsDialog.vue`: 热词管理对话框
 
 ## 文件操作
-- `AutoSaveToolbar.vue`: 自动保存设置工具栏
-  - 开启/关闭自动保存
-  - 保存间隔设置
-  - 版本数量限制
 - `ExportToolbar.vue`: 导出功能工具栏，支持多种格式导出
 - `ShareToolbar.vue`: 分享功能工具栏
-- `VersionHistoryToolbar.vue`: 版本历史管理工具栏
 
 ## 辅助功能
 - `KeyboardShortcuts.js`: 键盘快捷键配置
@@ -66,7 +61,6 @@
 3. 自动保存
    - 定时保存
    - 手动保存
-   - 版本管理
 
 4. 事件处理
    - 音频控制
@@ -76,4 +70,3 @@
 
 ## 工具栏组件
 - `Toolbar.vue`: 基础工具栏组件，包含常用操作按钮
-- `VersionHistoryToolbar.vue`: 版本历史工具栏，查看和恢复历史版本

@@ -60,19 +60,7 @@ class TranscriptManager:
             data = safe_read_json(file_path)
             if data:
                 print(f"成功读取 {key} 数据")
-                # 如果是original文件，尝试处理可能的嵌套结构
-                if key == "original" and isinstance(data, dict):
-                    print(f"Original数据结构: {type(data)}")
-                    # 如果有data字段，直接使用其内容
-                    if "data" in data:
-                        result[key] = data["data"]
-                        print("使用data字段内容")
-                    # 否则使用整个数据
-                    else:
-                        result[key] = data
-                        print("使用完整数据")
-                else:
-                    result[key] = data
+                result[key] = data
             else:
                 print(f"未找到 {key} 数据")
                 

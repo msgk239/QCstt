@@ -8,14 +8,6 @@
         <ShareToolbar />
         <StyleTemplateToolbar />
         <div class="divider"></div>
-        <AutoSaveToolbar
-          v-model:autoSave="autoSaveEnabled"
-          v-model:saveInterval="autoSaveInterval"
-          v-model:maxVersions="maxVersions"
-          :saving="saving"
-          :lastSaveTime="lastSaveTime"
-        />
-        <VersionHistoryToolbar />
       </div>
     </div>
 
@@ -84,13 +76,11 @@ import EditToolbar from './EditorComponents/EditToolbar.vue'
 import ReplaceDialog from './EditorComponents/ReplaceDialog.vue'
 import HotwordsDialog from './EditorComponents/HotwordsDialog.vue'
 import SpeedMenuDialog from './EditorComponents/SpeedMenuDialog.vue'
-import AutoSaveToolbar from './EditorComponents/AutoSaveToolbar.vue'
 import ExportToolbar from './EditorComponents/ExportToolbar.vue'
 import NoteToolbar from './EditorComponents/NoteToolbar.vue'
 import ShareToolbar from './EditorComponents/ShareToolbar.vue'
 import StyleTemplateToolbar from './EditorComponents/StyleTemplateToolbar.vue'
 import UndoRedoToolbar from './EditorComponents/UndoRedoToolbar.vue'
-import VersionHistoryToolbar from './EditorComponents/VersionHistoryToolbar.vue'
 
 // 导入事件总线
 import { editorBus, EVENT_TYPES } from './EditorComponents/eventBus'
@@ -137,7 +127,6 @@ const audio = ref(new Audio())
 // 添加自动保存相关的状态
 const autoSaveEnabled = ref(true)
 const autoSaveInterval = ref(5)
-const maxVersions = ref(10)
 const lastSaveTime = ref(null)
 // 添加定时器变量
 let autoSaveTimer = null
@@ -215,60 +204,34 @@ const initAudio = async () => {
 }
 
 // 方法
-const handleSave = async () => {
-  console.log('开始保存:', {
-    currentSegments: segments.value,
-    currentSpeakers: speakers.value
-  })
+const handleSave = async (updatedData) => {
+  console.log('开始保存:', updatedData)
   
   saving.value = true
   try {
-    // 确保数据存在且是数组
-    if (!Array.isArray(segments.value) || !Array.isArray(speakers.value)) {
-      console.error('数据格式错误:', {
-        segments: segments.value,
-        speakers: speakers.value
-      })
-      throw new Error('数据格式错误')
-    }
-
     const saveData = {
-      segments: segments.value.map(segment => {
-        // 确保每个 segment 都有必要的属性
-        const safeSegment = {
-          speaker_id: segment.speaker_id || '',
-          speaker_name: segment.speaker_name || '',
-          speakerKey: segment.speakerKey || '',
-          speakerDisplayName: segment.speakerDisplayName || '',
-          start_time: segment.start_time || 0,
-          end_time: segment.end_time || 0,
-          text: segment.text || '',
-          timestamps: segment.timestamps || [],
-          subSegments: segment.subSegments || []
-        }
-        return safeSegment
-      }),
+      segments: segments.value.map(segment => ({
+        speaker_id: segment.speaker_id || '',
+        speaker_name: segment.speaker_name || '',
+        speakerKey: segment.speakerKey || '',
+        speakerDisplayName: segment.speakerDisplayName || '',
+        start_time: segment.start_time || 0,
+        end_time: segment.end_time || 0,
+        text: segment.text || '',
+        timestamps: segment.timestamps || [],
+        subSegments: segment.subSegments || []
+      })),
       speakers: speakers.value.map(speaker => ({
         id: speaker.speakerKey || '',
         name: speaker.speakerDisplayName || ''
       }))
     }
     
-    console.log('准备发送到后端的数据:', saveData)
-    
-    // 使用 saveVersion 接口
-    const response = await fileApi.saveVersion(route.params.id, {
-      ...saveData,
-      type: 'manual',
-      note: '手动保存'
-    })
+    // 直接保存到后端
+    const response = await fileApi.saveContent(route.params.id, saveData)
     
     if (response.code === 200) {
-      lastSaveTime.value = new Date()
       console.log('保存成功')
-      ElMessage.success('保存成功')
-      // 触发版本保存成功事件
-      editorBus.emit(EVENT_TYPES.VERSION_SAVED, response.data)
     } else {
       throw new Error(response.message || '保存失败')
     }
@@ -280,7 +243,7 @@ const handleSave = async () => {
   }
 }
 
-const handleSegmentUpdate = (updatedSegments) => {
+const handleSegmentUpdate = async (updatedSegments) => {
   // 处理批量更新
   if (Array.isArray(updatedSegments)) {
     console.log('处理批量更新:', {
@@ -326,6 +289,9 @@ const handleSegmentUpdate = (updatedSegments) => {
       }
     }
   }
+
+  // 内容更新后立即保存
+  await handleSave({ type: 'content_update' })
 }
 
 // 音频播放器相关方法
@@ -432,34 +398,6 @@ onMounted(async () => {
   try {
     await loadFileData()
     await initAudio()
-    
-    // 监听版本保存事件
-    editorBus.on(EVENT_TYPES.SAVE_VERSION, async () => {
-      await handleSave()  // 移除重复的版本保存
-    })
-    
-    // 监听版本加载事件
-    editorBus.on(EVENT_TYPES.LOAD_VERSION, async (version) => {
-      try {
-        if (version.content) {
-          if (version.mode === 'preview') {
-            // TODO: 实现预览模式
-            ElMessage.info('预览功能开发中')
-          } else if (version.mode === 'restore') {
-            // 还原版本
-            segments.value = version.content.segments
-            speakers.value = version.content.speakers
-            
-            // 保存还原后的状态
-            await handleSave()
-            ElMessage.success('还原版本成功')
-          }
-        }
-      } catch (error) {
-        console.error('加载版本失败:', error)
-        ElMessage.error('加载版本失败')
-      }
-    })
   } catch (error) {
     console.error('Failed to load file:', error)
     ElMessage.error('加载失败')
@@ -555,7 +493,7 @@ const handleSegmentSelect = (updatedSegments) => {
   }))
 }
 
-const handleSpeakerChange = (updatedSegment) => {
+const handleSpeakerChange = async (updatedSegment) => {
   if (updatedSegment.batchUpdate) {
     console.log('处理批量说话人更新:', {
       oldSpeakerKey: updatedSegment.oldSpeakerKey,
@@ -595,6 +533,9 @@ const handleSpeakerChange = (updatedSegment) => {
       console.warn('未找到要更新的段落:', updatedSegment.segmentId)
     }
   }
+
+  // 说话人更新后立即保存
+  await handleSave({ type: 'speaker_update' })
 }
 
 // 修改获取说话人名字的函数
