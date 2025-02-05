@@ -39,6 +39,7 @@
                 :class="{ 'word-highlight': isWordPlaying(word) }"
                 @click="handleWordClick(word, $event)"
                 style="cursor: pointer"
+                :data-subsegment-id="subSegment.subsegmentId"
               >{{ word.text }}</span>
               <br v-if="subIndex < segment.subSegments.length - 1">
             </template>
@@ -181,53 +182,47 @@ const updateSpeakerInfo = (segment, newSpeakerInfo) => {
 }
 
 // 更新文本内容
-const updateSegmentText = (segment, newText) => {
-  console.log('开始更新文本:', {
-    segmentId: segment.segmentId,
-    oldText: segment.text,
-    newText: newText
-  })
+const handleContentChange = (event, segment) => {
+  // 获取当前编辑的元素
+  const editedElement = event.target;
+  const spans = editedElement.querySelectorAll('span');
+  const updatedSubSegments = new Map();
 
-  // 创建更新后的段落对象
+  // 收集每个 subsegmentId 对应的文本
+  spans.forEach(span => {
+    const subsegmentId = span.getAttribute('data-subsegment-id');
+    if (subsegmentId) {
+      if (!updatedSubSegments.has(subsegmentId)) {
+        updatedSubSegments.set(subsegmentId, []);
+      }
+      updatedSubSegments.get(subsegmentId).push(span.textContent);
+    }
+  });
+
+  // 更新每个子段落的文本
   const updatedSegment = {
     ...segment,
-    text: newText,
-    // 保留原有的时间戳
-    timestamps: segment.timestamps || [],
-    // 保持其他子段落不变，只更新当前编辑的子段落
     subSegments: segment.subSegments.map(sub => {
-      // 只更新与主段落文本相同的子段落
-      if (sub.text === segment.text) {
+      const updatedTexts = updatedSubSegments.get(sub.subsegmentId);
+      if (updatedTexts) {
         return {
           ...sub,
-          text: newText,
-          timestamps: sub.timestamps || []
-        }
+          text: updatedTexts.join('')
+        };
       }
-      // 保持其他子段落不变
-      return sub
+      return sub;
     })
-  }
+  };
 
-  // 更新缓存
-  const index = mergedSegmentsCache.value.findIndex(s => s.segmentId === segment.segmentId)
-  if (index > -1) {
-    mergedSegmentsCache.value[index] = updatedSegment
-    console.log('缓存更新成功，准备发送到父组件:', {
-      updatedSegment,
-      hasTimestamps: !!updatedSegment.timestamps,
-      subSegmentsCount: updatedSegment.subSegments?.length
-    })
-  }
+  // 更新主段落的文本（保持现有逻辑）
+  updatedSegment.text = updatedSegment.subSegments.map(sub => sub.text).join('');
 
-  return updatedSegment
-}
+  console.log('文本更新:', {
+    segmentId: segment.segmentId,
+    updatedSegment
+  });
 
-// 处理内容编辑
-const handleContentChange = (event, segment) => {
-  const newText = event.target.textContent
-  const updatedSegment = updateSegmentText(segment, newText)
-  emit('segment-update', updatedSegment)
+  emit('segment-update', updatedSegment);
 }
 
 // 优化 isSegmentPlaying 函数

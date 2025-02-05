@@ -219,7 +219,21 @@ const handleSave = async (updatedData) => {
         end_time: segment.end_time || 0,
         text: segment.text || '',
         timestamps: segment.timestamps || [],
-        subSegments: segment.subSegments || []
+        subsegmentId: segment.subsegmentId,
+        // 直接传递子段落原始信息
+        subSegments: (segment.subSegments || []).map(sub => ({
+          speaker_id: sub.speaker_id,
+          speaker_name: sub.speaker_name,
+          speakerKey: sub.speakerKey,
+          speakerDisplayName: sub.speakerDisplayName,
+          start_time: sub.start_time,
+          end_time: sub.end_time,
+          text: sub.text,
+          timestamps: sub.timestamps,
+          subsegmentId: sub.subsegmentId,
+          segmentId: segment.segmentId,
+          color: sub.color
+        }))
       })),
       speakers: speakers.value.map(speaker => ({
         id: speaker.speakerKey || '',
