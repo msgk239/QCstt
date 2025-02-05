@@ -366,6 +366,9 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
       })
       // 更新结束时间
       currentGroup.end_time = segment.end_time
+
+      // 动态更新主段落的 text，拼接所有子段落的文本
+      currentGroup.text = currentGroup.subSegments.map(sub => sub.text).join('')
     }
   })
   

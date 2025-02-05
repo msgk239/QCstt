@@ -168,9 +168,6 @@ async def delete_file(file_id: str):
 
 @app.put("/api/v1/files/{file_id}")
 async def update_file(file_id: str, data: dict = Body(...)):
-    """更新文件内容"""
-    logger.info(f"更新文件内容: {file_id}")
-    logger.debug(f"更新数据: {data}")
     return file_service.save_content(file_id, data)
 
 # 文件资源

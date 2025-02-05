@@ -477,7 +477,7 @@ class FileService:
         """
         try:
             logger.info(f"开始保存文件内容 - file_id: {file_id}")
-            logger.debug(f"保存的数据内容: {data}")
+
             
             # 1. 首先检查原始转写文件是否存在，如果不存在则创建备份
             transcript_dir = os.path.join(self.config.transcripts_dir, file_id)
