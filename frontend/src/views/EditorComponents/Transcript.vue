@@ -51,7 +51,7 @@
 </template>
 
 <script setup>
-import { ref, watch, watchEffect, computed, onMounted } from 'vue'
+import { ref, watch, watchEffect, computed, onMounted, nextTick } from 'vue'
 import SpeakerManager from '@/components/common/SpeakerManager.vue'
 import { nanoid } from 'nanoid'
 
@@ -287,6 +287,27 @@ watch(() => props.segments, (newVal) => {
             text: s.text
         }))
     })
+
+    // 如果是有效数据，且缓存为空（说明是第一次加载）
+    if (newVal.length > 0 && mergedSegmentsCache.value.length === 0) {
+      nextTick(() => {
+        // 触发合并
+        const merged = mergeSegments(newVal, true)
+        if (merged.length > 0) {
+          // 模拟一次文本更新，建立 subsegmentId 映射
+          const firstSegment = merged[0]
+          const updatedSegment = {
+            ...firstSegment,
+            text: firstSegment.text,
+            subSegments: firstSegment.subSegments.map(sub => ({
+              ...sub,
+              text: sub.text
+            }))
+          }
+          emit('segment-update', updatedSegment)
+        }
+      })
+    }
 }, { deep: true })
 
 // 1. 添加一个用于存储合并后段落的 ref
