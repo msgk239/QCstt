@@ -209,10 +209,7 @@ const handleContentChange = (event, segment) => {
   updatedSegment.text = updatedSegment.subSegments.map(sub => sub.text).join('');
 
   // 添加日志记录
-  console.log('段落更新数据(JSON格式):\n', JSON.stringify({
-    isFirstUpdate: mergedSegmentsCache.value.length === 0,
-    updatedSegment
-  }, null, 2));
+  console.log('段落更新数据:\n', JSON.stringify(updatedSegment, null, 2));
 
   emit('segment-update', updatedSegment);
 }
@@ -287,10 +284,7 @@ watch(() => props.segments, (newVal) => {
           }
           
           // 添加首次更新日志
-          console.log('首次段落更新数据(JSON格式):\n', JSON.stringify({
-            isFirstUpdate: true,
-            updatedSegment
-          }, null, 2));
+          console.log('段落更新数据:\n', JSON.stringify(updatedSegment, null, 2));
           
           emit('segment-update', updatedSegment)
         }

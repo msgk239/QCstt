@@ -203,63 +203,13 @@ const initAudio = async () => {
   }
 }
 
-// 方法
-const handleSave = async (updatedData) => {
-  console.log('开始保存:', updatedData)
-  
+const handleSegmentUpdate = async (updatedSegments) => {
   saving.value = true
   try {
-    const saveData = {
-      segments: segments.value.map(segment => ({
-        ...segment,  // 展开所有字段
-        // 保留所有原始字段
-        segmentId: segment.segmentId,
-        speaker_id: segment.speaker_id,
-        speaker_name: segment.speaker_name,
-        speakerKey: segment.speakerKey,
-        speakerDisplayName: segment.speakerDisplayName,
-        start_time: segment.start_time,
-        end_time: segment.end_time,
-        text: segment.text,
-        timestamps: segment.timestamps || [],
-        subsegmentId: segment.subsegmentId,
-        color: segment.color,
-        // 子段落数据
-        subSegments: (segment.subSegments || []).map(sub => ({
-          ...sub,  // 展开所有子段落字段
-          segmentId: sub.segmentId,
-          speaker_id: sub.speaker_id,
-          speaker_name: sub.speaker_name,
-          speakerKey: sub.speakerKey,
-          speakerDisplayName: sub.speakerDisplayName,
-          start_time: sub.start_time,
-          end_time: sub.end_time,
-          text: sub.text,
-          timestamps: sub.timestamps || [],
-          subsegmentId: sub.subsegmentId,
-          color: sub.color
-        }))
-      })),
-      speakers: speakers.value.map(speaker => ({
-        // 保留所有说话人字段
-        id: speaker.speaker_id,
-        name: speaker.speaker_name,
-        speakerKey: speaker.speakerKey,
-        speakerDisplayName: speaker.speakerDisplayName,
-        color: speaker.color
-      })),
-      // 添加文件基本信息
-      fileName: file.value?.fileName,
-      duration: duration.value,
-      lastModified: new Date().toISOString()
-    }
-    
-    // 添加完整的原始数据日志
-    console.log('发送给后端的完整数据:', saveData)
-    console.log('发送给后端的完整数据(JSON格式):\n', JSON.stringify(saveData, null, 2))
-    
-    // 直接保存到后端
-    const response = await fileApi.saveContent(route.params.id, saveData)
+    const response = await fileApi.saveContent(route.params.id, {
+      type: 'content_update',
+      segments: updatedSegments  // 改回 segments，与 API 接口保持一致
+    })
     
     if (response.code === 200) {
       console.log('保存成功')
@@ -272,58 +222,6 @@ const handleSave = async (updatedData) => {
   } finally {
     saving.value = false
   }
-}
-
-const handleSegmentUpdate = async (updatedSegments) => {
-  // 处理批量更新
-  if (Array.isArray(updatedSegments)) {
-    console.log('处理批量更新:', {
-      updatedSegmentsCount: updatedSegments.length
-    })
-
-    // 如果是合并后的结果（包含 subSegments），直接替换
-    if (updatedSegments[0]?.subSegments) {
-      segments.value = updatedSegments
-      return
-    }
-    
-    // 原有的更新逻辑保持不变
-    const updatedSegmentIds = new Set(updatedSegments.map(s => s.segmentId))
-    
-    segments.value = segments.value.map(segment => {
-      if (updatedSegmentIds.has(segment.segmentId)) {
-        const updatedSegment = updatedSegments.find(s => s.segmentId === segment.segmentId)
-        return {
-          ...segment,
-          ...updatedSegment
-        }
-      }
-      return segment
-    })
-    
-    // 添加新段落（如果有）
-    const newSegments = updatedSegments.filter(s => !updatedSegmentIds.has(s.segmentId))
-    if (newSegments.length > 0) {
-      console.log('添加新段落:', {
-        count: newSegments.length
-      })
-      segments.value = [...segments.value, ...newSegments]
-    }
-  } 
-  // 处理单个段落更新（保持兼容）
-  else {
-    const updateData = updatedSegments.updatedSegment || updatedSegments
-    const index = segments.value.findIndex(s => s.segmentId === updateData.segmentId)
-    if (index > -1) {
-      segments.value[index] = {
-        ...segments.value[index],
-        ...updateData
-      }
-    }
-  }
-
-  // 内容更新后立即保存
-  await handleSave({ type: 'content_update' })
 }
 
 // 音频播放器相关方法
