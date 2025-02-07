@@ -124,13 +124,6 @@ const playbackRate = ref(1)
 // 音频相关
 const audio = ref(new Audio())
 
-// 添加自动保存相关的状态
-const autoSaveEnabled = ref(true)
-const autoSaveInterval = ref(5)
-const lastSaveTime = ref(null)
-// 添加定时器变量
-let autoSaveTimer = null
-
 // 初始化音频
 const initAudio = async () => {
   try {
@@ -208,7 +201,7 @@ const handleSegmentUpdate = async (updatedSegments) => {
   try {
     const response = await fileApi.saveContent(route.params.id, {
       type: 'content_update',
-      segments: updatedSegments  // 改回 segments，与 API 接口保持一致
+      segments: updatedSegments  // 直接传对象即可
     })
     
     if (response.code === 200) {
@@ -267,25 +260,6 @@ const getOriginalFilename = (fullname) => {
   return fullname.split('_').slice(2).join('_')
 }
 
-// 修改自动保存逻辑
-const startAutoSave = () => {
-  if (autoSaveEnabled.value) {
-    // 先清除已存在的定时器
-    if (autoSaveTimer) {
-      clearInterval(autoSaveTimer)
-    }
-    autoSaveTimer = setInterval(handleSave, autoSaveInterval.value * 60 * 1000)
-  }
-}
-
-// 监听自动保存设置变化
-watch([autoSaveEnabled, autoSaveInterval], () => {
-  if (autoSaveTimer) {
-    clearInterval(autoSaveTimer)
-  }
-  startAutoSave()
-})
-
 // 提取加载文件数据的方法
 const loadFileData = async () => {
   console.log('开始加载文件数据')
@@ -332,13 +306,9 @@ onMounted(async () => {
     console.error('Failed to load file:', error)
     ElMessage.error('加载失败')
   }
-  startAutoSave()
 })
 
 onUnmounted(() => {
-  if(autoSaveTimer) {
-    clearInterval(autoSaveTimer)
-  }
   // 清理音频资源
   if (audio.value.src) {
     URL.revokeObjectURL(audio.value.src)

@@ -273,20 +273,13 @@ watch(() => props.segments, (newVal) => {
       nextTick(() => {
         const merged = mergeSegments(newVal, true)
         if (merged.length > 0) {
-          const firstSegment = merged[0]
-          const updatedSegment = {
-            ...firstSegment,
-            text: firstSegment.text,
-            subSegments: firstSegment.subSegments.map(sub => ({
-              ...sub,
-              text: sub.text
-            }))
-          }
+          // 发送所有合并后的数据
+          console.log('首次更新数据:\n', JSON.stringify(merged, null, 2));
           
-          // 添加首次更新日志
-          console.log('段落更新数据:\n', JSON.stringify(updatedSegment, null, 2));
-          
-          emit('segment-update', updatedSegment)
+          // 更新所有segments
+          merged.forEach(segment => {
+            emit('segment-update', segment)
+          })
         }
       })
     }

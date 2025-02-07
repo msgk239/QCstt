@@ -477,6 +477,9 @@ class FileService:
         """
         try:
             logger.info(f"开始保存文件内容 - file_id: {file_id}")
+            logger.info(f"data类型: {type(data)}")
+            logger.info(f"segments类型: {type(data.get('segments'))}")  # 看看 segments 的类型
+            logger.info(f"segments内容: {data.get('segments')}")  # 看看具体内容
             
             # 1. 获取转写文件路径
             transcript_dir = os.path.join(self.config.transcripts_dir, file_id)
@@ -513,28 +516,33 @@ class FileService:
             
             # 6. 处理新的segments数据
             updated_segments = []
-            for segment in data.get("segments", []):
-                # 直接使用前端发来的所有字段
-                updated_segment = segment.copy()  # 复制所有字段
-
-                # 第一次更新：使用精确的start_time匹配
+            segment = data.get("segments")  # 现在是字典
+            
+            # 从segment中获取subSegments
+            for sub_segment in segment.get("subSegments", []):
+                # 复制所有字段
+                updated_segment = sub_segment.copy()
+                
+                # 如果是第一次更新
                 if is_first_update:
                     matching_segment = next(
-                        (s for s in original_segments if abs(s.get("start_time", 0) - segment.get("start_time", 0)) < 0.001),
+                        (s for s in original_segments 
+                         if s.get("start_time") == sub_segment.get("start_time")),
                         None
                     )
                     if matching_segment:
                         # 保留原有字段，但允许新字段覆盖
-                        updated_segment = {**matching_segment, **segment}
-                # 后续更新：使用subsegmentId匹配
+                        updated_segment = {**matching_segment, **sub_segment}
                 else:
+                    # 使用subsegmentId匹配
                     matching_segment = next(
-                        (s for s in original_segments if s.get("subsegmentId") == segment.get("subsegmentId")),
+                        (s for s in original_segments 
+                         if s.get("subsegmentId") == sub_segment.get("subsegmentId")),
                         None
                     )
                     if matching_segment:
                         # 保留原有字段，但允许新字段覆盖
-                        updated_segment = {**matching_segment, **segment}
+                        updated_segment = {**matching_segment, **sub_segment}
                 
                 updated_segments.append(updated_segment)
 
@@ -542,13 +550,14 @@ class FileService:
             original_content["data"].update({
                 "segments": updated_segments,
                 "speakers": data.get("speakers", original_data.get("speakers", [])),
-                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "full_text": "".join(segment["text"] for segment in updated_segments)
             })
 
             # 8. 保留其他原有字段
             for key in original_data:
                 if key not in ["segments", "speakers", "updated_at"]:
-                    original_content["data"][key] = original_data[key]
+                    original_content["data"][key] = original_data[key]  # full_text 在这里被保留了
             
             # 9. 保存更新后的内容
             if not safe_write_json(original_path, original_content):

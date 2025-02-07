@@ -168,6 +168,17 @@ async def delete_file(file_id: str):
 
 @app.put("/api/v1/files/{file_id}")
 async def update_file(file_id: str, data: dict = Body(...)):
+    logger.info(f"收到更新请求 - file_id: {file_id}")
+    logger.info(f"请求数据类型: {type(data)}")  # 添加类型检查
+    logger.info(f"请求数据: {data}")
+    
+    # 如果是字符串，尝试解析成字典
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError:
+            return {"code": 400, "message": "数据格式错误"}
+            
     return file_service.save_content(file_id, data)
 
 # 文件资源
