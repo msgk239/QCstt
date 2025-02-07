@@ -82,15 +82,6 @@ const formatTime = (seconds) => {
 
 // 处理说话人变更
 const handleSpeakerChange = (updatedData) => {
-  console.log('说话人变更:', {
-    segmentId: updatedData.segmentId,
-    newSpeaker: {
-      key: updatedData.speakerKey,
-      name: updatedData.speakerDisplayName
-    },
-    batchUpdate: updatedData.batchUpdate
-  })
-  
   if (updatedData.batchUpdate) {
     // 批量更新：找到所有相同说话人的段落进行更新
     const oldSpeakerKey = mergedSegmentsCache.value.find(
@@ -217,10 +208,11 @@ const handleContentChange = (event, segment) => {
   // 更新主段落的文本（保持现有逻辑）
   updatedSegment.text = updatedSegment.subSegments.map(sub => sub.text).join('');
 
-  console.log('文本更新:', {
-    segmentId: segment.segmentId,
+  // 添加日志记录
+  console.log('段落更新数据(JSON格式):\n', JSON.stringify({
+    isFirstUpdate: mergedSegmentsCache.value.length === 0,
     updatedSegment
-  });
+  }, null, 2));
 
   emit('segment-update', updatedSegment);
 }
@@ -278,23 +270,12 @@ const isWordPlaying = (word) => {
          props.currentTime <= (word.end + buffer)
 }
 
-// 添加调试代码
-watch(() => props.segments, (newVal) => {
-    console.log('segments 发生变化:', {
-        segments: newVal,
-        firstThreeSegments: newVal.slice(0, 3).map(s => ({
-            speakerKey: s.speakerKey,
-            text: s.text
-        }))
-    })
 
-    // 如果是有效数据，且缓存为空（说明是第一次加载）
+watch(() => props.segments, (newVal) => {
     if (newVal.length > 0 && mergedSegmentsCache.value.length === 0) {
       nextTick(() => {
-        // 触发合并
         const merged = mergeSegments(newVal, true)
         if (merged.length > 0) {
-          // 模拟一次文本更新，建立 subsegmentId 映射
           const firstSegment = merged[0]
           const updatedSegment = {
             ...firstSegment,
@@ -304,6 +285,13 @@ watch(() => props.segments, (newVal) => {
               text: sub.text
             }))
           }
+          
+          // 添加首次更新日志
+          console.log('首次段落更新数据(JSON格式):\n', JSON.stringify({
+            isFirstUpdate: true,
+            updatedSegment
+          }, null, 2));
+          
           emit('segment-update', updatedSegment)
         }
       })
@@ -467,7 +455,6 @@ defineExpose({
 
 // 添加初始化检查
 onMounted(() => {
-  console.log('Transcript 组件挂载完成')
   if (props.segments && props.segments.length > 0) {
     mergedSegments.value // 触发首次合并
   }

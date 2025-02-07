@@ -211,17 +211,23 @@ const handleSave = async (updatedData) => {
   try {
     const saveData = {
       segments: segments.value.map(segment => ({
-        speaker_id: segment.speaker_id || '',
-        speaker_name: segment.speaker_name || '',
-        speakerKey: segment.speakerKey || '',
-        speakerDisplayName: segment.speakerDisplayName || '',
-        start_time: segment.start_time || 0,
-        end_time: segment.end_time || 0,
-        text: segment.text || '',
+        ...segment,  // 展开所有字段
+        // 保留所有原始字段
+        segmentId: segment.segmentId,
+        speaker_id: segment.speaker_id,
+        speaker_name: segment.speaker_name,
+        speakerKey: segment.speakerKey,
+        speakerDisplayName: segment.speakerDisplayName,
+        start_time: segment.start_time,
+        end_time: segment.end_time,
+        text: segment.text,
         timestamps: segment.timestamps || [],
         subsegmentId: segment.subsegmentId,
-        // 直接传递子段落原始信息
+        color: segment.color,
+        // 子段落数据
         subSegments: (segment.subSegments || []).map(sub => ({
+          ...sub,  // 展开所有子段落字段
+          segmentId: sub.segmentId,
           speaker_id: sub.speaker_id,
           speaker_name: sub.speaker_name,
           speakerKey: sub.speakerKey,
@@ -229,17 +235,28 @@ const handleSave = async (updatedData) => {
           start_time: sub.start_time,
           end_time: sub.end_time,
           text: sub.text,
-          timestamps: sub.timestamps,
+          timestamps: sub.timestamps || [],
           subsegmentId: sub.subsegmentId,
-          segmentId: segment.segmentId,
           color: sub.color
         }))
       })),
       speakers: speakers.value.map(speaker => ({
-        id: speaker.speakerKey || '',
-        name: speaker.speakerDisplayName || ''
-      }))
+        // 保留所有说话人字段
+        id: speaker.speaker_id,
+        name: speaker.speaker_name,
+        speakerKey: speaker.speakerKey,
+        speakerDisplayName: speaker.speakerDisplayName,
+        color: speaker.color
+      })),
+      // 添加文件基本信息
+      fileName: file.value?.fileName,
+      duration: duration.value,
+      lastModified: new Date().toISOString()
     }
+    
+    // 添加完整的原始数据日志
+    console.log('发送给后端的完整数据:', saveData)
+    console.log('发送给后端的完整数据(JSON格式):\n', JSON.stringify(saveData, null, 2))
     
     // 直接保存到后端
     const response = await fileApi.saveContent(route.params.id, saveData)
@@ -295,11 +312,12 @@ const handleSegmentUpdate = async (updatedSegments) => {
   } 
   // 处理单个段落更新（保持兼容）
   else {
-    const index = segments.value.findIndex(s => s.segmentId === updatedSegments.segmentId)
+    const updateData = updatedSegments.updatedSegment || updatedSegments
+    const index = segments.value.findIndex(s => s.segmentId === updateData.segmentId)
     if (index > -1) {
       segments.value[index] = {
         ...segments.value[index],
-        ...updatedSegments
+        ...updateData
       }
     }
   }

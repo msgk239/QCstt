@@ -478,12 +478,12 @@ class FileService:
         try:
             logger.info(f"开始保存文件内容 - file_id: {file_id}")
             
-            # 1. 首先检查原始转写文件是否存在，如果不存在则创建备份
+            # 1. 获取转写文件路径
             transcript_dir = os.path.join(self.config.transcripts_dir, file_id)
             original_path = os.path.join(transcript_dir, 'original.json')
             backup_path = os.path.join(transcript_dir, 'original.backup.json')
             
-            # 读取现有的 original.json 内容
+            # 2. 读取现有的 original.json 内容
             original_content = {}
             if os.path.exists(original_path):
                 try:
@@ -500,90 +500,61 @@ class FileService:
             else:
                 original_content = {"code": 200, "message": "success", "data": {}}
 
-            # 2. 更新原始文件，保留原有的键
+            # 3. 确保data字段存在
             if "data" not in original_content:
                 original_content["data"] = {}
             
-            # 保留原有数据
+            # 4. 获取原有segments数据
             original_data = original_content.get("data", {})
             original_segments = original_data.get("segments", [])
             
-            # 检查是否是第一次更新（通过检查第一个 segment 是否有 subsegmentId）
+            # 5. 检查是否是第一次更新（通过检查第一个segment是否有subsegmentId）
             is_first_update = len(original_segments) > 0 and "subsegmentId" not in original_segments[0]
             
-            # 3. 保存合并后的大段信息到新键
-            merged_segments = []
-            for segment in data.get("segments", []):
-                merged_segment = {
-                    "segmentId": segment.get("segmentId"),
-                    "text": segment.get("text"),
-                    "start_time": segment.get("start_time"),
-                    "end_time": segment.get("end_time"),
-                    "speakerKey": segment.get("speakerKey"),
-                    "speakerDisplayName": segment.get("speakerDisplayName"),
-                    "speaker_name": segment.get("speaker_name"),
-                    "speaker_id": segment.get("speaker_id")
-                }
-                merged_segments.append(merged_segment)
-            
-            # 4. 处理子段落数据
+            # 6. 处理新的segments数据
             updated_segments = []
             for segment in data.get("segments", []):
-                for sub_segment in segment.get("subSegments", []):
-                    # 构建更新的段落数据
-                    updated_segment = {
-                        "speaker_id": sub_segment.get("speaker_id"),
-                        "speaker_name": sub_segment.get("speaker_name"),
-                        "start_time": sub_segment.get("start_time"),
-                        "end_time": sub_segment.get("end_time"),
-                        "text": sub_segment.get("text"),
-                        "timestamps": sub_segment.get("timestamps"),
-                        "subsegmentId": sub_segment.get("subsegmentId"),
-                        "segmentId": segment.get("segmentId"),
-                        "speakerKey": sub_segment.get("speakerKey"),
-                        "speakerDisplayName": sub_segment.get("speakerDisplayName"),
-                        "color": sub_segment.get("color")
-                    }
+                # 直接使用前端发来的所有字段
+                updated_segment = segment.copy()  # 复制所有字段
 
-                    # 第一次更新：使用精确的 start_time 匹配
-                    if is_first_update:
-                        matching_segment = next(
-                            (s for s in original_segments if s.get("start_time") == sub_segment.get("start_time")),
-                            None
-                        )
-                        if matching_segment:
-                            # 保留原有字段
-                            updated_segment = {**matching_segment, **updated_segment}
-                    # 后续更新：使用 subsegmentId 匹配
-                    else:
-                        matching_segment = next(
-                            (s for s in original_segments if s.get("subsegmentId") == sub_segment.get("subsegmentId")),
-                            None
-                        )
-                        if matching_segment:
-                            # 保留原有字段
-                            updated_segment = {**matching_segment, **updated_segment}
-                    
-                    updated_segments.append(updated_segment)
+                # 第一次更新：使用精确的start_time匹配
+                if is_first_update:
+                    matching_segment = next(
+                        (s for s in original_segments if abs(s.get("start_time", 0) - segment.get("start_time", 0)) < 0.001),
+                        None
+                    )
+                    if matching_segment:
+                        # 保留原有字段，但允许新字段覆盖
+                        updated_segment = {**matching_segment, **segment}
+                # 后续更新：使用subsegmentId匹配
+                else:
+                    matching_segment = next(
+                        (s for s in original_segments if s.get("subsegmentId") == segment.get("subsegmentId")),
+                        None
+                    )
+                    if matching_segment:
+                        # 保留原有字段，但允许新字段覆盖
+                        updated_segment = {**matching_segment, **segment}
+                
+                updated_segments.append(updated_segment)
 
-            # 5. 更新内容
+            # 7. 更新content
             original_content["data"].update({
                 "segments": updated_segments,
-                "merged_segments": merged_segments,  # 添加合并段落信息
                 "speakers": data.get("speakers", original_data.get("speakers", [])),
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             })
 
-            # 保留其他原有字段
+            # 8. 保留其他原有字段
             for key in original_data:
-                if key not in ["segments", "merged_segments", "speakers", "updated_at"]:
+                if key not in ["segments", "speakers", "updated_at"]:
                     original_content["data"][key] = original_data[key]
             
-            # 保存更新后的内容
+            # 9. 保存更新后的内容
             if not safe_write_json(original_path, original_content):
                 return {"code": 500, "message": "保存内容失败"}
             
-            # 6. 更新metadata
+            # 10. 更新metadata
             metadata_path = os.path.join(transcript_dir, 'metadata.json')
             current_metadata = {}
             if os.path.exists(metadata_path):
@@ -597,7 +568,6 @@ class FileService:
             current_metadata.update({
                 'last_modified': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'segments_count': len(updated_segments),
-                'merged_segments_count': len(merged_segments),
                 'speakers_count': len(data.get('speakers', [])),
                 'has_backup': True
             })
