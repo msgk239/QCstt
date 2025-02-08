@@ -274,12 +274,10 @@ watch(() => props.segments, (newVal) => {
         const merged = mergeSegments(newVal, true)
         if (merged.length > 0) {
           // 发送所有合并后的数据
-          console.log('首次更新数据:\n', JSON.stringify(merged, null, 2));
+          console.log('首次更新数据:\n', JSON.stringify({merged}, null, 2));
           
-          // 更新所有segments
-          merged.forEach(segment => {
-            emit('segment-update', segment)
-          })
+          // 一次性发送所有 segments
+          emit('segment-update', {merged})  // 发送整个数组
         }
       })
     }

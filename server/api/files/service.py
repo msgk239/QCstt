@@ -478,8 +478,7 @@ class FileService:
         try:
             logger.info(f"开始保存文件内容 - file_id: {file_id}")
             logger.info(f"data类型: {type(data)}")
-            logger.info(f"segments类型: {type(data.get('segments'))}")  # 看看 segments 的类型
-            logger.info(f"segments内容: {data.get('segments')}")  # 看看具体内容
+            logger.info(f"segments内容: {data.get('segments')}")  # 现在是 {'merged': [...]}
             
             # 1. 获取转写文件路径
             transcript_dir = os.path.join(self.config.transcripts_dir, file_id)
@@ -511,53 +510,44 @@ class FileService:
             original_data = original_content.get("data", {})
             original_segments = original_data.get("segments", [])
             
-            # 5. 检查是否是第一次更新（通过检查第一个segment是否有subsegmentId）
+            # 5. 检查是否是第一次更新
             is_first_update = len(original_segments) > 0 and "subsegmentId" not in original_segments[0]
             
             # 6. 处理新的segments数据
-            updated_segments = []
-            segment = data.get("segments")  # 现在是字典
+            if is_first_update:
+                updated_segments = []
+                segments_data = data.get("segments", {})
+                
+                # 处理 {'merged': [...]} 格式
+                if "merged" in segments_data:
+                    for segment in segments_data["merged"]:  # 从 merged 字段里取数组
+                        updated_segments.extend(segment.get("subSegments", []))
             
-            # 从segment中获取subSegments
-            for sub_segment in segment.get("subSegments", []):
-                # 复制所有字段
-                updated_segment = sub_segment.copy()
+            else:
+                # 后续更新：只更新匹配的segment
+                updated_segments = original_segments.copy()  # 复制原有的所有segments
+                segment = data.get("segments")
                 
-                # 如果是第一次更新
-                if is_first_update:
-                    matching_segment = next(
-                        (s for s in original_segments 
-                         if s.get("start_time") == sub_segment.get("start_time")),
-                        None
-                    )
-                    if matching_segment:
-                        # 保留原有字段，但允许新字段覆盖
-                        updated_segment = {**matching_segment, **sub_segment}
-                else:
-                    # 使用subsegmentId匹配
-                    matching_segment = next(
-                        (s for s in original_segments 
-                         if s.get("subsegmentId") == sub_segment.get("subsegmentId")),
-                        None
-                    )
-                    if matching_segment:
-                        # 保留原有字段，但允许新字段覆盖
-                        updated_segment = {**matching_segment, **sub_segment}
-                
-                updated_segments.append(updated_segment)
+                # 找到并更新匹配的segment
+                for sub_segment in segment.get("subSegments", []):
+                    for i, orig_segment in enumerate(updated_segments):
+                        if orig_segment.get("subsegmentId") == sub_segment.get("subsegmentId"):
+                            # 更新匹配的segment
+                            updated_segments[i] = {**orig_segment, **sub_segment}
+                            break
 
             # 7. 更新content
             original_content["data"].update({
                 "segments": updated_segments,
                 "speakers": data.get("speakers", original_data.get("speakers", [])),
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "full_text": "".join(segment["text"] for segment in updated_segments)
+                "full_text": " ".join(s.get("text", "") for s in updated_segments)  # 只用主段落的 text
             })
 
             # 8. 保留其他原有字段
             for key in original_data:
-                if key not in ["segments", "speakers", "updated_at"]:
-                    original_content["data"][key] = original_data[key]  # full_text 在这里被保留了
+                if key not in ["segments", "speakers", "updated_at", "full_text"]: # 不要保留旧的 full_text
+                    original_content["data"][key] = original_data[key]
             
             # 9. 保存更新后的内容
             if not safe_write_json(original_path, original_content):
