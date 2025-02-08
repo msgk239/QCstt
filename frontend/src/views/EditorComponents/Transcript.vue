@@ -228,23 +228,46 @@ const splitTextWithTimestamps = (segment) => {
     return [{ text: '' }]
   }
 
-  if (!segment.timestamps || !segment.text) {
-    console.warn('缺少必要的数据:', {
-      text: segment.text,
-      hasTimestamps: !!segment.timestamps
-    })
-    return [{ text: segment.text || '' }]
+  if (!segment.text) {
+    console.warn('缺少文本:', segment)
+    return [{ text: '' }]
   }
   
   const text = segment.text
-  const timestamps = segment.timestamps
-  const minLength = Math.min(text.length, timestamps.length)
+  const timestamps = segment.timestamps || []
   
-  return Array.from({ length: minLength }, (_, index) => ({
-    text: text[index],
-    start: timestamps[index].start,
-    end: timestamps[index].end
-  }))
+  // 如果没有时间戳，直接返回完整文本
+  if (!timestamps.length) {
+    return [{ text, start: 0, end: 0 }]
+  }
+
+  const result = []
+  let currentPosition = 0
+  
+  // 遍历时间戳，找到对应的原始文字
+  timestamps.forEach((timestamp, index) => {
+    // 如果当前位置已经超出文本长度，跳过
+    if (currentPosition >= text.length) return
+    
+    // 添加这个时间戳对应的字符
+    result.push({
+      text: text[currentPosition],
+      start: timestamp.start,
+      end: timestamp.end
+    })
+    currentPosition++
+  })
+  
+  // 如果还有剩余的文字（包括插入的），作为一个整体添加
+  if (currentPosition < text.length) {
+    result.push({
+      text: text.slice(currentPosition),
+      start: timestamps[timestamps.length - 1]?.end || 0,
+      end: timestamps[timestamps.length - 1]?.end || 0
+    })
+  }
+  
+  return result
 }
 
 // 判断单个词是否正在播放
@@ -384,22 +407,38 @@ const mergedSegments = computed(() => {
 })
 
 // 添加对 segments 的深度监听
-watch(() => props.segments, (newSegments) => {
+watch(() => props.segments, (newSegments, oldSegments) => {
+  console.log('Transcript segments 变化:', {
+    newSegments,
+    oldSegments,
+    cacheLength: mergedSegmentsCache.value.length
+  })
+  
   // 检查是否有说话人信息变化
   const hasChanges = newSegments.some((segment, index) => {
     const cached = mergedSegmentsCache.value.find(m => 
       m.subSegments.some(sub => sub.subsegmentId === segment.subsegmentId)
     )
+    console.log('比较段落:', {
+      segment,
+      cached,
+      hasChange: !cached || 
+                 cached.speakerKey !== segment.speakerKey || 
+                 cached.speakerDisplayName !== segment.speakerDisplayName ||
+                 cached.text !== segment.text
+    })
     return !cached || 
            cached.speakerKey !== segment.speakerKey || 
-           cached.speakerDisplayName !== segment.speakerDisplayName
+           cached.speakerDisplayName !== segment.speakerDisplayName ||
+           cached.text !== segment.text  // 添加文本内容的比较
   })
 
   if (hasChanges) {
-    console.log('检测到说话人变化，清除缓存')
+    console.log('检测到内容变化，清除缓存')
     mergedSegmentsCache.value = []
+    console.log('清除缓存后的值:', mergedSegmentsCache.value)  // 新加的日志
   }
-}, { deep: true })
+}, { deep: true, immediate: true })
 
 // 4. 添加新的方法
 const handleSegmentClick = (segment) => {

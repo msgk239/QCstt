@@ -501,7 +501,7 @@ class FileService:
                     original_content = {"code": 200, "message": "success", "data": {}}
             else:
                 original_content = {"code": 200, "message": "success", "data": {}}
-
+            
             # 3. 确保data字段存在
             if "data" not in original_content:
                 original_content["data"] = {}
@@ -535,7 +535,7 @@ class FileService:
                             # 更新匹配的segment
                             updated_segments[i] = {**orig_segment, **sub_segment}
                             break
-
+            
             # 7. 更新content
             original_content["data"].update({
                 "segments": updated_segments,
