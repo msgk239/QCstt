@@ -206,19 +206,7 @@ const handleSegmentUpdate = async (updatedSegments) => {
     
     if (response.code === 200) {
       console.log('保存成功')
-      // 获取最新数据
-      const latestData = await getFileDetail(route.params.id)
-      const formattedData = formatFileData(latestData)
-      
-      // 只更新 segments 数据，保持其他状态不变
-      segments.value = formattedData.segments.map((segment, index) => ({
-        ...segment,
-        speakerKey: segment.speaker_id || `speaker_${index}`,
-        speakerDisplayName: segment.speaker_name || `说话人 ${index + 1}`,
-        color: segment.color || '#409EFF',
-        isSelected: false,
-        subsegmentId: `${segment.speaker_id || `speaker_${index}`}-${segment.start_time || 0}-${segment.end_time || 0}`
-      }))
+      // 删除这里获取最新数据的部分,只保留保存功能
     } else {
       throw new Error(response.message || '保存失败')
     }
