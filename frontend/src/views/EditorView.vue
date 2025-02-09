@@ -59,7 +59,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getFileDetail, formatFileData, getAudioFile, fileApi } from '@/api/modules/file'
@@ -416,13 +416,11 @@ const handleSegmentSelect = (updatedSegments) => {
 }
 
 const handleSpeakerChange = async (updatedSegment) => {
+  console.log('handleSpeakerChange 被调用:', updatedSegment)  // 添加日志
+  
   if (updatedSegment.batchUpdate) {
-    console.log('处理批量说话人更新:', {
-      oldSpeakerKey: updatedSegment.oldSpeakerKey,
-      newSpeakerKey: updatedSegment.speakerKey,
-      speakerDisplayName: updatedSegment.speakerDisplayName,
-      updatedSegmentsCount: updatedSegment.updatedSegments?.length
-    })
+    console.log('进入 batchUpdate 分支')  // 添加日志
+    console.log('更新前的 speakers:', JSON.stringify(speakers.value, null, 2))
     
     // 批量更新所有相同说话人的段落
     segments.value = segments.value.map(segment => {
@@ -436,27 +434,27 @@ const handleSpeakerChange = async (updatedSegment) => {
       }
       return segment
     })
-  } else {
-    const index = segments.value.findIndex(s => s.segmentId === updatedSegment.segmentId)
-    
-    if (index > -1) {
-      segments.value = segments.value.map(segment => {
-        if (segment.segmentId === updatedSegment.segmentId) {
-          return {
-            ...segment,
-            speakerKey: updatedSegment.speakerKey,
-            speakerDisplayName: updatedSegment.speakerDisplayName,
-            speaker_name: updatedSegment.speakerDisplayName
-          }
+
+    // 同步更新 speakers 数组
+    speakers.value = speakers.value.map(speaker => {
+      if (speaker.speakerKey === updatedSegment.oldSpeakerKey) {
+        return {
+          ...speaker,
+          speakerDisplayName: updatedSegment.speakerDisplayName,
+          speaker_name: updatedSegment.speakerDisplayName
         }
-        return segment
-      })
-    } else {
-      console.warn('未找到要更新的段落:', updatedSegment.segmentId)
-    }
+      }
+      return speaker
+    })
+    
+    console.log('更新后的 speakers:', JSON.stringify(speakers.value, null, 2))
+    console.log('updatedSegment:', updatedSegment)
+
+    // 等待 Vue 完成更新
+    await nextTick()
   }
 
-  // 说话人更新后立即保存
+  // 说话人更新后保存
   await handleSave({ type: 'speaker_update' })
 }
 
@@ -473,22 +471,23 @@ const handleSave = async (options = {}) => {
       // 从 Transcript 组件获取合并的段落数据
       const transcriptData = transcriptRef.value.mergedSegments
       
-      // 添加发送数据的日志
-      console.log('保存说话人数据:\n', JSON.stringify({
-        segments: transcriptData,
-        speakers: speakers.value
-      }, null, 2))
-
-      await fileApi.saveContent(route.params.id, {
+      // 打印 speakers 的值
+      console.log('保存前的 speakers:', JSON.stringify(speakers.value, null, 2))
+      
+      // 构建要保存的数据
+      const saveData = {
         type: 'speaker_update',
         segments: {
           merged: transcriptData
         },
         speakers: speakers.value
-      })
+      }
+      
+      // 在发送请求前打印最新数据
+      console.log('保存说话人数据:\n', JSON.stringify(saveData, null, 2))
+
+      await fileApi.saveContent(route.params.id, saveData)
       ElMessage.success('说话人更新成功')
-    } else {
-      // ... 保持原有逻辑
     }
   } catch (error) {
     console.error('保存失败:', error)

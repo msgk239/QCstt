@@ -82,6 +82,8 @@ const formatTime = (seconds) => {
 
 // 处理说话人变更
 const handleSpeakerChange = (updatedData) => {
+  console.log('Transcript handleSpeakerChange 被调用:', updatedData)  // 添加日志
+  
   if (updatedData.batchUpdate) {
     // 批量更新：找到所有相同说话人的段落进行更新
     const oldSpeakerKey = mergedSegmentsCache.value.find(
@@ -114,12 +116,14 @@ const handleSpeakerChange = (updatedData) => {
       mergedSegmentsCache.value = updatedSegments
 
       // 发送批量更新事件给父组件
-      emit('speaker-change', {
+      const eventData = {
         ...updatedData,
         batchUpdate: true,
         oldSpeakerKey,
         updatedSegments: updatedSegments.filter(seg => seg.speakerKey === updatedData.speakerKey)
-      })
+      }
+      console.log('Transcript 发送事件:', eventData)  // 添加日志
+      emit('speaker-change', eventData)
     }
   } else {
     // 单独更新：只更新指定的段落

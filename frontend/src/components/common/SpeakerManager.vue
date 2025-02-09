@@ -286,9 +286,8 @@ const handleConfirm = () => {
     speaker_name: selectedSpeaker.value.speakerDisplayName,  // 同步更新 speaker_name
     speaker_id: selectedSpeaker.value.speakerKey,  // 同步更新 speaker_id
     color: selectedSpeaker.value.color,  // 使用新说话人的颜色
-    
-    // 批量更新标志
-    batchUpdate: batchUpdate.value,
+    oldSpeakerKey: props.segment.speakerKey,  // 添加当前说话人的 key
+    batchUpdate: true  // 设置为 true
   }
 
   // 如果有子段落，也更新子段落
@@ -335,6 +334,8 @@ const handleSpeakerItemClick = (speaker) => {
     speaker_name: speaker.speakerDisplayName,  // 同步更新 speaker_name
     speaker_id: speaker.speakerKey,  // 同步更新 speaker_id
     color: speaker.color,  // 使用新说话人的颜色
+    oldSpeakerKey: props.segment.speakerKey,  // 添加当前说话人的 key
+    batchUpdate: true  // 设置为 true
   }
 
   // 如果有子段落，也更新子段落

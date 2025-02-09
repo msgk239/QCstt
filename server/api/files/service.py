@@ -478,7 +478,6 @@ class FileService:
         try:
             logger.info(f"开始保存文件内容 - file_id: {file_id}")
             logger.info(f"data类型: {type(data)}")
-            logger.info(f"segments内容: {data.get('segments')}")
             
             # 1. 获取转写文件路径
             transcript_dir = os.path.join(self.config.transcripts_dir, file_id)
@@ -537,23 +536,49 @@ class FileService:
                 
                 # 根据 segmentId 更新说话人信息
                 for segment in segments_data:
-                    for subsegment in segment.get('subSegments', []):
-                        # 获取新的说话人信息
-                        speaker_info = {
-                            'speaker_id': subsegment.get('speakerKey'),
-                            'speaker_name': subsegment.get('speakerDisplayName'),
-                            'speakerKey': subsegment.get('speakerKey'),
-                            'speakerDisplayName': subsegment.get('speakerDisplayName'),
-                            'color': subsegment.get('color', '#409EFF')  # 添加 color 字段
-                        }
-                        
-                        # 更新所有具有相同 segmentId 的段落
-                        segment_id = subsegment.get('segmentId')
-                        for i, orig_segment in enumerate(updated_segments):
-                            if orig_segment.get('segmentId') == segment_id:
-                                updated_segments[i].update(speaker_info)
+                    # 获取新的说话人信息
+                    speaker_info = {
+                        'speaker_id': segment.get('speakerKey'),
+                        'speaker_name': segment.get('speakerDisplayName'),
+                        'speakerKey': segment.get('speakerKey'),
+                        'speakerDisplayName': segment.get('speakerDisplayName'),
+                        'color': segment.get('color', '#409EFF')
+                    }
+                    
+                    # 更新所有具有相同 segmentId 的段落和其子段落
+                    segment_id = segment.get('segmentId')
+                    for i, orig_segment in enumerate(updated_segments):
+                        if orig_segment.get('segmentId') == segment_id:
+                            # 更新主段落的说话人信息
+                            updated_segments[i].update(speaker_info)
+                            
+                            # 同时更新子段落的说话人信息
+                            if 'subSegments' in segment:
+                                for subsegment in segment['subSegments']:
+                                    subsegment_id = subsegment.get('subsegmentId')
+                                    # 找到对应的原始子段落并更新
+                                    if subsegment_id == orig_segment.get('subsegmentId'):
+                                        updated_segments[i].update(speaker_info)
                 
-                # 更新 content，保持原有格式
+                # 更新 speakers
+                updated_speakers = original_content["data"].get("speakers", []).copy()
+                frontend_speakers = data.get("speakers", [])
+                
+                # 根据前端传来的数据更新 speakers
+                for i, speaker in enumerate(updated_speakers):
+                    # 找到对应的前端 speaker
+                    frontend_speaker = next(
+                        (s for s in frontend_speakers if s["speakerKey"] == speaker["speakerKey"]), 
+                        None
+                    )
+                    if frontend_speaker:
+                        # 只更新显示名称，保持其他字段不变
+                        speaker.update({
+                            "speakerDisplayName": frontend_speaker["speakerDisplayName"],
+                            "speaker_name": frontend_speaker["speaker_name"]
+                        })
+                
+                # 更新 content
                 original_content["data"].update({
                     "segments": updated_segments,
                     "speakers": data.get("speakers", []),  # 更新说话人列表
