@@ -70,6 +70,7 @@ class SpeechService:
             # 2. 处理说话人分离结果，格式化为飞书妙记风格
             logger.info("开始处理说话人分离结果...")
             speakers_data = []
+            colors = ['#409EFF', '#F56C6C']
             for i, segment in enumerate(res[0]["sentence_info"]):
                 logger.debug(f"处理第 {i+1} 个语音片段")
                 # 移除标记符号并提取纯文本
@@ -79,6 +80,9 @@ class SpeechService:
                 speaker_data = {
                     "speaker_id": f"speaker_{segment['spk']}",
                     "speaker_name": f"说话人 {segment['spk'] + 1}",
+                    "speakerKey": f"speaker_{segment['spk']}",
+                    "speakerDisplayName": f"说话人 {segment['spk'] + 1}",
+                    "color": colors[segment['spk'] % len(colors)],
                     "start_time": round(segment['start'] / 1000, 2),
                     "end_time": round(segment['end'] / 1000, 2),
                     "text": text.strip(),
@@ -92,6 +96,17 @@ class SpeechService:
                 speakers_data.append(speaker_data)
                 logger.debug(f"语音片段处理结果: {speaker_data}")
             
+            # 构建标准格式的 speakers
+            speakers = [
+                {
+                    "speakerKey": f"speaker_{i}",
+                    "speakerDisplayName": f"说话人 {i + 1}",
+                    "color": colors[i % len(colors)],
+                    "speaker_id": f"speaker_{i}",
+                    "speaker_name": f"说话人 {i + 1}"
+                } for i in set(seg['spk'] for seg in res[0]["sentence_info"])
+            ]
+            
             # 3. 构建识别结果
             logger.info("开始构建最终识别结果...")
             recognition_result = {
@@ -102,12 +117,7 @@ class SpeechService:
                     "language": language,
                     "full_text": rich_transcription_postprocess(res[0]["text"]),
                     "segments": speakers_data,
-                    "speakers": [
-                        {
-                            "id": f"speaker_{i}",
-                            "name": f"说话人 {i + 1}"
-                        } for i in set(seg['spk'] for seg in res[0]["sentence_info"])
-                    ],
+                    "speakers": speakers,  # 使用新的标准格式
                     "metadata": {
                         "has_timestamp": True,
                         "has_speaker": True,

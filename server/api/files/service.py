@@ -478,7 +478,7 @@ class FileService:
         try:
             logger.info(f"开始保存文件内容 - file_id: {file_id}")
             logger.info(f"data类型: {type(data)}")
-            logger.info(f"segments内容: {data.get('segments')}")  # 现在是 {'merged': [...]}
+            logger.info(f"segments内容: {data.get('segments')}")
             
             # 1. 获取转写文件路径
             transcript_dir = os.path.join(self.config.transcripts_dir, file_id)
@@ -505,6 +505,93 @@ class FileService:
             # 3. 确保data字段存在
             if "data" not in original_content:
                 original_content["data"] = {}
+            
+            # 3.1 如果是第一次保存（没有 speakers 或 speakers 格式是旧的），初始化标准格式的 speakers
+            if not original_content["data"].get("speakers") or (
+                original_content["data"].get("speakers") and 
+                "speakerKey" not in original_content["data"]["speakers"][0]
+            ):
+                # 初始化标准格式的 speakers
+                original_content["data"]["speakers"] = [
+                    {
+                        "speakerKey": "speaker_0",
+                        "speakerDisplayName": "说话人 1",
+                        "color": "#409EFF",
+                        "speaker_id": "speaker_0",
+                        "speaker_name": "说话人 1"
+                    },
+                    {
+                        "speakerKey": "speaker_1",
+                        "speakerDisplayName": "说话人 2",
+                        "color": "#F56C6C",
+                        "speaker_id": "speaker_1",
+                        "speaker_name": "说话人 2"
+                    }
+                ]
+            
+            # 3.2 处理说话人更新的情况
+            if data.get('type') == 'speaker_update':
+                logger.info("处理说话人更新")
+                segments_data = data.get('segments', {}).get('merged', [])
+                updated_segments = original_content.get("data", {}).get("segments", []).copy()
+                
+                # 根据 segmentId 更新说话人信息
+                for segment in segments_data:
+                    for subsegment in segment.get('subSegments', []):
+                        # 获取新的说话人信息
+                        speaker_info = {
+                            'speaker_id': subsegment.get('speakerKey'),
+                            'speaker_name': subsegment.get('speakerDisplayName'),
+                            'speakerKey': subsegment.get('speakerKey'),
+                            'speakerDisplayName': subsegment.get('speakerDisplayName'),
+                            'color': subsegment.get('color', '#409EFF')  # 添加 color 字段
+                        }
+                        
+                        # 更新所有具有相同 segmentId 的段落
+                        segment_id = subsegment.get('segmentId')
+                        for i, orig_segment in enumerate(updated_segments):
+                            if orig_segment.get('segmentId') == segment_id:
+                                updated_segments[i].update(speaker_info)
+                
+                # 更新 content，保持原有格式
+                original_content["data"].update({
+                    "segments": updated_segments,
+                    "speakers": data.get("speakers", []),  # 更新说话人列表
+                    "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+                
+                # 保存更新后的内容
+                if not safe_write_json(original_path, original_content):
+                    return {"code": 500, "message": "保存内容失败"}
+                
+                # 更新metadata
+                metadata_path = os.path.join(transcript_dir, 'metadata.json')
+                current_metadata = {}
+                if os.path.exists(metadata_path):
+                    try:
+                        with open(metadata_path, 'r', encoding='utf-8') as f:
+                            current_metadata = json.load(f)
+                    except Exception as e:
+                        logger.error(f"读取metadata失败: {str(e)}")
+                
+                current_metadata.update({
+                    'last_modified': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'segments_count': len(updated_segments),
+                    'speakers_count': len(data.get('speakers', [])),
+                    'has_backup': True
+                })
+                
+                if not safe_write_json(metadata_path, current_metadata):
+                    logger.warning("元数据更新失败")
+                
+                return {
+                    "code": 200,
+                    "message": "保存成功",
+                    "data": {
+                        "file_id": file_id,
+                        "updated_at": current_metadata['last_modified']
+                    }
+                }
             
             # 4. 获取原有segments数据
             original_data = original_content.get("data", {})

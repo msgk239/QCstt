@@ -91,22 +91,7 @@ const route = useRoute()
 // 状态
 const file = ref(null)
 const segments = ref([])
-const speakers = ref([
-  {
-    speakerKey: 'speaker_0',
-    speakerDisplayName: '说话人 1',
-    color: '#409EFF',
-    speaker_id: 'speaker_0',
-    speaker_name: '说话人 1'
-  },
-  {
-    speakerKey: 'speaker_1',
-    speakerDisplayName: '说话人 2',
-    color: '#F56C6C',
-    speaker_id: 'speaker_1',
-    speaker_name: '说话人 2'
-  }
-])
+const speakers = ref([])  // 初始为空数组，而不是 null
 const saving = ref(false)
 
 // 对话框状态
@@ -123,6 +108,9 @@ const playbackRate = ref(1)
 
 // 音频相关
 const audio = ref(new Audio())
+
+// 添加对 Transcript 组件的引用
+const transcriptRef = ref(null)
 
 // 初始化音频
 const initAudio = async () => {
@@ -261,6 +249,39 @@ const getOriginalFilename = (fullname) => {
   return fullname.split('_').slice(2).join('_')
 }
 
+// 初始化默认说话人
+const initDefaultSpeakers = () => {
+  return [
+    {
+      speakerKey: 'speaker_0',
+      speakerDisplayName: '说话人 1',
+      color: '#409EFF',
+      speaker_id: 'speaker_0',
+      speaker_name: '说话人 1'
+    },
+    {
+      speakerKey: 'speaker_1',
+      speakerDisplayName: '说话人 2',
+      color: '#F56C6C',
+      speaker_id: 'speaker_1',
+      speaker_name: '说话人 2'
+    }
+  ]
+}
+
+// 在加载文件内容时初始化 speakers
+const loadFileContent = async () => {
+  try {
+    const response = await fileApi.getContent(route.params.id)
+    if (response.code === 200) {
+      speakers.value = response.data?.speakers || []
+      // ... 其他数据加载
+    }
+  } catch (error) {
+    console.error('加载文件内容失败:', error)
+  }
+}
+
 // 提取加载文件数据的方法
 const loadFileData = async () => {
   console.log('开始加载文件数据')
@@ -287,11 +308,11 @@ const loadFileData = async () => {
   if (!speakers.value.length) {
     const colors = ['#409EFF', '#F56C6C', '#67C23A', '#E6A23C', '#909399']
     speakers.value = formattedData.speakers.map((speaker, index) => ({
-      speakerKey: speaker.id || `speaker_${index}`,
-      speakerDisplayName: speaker.name || `说话人 ${index + 1}`,
-      color: colors[index % colors.length],
-      speaker_id: speaker.id || `speaker_${index}`,
-      speaker_name: speaker.name || `说话人 ${index + 1}`
+      speakerKey: speaker.speakerKey || speaker.id || `speaker_${index}`,
+      speakerDisplayName: speaker.speakerDisplayName || speaker.name || `说话人 ${index + 1}`,
+      color: speaker.color || colors[index % colors.length],
+      speaker_id: speaker.speaker_id || speaker.id || `speaker_${index}`,
+      speaker_name: speaker.speaker_name || speaker.name || `说话人 ${index + 1}`
     }))
   }
   
@@ -443,6 +464,36 @@ const handleSpeakerChange = async (updatedSegment) => {
 const getSpeakerName = (segment) => {
   // 只使用 speakerDisplayName
   return segment.speakerDisplayName
+}
+
+// 添加 handleSave 函数
+const handleSave = async (options = {}) => {
+  try {
+    if (options.type === 'speaker_update') {
+      // 从 Transcript 组件获取合并的段落数据
+      const transcriptData = transcriptRef.value.mergedSegments
+      
+      // 添加发送数据的日志
+      console.log('保存说话人数据:\n', JSON.stringify({
+        segments: transcriptData,
+        speakers: speakers.value
+      }, null, 2))
+
+      await fileApi.saveContent(route.params.id, {
+        type: 'speaker_update',
+        segments: {
+          merged: transcriptData
+        },
+        speakers: speakers.value
+      })
+      ElMessage.success('说话人更新成功')
+    } else {
+      // ... 保持原有逻辑
+    }
+  } catch (error) {
+    console.error('保存失败:', error)
+    ElMessage.error('保存失败')
+  }
 }
 </script>
 
