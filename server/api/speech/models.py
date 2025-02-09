@@ -34,21 +34,23 @@ class ModelService:
         model_py_path = os.path.join(SENSEVOICE_DIR, "model.py")
         
         self.model = AutoModel(
-            model=model_dir,
+            model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/SenseVoiceSmall"),
+            spk_model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/speech_campplus_sv_zh-cn_16k-common"),
+            vad_model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"),
             trust_remote_code=False,
+            check_latest=False,  #禁用检查最新版本的模型
+            local_files_only=True,  # 强制只使用本地缓存
+            disable_update=True,  # 禁用 FunASR 版本检查
             remote_code=model_py_path,
-            vad_model="fsmn-vad",
             vad_kwargs={"max_single_segment_time": 30000},
-            spk_model="cam++",
             spk_mode="vad_segment",
             spk_kwargs={
                 "cb_kwargs": {"merge_thr": 0.5},
                 "return_spk_res": True
             },
             device="cpu",
-            disable_update=True,
             log_level="DEBUG",
-            ncpu=4,
+            ncpu=6,
             batch_size=1
         )
 

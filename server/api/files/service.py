@@ -639,14 +639,51 @@ class FileService:
                 # 后续更新：只更新匹配的segment
                 updated_segments = original_segments.copy()  # 复制原有的所有segments
                 segment = data.get("segments")
+                logger.info(f"收到的前端数据: {json.dumps(segment, ensure_ascii=False)}")
+                logger.info(f"原始segments数据: {json.dumps(updated_segments, ensure_ascii=False)}")
                 
-                # 找到并更新匹配的segment
+                # 遍历前端发送的 subSegments
                 for sub_segment in segment.get("subSegments", []):
+                    subsegment_id = sub_segment.get("subsegmentId")
+                    logger.info(f"处理子段落 - subsegment_id: {subsegment_id}")
+                    logger.info(f"子段落内容: {json.dumps(sub_segment, ensure_ascii=False)}")
+                    
+                    if not subsegment_id:
+                        logger.warning("子段落缺少 subsegmentId，跳过")
+                        continue
+                        
+                    # 在原始数据中查找匹配的段落
+                    found = False
                     for i, orig_segment in enumerate(updated_segments):
-                        if orig_segment.get("subsegmentId") == sub_segment.get("subsegmentId"):
-                            # 更新匹配的segment
-                            updated_segments[i] = {**orig_segment, **sub_segment}
-                            break
+                        orig_subsegment_id = orig_segment.get("subsegmentId")
+                        logger.info(f"对比原始段落 - subsegmentId: {orig_subsegment_id}")
+                        
+                        # 提取时间部分进行匹配
+                        try:
+                            # 从 ID 中提取时间部分 (例如从 "speaker_1-0-0.63" 提取 "0-0.63")
+                            time_part = subsegment_id.split("-", 1)[1]
+                            orig_time_part = orig_subsegment_id.split("-", 1)[1]
+                            
+                            logger.info(f"对比时间部分 - 新: {time_part}, 原: {orig_time_part}")
+                            
+                            if time_part == orig_time_part:
+                                old_text = orig_segment.get("text", "")
+                                new_text = sub_segment.get("text", old_text)
+                                logger.info(f"找到匹配段落 - 原文本: {old_text}")
+                                logger.info(f"更新为新文本: {new_text}")
+                                
+                                # 只更新文本内容
+                                updated_segments[i]["text"] = new_text
+                                found = True
+                                break
+                        except Exception as e:
+                            logger.warning(f"处理段落ID时出错: {str(e)}")
+                            continue
+                    
+                    if not found:
+                        logger.warning(f"未找到匹配的段落 - subsegment_id: {subsegment_id}")
+
+                logger.info(f"更新后的segments数据: {json.dumps(updated_segments, ensure_ascii=False)}")
             
             # 7. 更新content
             original_content["data"].update({
