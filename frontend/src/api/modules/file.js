@@ -273,6 +273,24 @@ export function exportFile(fileId, format) {
 }
 
 /**
+ * 导出转写内容
+ * @param {string} fileId - 文件ID
+ * @param {string} format - 导出格式：'word' | 'pdf' | 'txt' | 'md' | 'srt'
+ * @returns {Promise<Blob>}
+ */
+export function exportTranscript(fileId, format) {
+  return request({
+    url: `/api/v1/files/${fileId}/transcript/export`,
+    method: 'get',
+    params: { format },
+    responseType: 'blob',
+    headers: {
+      'Accept': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    }
+  })
+}
+
+/**
  * 格式化文件数据
  * @param {Object} response - API响应数据
  * @returns {{
@@ -404,6 +422,7 @@ export const fileApi = {
   update: updateFile,
   getAudio: getAudioFile,
   export: exportFile,
+  exportTranscript,
   batchDelete: batchDeleteFiles,
   getTranscript,
   updateTranscript,

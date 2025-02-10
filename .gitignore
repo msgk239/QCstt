@@ -45,6 +45,12 @@ Thumbs.db
 *.ogg
 test.wav
 
+# Export files
+exports/
+exports/**
+server/exports/
+server/exports/**
+
 # Model files
 *.pth
 *.onnx

@@ -4,7 +4,7 @@
     <div class="editor-header">
       <h1>{{ formatDisplayName(fileName) }}</h1>
       <div class="header-tools">
-        <ExportToolbar />
+        <ExportToolbar @export="handleExport"/>
         <ShareToolbar />
         <StyleTemplateToolbar />
         <div class="divider"></div>
@@ -492,6 +492,35 @@ const handleSave = async (options = {}) => {
   } catch (error) {
     console.error('保存失败:', error)
     ElMessage.error('保存失败')
+  }
+}
+
+// 添加导出处理函数
+const handleExport = async (formats) => {
+  try {
+    console.log('准备导出格式：', formats)
+    const format = formats[0] // 获取第一个格式
+    const response = await fileApi.exportTranscript(route.params.id, format)
+    
+    console.log('收到的响应：', response)
+    console.log('响应类型：', response.type) // 查看 Blob 的 MIME 类型
+    
+    // response 本身就是 Blob，不需要再次创建
+    const downloadLink = document.createElement('a')
+    downloadLink.href = URL.createObjectURL(response) // 直接使用 response
+    downloadLink.download = `${formatDisplayName(file.value?.name || 'export')}.${format}`
+    console.log('下载链接：', downloadLink.href)
+    console.log('文件名：', downloadLink.download)
+    
+    document.body.appendChild(downloadLink)
+    downloadLink.click()
+    document.body.removeChild(downloadLink)
+    URL.revokeObjectURL(downloadLink.href)
+    
+    ElMessage.success('导出成功')
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败')
   }
 }
 </script>

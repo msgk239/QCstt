@@ -6,20 +6,20 @@
       </el-button>
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item>
-            <el-checkbox v-model="formats.word">Word文档</el-checkbox>
+          <el-dropdown-item @click="handleExport('word')">
+            Word文档
           </el-dropdown-item>
-          <el-dropdown-item>
-            <el-checkbox v-model="formats.pdf">PDF文件</el-checkbox>
+          <el-dropdown-item @click="handleExport('pdf')">
+            PDF文件
           </el-dropdown-item>
-          <el-dropdown-item>
-            <el-checkbox v-model="formats.txt">纯文本</el-checkbox>
+          <el-dropdown-item @click="handleExport('txt')">
+            纯文本
           </el-dropdown-item>
-          <el-dropdown-item>
-            <el-checkbox v-model="formats.md">Markdown</el-checkbox>
+          <el-dropdown-item @click="handleExport('md')">
+            Markdown
           </el-dropdown-item>
-          <el-dropdown-item>
-            <el-checkbox v-model="formats.srt">SRT字幕</el-checkbox>
+          <el-dropdown-item @click="handleExport('srt')">
+            SRT字幕
           </el-dropdown-item>
         </el-dropdown-menu>
       </template>
@@ -41,14 +41,9 @@ const formats = ref({
 // 定义事件
 const emit = defineEmits(['export'])
 
-const handleExport = () => {
-  const selectedFormats = Object.entries(formats.value)
-    .filter(([_, selected]) => selected)
-    .map(([format]) => format)
-  
-  if (selectedFormats.length > 0) {
-    emit('export', selectedFormats)
-  }
+const handleExport = (format) => {
+  console.log('正在导出格式：', format)
+  emit('export', [format])
 }
 </script>
 

@@ -11,7 +11,7 @@ logger = Logger.get_logger(__name__)
 
 # 第三方库
 import uvicorn
-from fastapi import FastAPI, UploadFile, File, Form, Query, Request, Body
+from fastapi import FastAPI, UploadFile, File, Form, Query, Request, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -26,6 +26,7 @@ from .models import (
     FileListResponse,
     RecognitionProgressResponse
 )
+from .files.export import export_service  # 导入导出服务
 
 # FastAPI 应用配置
 app = FastAPI()
@@ -197,7 +198,15 @@ async def rename_file(file_id: str, new_name: str = Form(...)):
 
 @app.get("/api/v1/files/{file_id}/transcript", response_model=FileResponse)
 async def get_transcript(file_id: str):
+    """获取转写内容的原始数据"""
     return file_service.get_recognition_result(file_id)
+
+@app.get("/api/v1/files/{file_id}/transcript/export")
+async def export_transcript(file_id: str, format: str = Query(..., description="导出格式(word/pdf/txt/md/srt)")):
+    """
+    导出转写内容为指定格式
+    """
+    return await export_service.handle_export_request(file_id, format)
 
 @app.put("/api/v1/files/{file_id}/transcript", response_model=BaseResponse)
 async def update_transcript(file_id: str, data: dict):
