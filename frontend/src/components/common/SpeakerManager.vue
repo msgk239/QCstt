@@ -144,7 +144,17 @@ const handleButtonClick = () => {
 
 const getSpeakerColor = () => {
   const speaker = props.speakers.find(s => s.speakerKey === props.segment.speakerKey)
-  return speaker?.color || '#409EFF'
+  if (speaker?.color) {
+    return speaker.color
+  }
+  // 根据说话人名字来决定颜色
+  const speakerName = speaker?.speakerDisplayName || speaker?.speaker_name || ''
+  if (speakerName.includes('主催')) {
+    return '#409EFF'  // 蓝色
+  } else if (speakerName.includes('被催')) {
+    return '#F56C6C'  // 红色
+  }
+  return '#67C23A'  // 其他说话人默认绿色
 }
 
 const getSpeakerName = () => {
