@@ -76,4 +76,11 @@ FunASR/**
 
 # Storage directory
 storage/
-storage/** 
+storage/**
+
+# Pytest
+.pytest_cache/
+.pytest_cache/** 
+
+shuchu/
+shuchu/**
