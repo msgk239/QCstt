@@ -67,6 +67,10 @@ const props = defineProps({
   currentTime: {
     type: Number,
     default: 0
+  },
+  data: {
+    type: Object,
+    default: () => {}
   }
 })
 
@@ -294,17 +298,20 @@ const isWordPlaying = (word) => {
          props.currentTime <= (word.end + buffer)
 }
 
+const isFirstUpdate = ref(true)  // 添加一个标志位来追踪是否为真正的首次更新
 
 watch(() => props.segments, (newVal) => {
-    if (newVal.length > 0 && mergedSegmentsCache.value.length === 0) {
+    if (newVal.length > 0) {
       nextTick(() => {
-        const merged = mergeSegments(newVal, true)
-        if (merged.length > 0) {
-          // 发送所有合并后的数据
-          console.log('首次更新数据:\n', JSON.stringify({merged}, null, 2));
-          
-          // 一次性发送所有 segments
-          emit('segment-update', {merged})  // 发送整个数组
+        // 更准确地检查 updated_at 字段
+        const isOriginalTranscript = props.data && 'updated_at' in props.data
+        
+        if (isOriginalTranscript) {
+          const merged = mergeSegments(newVal, true)
+          if (merged.length > 0) {
+            emit('segment-update', {merged})
+            console.log('更新原始转写文件数据:\n', JSON.stringify({merged}, null, 2));
+          }
         }
       })
     }
