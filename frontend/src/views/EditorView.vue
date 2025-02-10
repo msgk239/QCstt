@@ -298,7 +298,7 @@ const loadFileData = async () => {
       speakerDisplayName: segment.speaker_name || `说话人 ${index + 1}`,
       color: segment.color || '#409EFF',
       isSelected: false,
-      subsegmentId: `${segment.speaker_id || `speaker_${index}`}-${segment.start_time || 0}-${segment.end_time || 0}`
+      subsegmentId: segment.subsegmentId || `subsegment_${segment.start_time || 0}-${segment.end_time || 0}`
     }
     
     return safeSegment
@@ -312,7 +312,7 @@ const loadFileData = async () => {
       speakerDisplayName: speaker.speakerDisplayName || speaker.name || `说话人 ${index + 1}`,
       color: speaker.color || colors[index % colors.length],
       speaker_id: speaker.speaker_id || speaker.id || `speaker_${index}`,
-      speaker_name: speaker.speaker_name || speaker.name || `说话人 ${index + 1}`
+      speaker_name: speaker.speaker_name || speaker.name || `说话人 ${index + 1}`,
     }))
   }
   

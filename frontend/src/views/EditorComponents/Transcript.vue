@@ -298,19 +298,21 @@ const isWordPlaying = (word) => {
          props.currentTime <= (word.end + buffer)
 }
 
-const isFirstUpdate = ref(true)  // 添加一个标志位来追踪是否为真正的首次更新
+const isFirstUpdate = ref(true)  // 保留这个标志位
 
 watch(() => props.segments, (newVal) => {
     if (newVal.length > 0) {
       nextTick(() => {
-        // 更准确地检查 updated_at 字段
-        const isOriginalTranscript = props.data && 'updated_at' in props.data
+        // 修改判断逻辑：当是首次更新或没有 updated_at 字段时都需要更新
+        const shouldUpdate = isFirstUpdate.value || 
+                           (props.data && !props.data.updated_at)
         
-        if (isOriginalTranscript) {
+        if (shouldUpdate) {
           const merged = mergeSegments(newVal, true)
           if (merged.length > 0) {
             emit('segment-update', {merged})
-            console.log('更新原始转写文件数据:\n', JSON.stringify({merged}, null, 2));
+            console.log('首次更新转写文件数据:\n', JSON.stringify({merged}, null, 2));
+            isFirstUpdate.value = false  // 更新完成后设置标志位
           }
         }
       })
@@ -352,8 +354,8 @@ const mergeSegments = (rawSegments, isFirstMerge = false) => {
         result.push(currentGroup)
       }
 
-      // 使用第一个子段落的 segmentId 或生成新的
-      const segmentId = segment.segmentId || `${currentKey}_${nanoid(6)}`
+      // 修改这里：使用纯随机ID
+      const segmentId = segment.segmentId || `segment_${nanoid(6)}`
       
       // 保留更多原始数据
       currentGroup = {

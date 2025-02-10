@@ -545,20 +545,13 @@ class FileService:
                         'color': segment.get('color', '#409EFF')
                     }
                     
-                    # 更新所有具有相同 segmentId 的段落和其子段落
-                    segment_id = segment.get('segmentId')
-                    for i, orig_segment in enumerate(updated_segments):
-                        if orig_segment.get('segmentId') == segment_id:
-                            # 更新主段落的说话人信息
-                            updated_segments[i].update(speaker_info)
-                            
-                            # 同时更新子段落的说话人信息
-                            if 'subSegments' in segment:
-                                for subsegment in segment['subSegments']:
-                                    subsegment_id = subsegment.get('subsegmentId')
-                                    # 找到对应的原始子段落并更新
-                                    if subsegment_id == orig_segment.get('subsegmentId'):
-                                        updated_segments[i].update(speaker_info)
+                    # 遍历前端传来的子段落
+                    for subsegment in segment.get('subSegments', []):
+                        # 在原始数据中查找匹配的子段落
+                        for i, orig_segment in enumerate(updated_segments):
+                            if orig_segment.get('subsegmentId') == subsegment.get('subsegmentId'):
+                                # 更新找到的子段落的说话人信息
+                                updated_segments[i].update(speaker_info)
                 
                 # 更新 speakers
                 updated_speakers = original_content["data"].get("speakers", []).copy()
