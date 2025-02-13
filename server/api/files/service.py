@@ -199,7 +199,7 @@ class FileService:
                     "original_filename": original_filename  # 确保原始文件名字段存在
                 }
             }
-            logger.debug(f"\n最终响应: {response}")
+            #logger.debug(f"\n最终响应: {response}")
             return response
             
         except Exception as e:
@@ -396,7 +396,7 @@ class FileService:
     
     def get_audio_file(self, file_id: str):
         """获取音频文件"""
-        logger.error(f"=== 开始获取音频文件 === file_id: {file_id}")
+        logger.info(f"=== 开始获取音频文件 === file_id: {file_id}")
         try:
             # 获取文件路径
             file_info = self.get_file_path(file_id)
@@ -632,8 +632,8 @@ class FileService:
                 # 后续更新：只更新匹配的segment
                 updated_segments = original_segments.copy()  # 复制原有的所有segments
                 segment = data.get("segments")
-                logger.info(f"收到的前端数据: {json.dumps(segment, ensure_ascii=False)}")
-                logger.info(f"原始segments数据: {json.dumps(updated_segments, ensure_ascii=False)}")
+                #logger.info(f"收到的前端数据: {json.dumps(segment, ensure_ascii=False)}")
+                #logger.info(f"原始segments数据: {json.dumps(updated_segments, ensure_ascii=False)}")
                 
                 # 遍历前端发送的 subSegments
                 for sub_segment in segment.get("subSegments", []):
@@ -676,7 +676,7 @@ class FileService:
                     if not found:
                         logger.warning(f"未找到匹配的段落 - subsegment_id: {subsegment_id}")
 
-                logger.info(f"更新后的segments数据: {json.dumps(updated_segments, ensure_ascii=False)}")
+                #logger.info(f"更新后的segments数据: {json.dumps(updated_segments, ensure_ascii=False)}")
             
             # 7. 更新content
             original_content["data"].update({

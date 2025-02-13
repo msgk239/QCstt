@@ -84,3 +84,7 @@ storage/**
 
 shuchu/
 shuchu/**
+
+# Conda
+.conda/
+.conda/**

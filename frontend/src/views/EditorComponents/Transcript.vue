@@ -217,7 +217,7 @@ const handleContentChange = (event, segment) => {
   updatedSegment.text = updatedSegment.subSegments.map(sub => sub.text).join('');
 
   // 添加日志记录
-  console.log('段落更新数据:\n', JSON.stringify(updatedSegment, null, 2));
+  //console.log('段落更新数据:\n', JSON.stringify(updatedSegment, null, 2));
 
   emit('segment-update', updatedSegment);
 }
@@ -311,7 +311,7 @@ watch(() => props.segments, (newVal) => {
           const merged = mergeSegments(newVal, true)
           if (merged.length > 0) {
             emit('segment-update', {merged})
-            console.log('首次更新转写文件数据:\n', JSON.stringify({merged}, null, 2));
+            //console.log('首次更新转写文件数据:\n', JSON.stringify({merged}, null, 2));
             isFirstUpdate.value = false  // 更新完成后设置标志位
           }
         }

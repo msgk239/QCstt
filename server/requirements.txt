@@ -5,3 +5,4 @@ python-dotenv>=1.0.0
 pydub>=0.25.1
 soundfile>=0.12.1
 python-docx>=0.8.11
+psutil>=5.9.0

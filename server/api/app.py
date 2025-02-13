@@ -171,7 +171,7 @@ async def delete_file(file_id: str):
 async def update_file(file_id: str, data: dict = Body(...)):
     logger.info(f"收到更新请求 - file_id: {file_id}")
     logger.info(f"请求数据类型: {type(data)}")  # 添加类型检查
-    logger.info(f"请求数据: {data}")
+
     
     # 如果是字符串，尝试解析成字典
     if isinstance(data, str):
@@ -185,7 +185,7 @@ async def update_file(file_id: str, data: dict = Body(...)):
 # 文件资源
 @app.get("/api/v1/files/{file_id}/audio")
 async def get_audio_file(file_id: str):
-    logger.error(f"=== 收到音频文件请求 === file_id: {file_id}")
+    logger.info(f"=== 收到音频文件请求 === file_id: {file_id}")
     return file_service.get_audio_file(file_id)
 
 @app.get("/api/v1/files/{file_id}/path", response_model=BaseResponse)

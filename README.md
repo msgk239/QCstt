@@ -120,10 +120,12 @@ y2w/                           # 项目根目录
 ```bash
 # 在项目根目录下运行
 python -m server.api.app
+或者
+uvicorn server.api.app:app --reload
 ```
 
 ```
-
+g
 ### 路径处理
 所有文件路径操作都使用 `os.path` 处理，确保跨平台兼容：
 ```python

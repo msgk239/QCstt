@@ -484,7 +484,7 @@ const handleSave = async (options = {}) => {
       }
       
       // 在发送请求前打印最新数据
-      console.log('保存说话人数据:\n', JSON.stringify(saveData, null, 2))
+      //console.log('保存说话人数据:\n', JSON.stringify(saveData, null, 2))
 
       await fileApi.saveContent(route.params.id, saveData)
       ElMessage.success('说话人更新成功')
