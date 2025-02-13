@@ -2,7 +2,18 @@
   <div class="editor-view">
     <!-- 顶部标题和工具栏 -->
     <div class="editor-header">
-      <h1>{{ formatDisplayName(fileName) }}</h1>
+      <div class="header-left">
+        <el-button 
+          link
+          type="primary" 
+          @click="handleBack"
+          class="back-button"
+        >
+          <el-icon><Back /></el-icon>返回
+        </el-button>
+        <div class="divider"></div>
+        <h1>{{ formatDisplayName(fileName) }}</h1>
+      </div>
       <div class="header-tools">
         <ExportToolbar @export="handleExport"/>
         <ShareToolbar />
@@ -60,11 +71,12 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getFileDetail, formatFileData, getAudioFile, fileApi } from '@/api/modules/file'
 import { useFileStore } from '@/stores/fileStore'
 import { nanoid } from 'nanoid'
+import { Back } from '@element-plus/icons-vue'
 
 // 获取 store 实例
 const fileStore = useFileStore()
@@ -87,6 +99,7 @@ import { editorBus, EVENT_TYPES } from './EditorComponents/eventBus'
 
 // 路由
 const route = useRoute()
+const router = useRouter()
 
 // 状态
 const file = ref(null)
@@ -523,6 +536,10 @@ const handleExport = async (formats) => {
     ElMessage.error('导出失败')
   }
 }
+
+const handleBack = () => {
+  router.push({ name: 'home' })
+}
 </script>
 
 <style scoped>
@@ -542,6 +559,23 @@ const handleExport = async (formats) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.back-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.back-button:hover {
+  opacity: 0.8;
 }
 
 .editor-header h2 {
