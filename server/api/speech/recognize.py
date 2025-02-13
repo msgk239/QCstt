@@ -8,6 +8,7 @@ from .models import model
 import logging
 import re
 from .audio_utils import AudioConverter  # 添加导入
+from ..files.metadata import MetadataManager  # 添加导入
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class SpeechService:
         # 设置转写结果存储根目录
         self.transcripts_dir = os.path.join("storage", "transcripts")
         os.makedirs(self.transcripts_dir, exist_ok=True)
+        self.metadata = MetadataManager()  # 添加 metadata 管理器
     
     def get_languages(self) -> Dict:
         """获取支持的语言列表"""
@@ -36,19 +38,27 @@ class SpeechService:
             "data": self.SUPPORTED_LANGUAGES
         }
     
-    def process_audio(self, audio_file: bytes, language: str = "zh") -> Dict:
+    def process_audio(self, audio_file: bytes, language: str = "zh", file_id: str = None) -> Dict:
         """处理音频文件，进行语音识别
         
         Args:
             audio_file: 音频文件的二进制数据
             language: 识别的目标语言，默认为中文
+            file_id: 音频文件ID，用于获取元数据
             
         Returns:
             包含识别结果的字典
         """
         try:
+            if not file_id:  # 检查是否有 file_id
+                logger.error("缺少必要参数 file_id")
+                return {
+                    "code": 400,
+                    "message": "缺少必要参数 file_id"
+                }
+            
             logger.info(f"=== 开始语音识别 ===")
-            logger.info(f"输入参数 - 目标语言: {language}, 音频大小: {len(audio_file)} bytes")
+            logger.info(f"输入参数 - 目标语言: {language}, 音频大小: {len(audio_file)} bytes, file_id: {file_id}")
             
             # 1. 音频格式转换
             logger.info("开始音频格式转换...")
@@ -59,20 +69,33 @@ class SpeechService:
             logger.info("开始调用模型进行识别...")
             res = model.generate(
                 input=audio_file,
-                output_timestamp=True,
-                language=language,
-                use_itn=True,
-                batch_size_s=60
+                language=language,  # 语言参数默认中文
             )
             logger.info("模型识别完成")
             logger.debug(f"模型原始输出: {res}")
+            
+            # 从元数据中获取音频时长
+            metadata_prefix = f"metadata_{file_id}"
+            logger.info(f"查找元数据，前缀: {metadata_prefix}")
+            logger.debug(f"当前元数据列表: {list(self.metadata.metadata.keys())}")  # 打印所有元数据键
+            
+            for key in self.metadata.metadata:
+                if key.startswith(metadata_prefix):
+                    metadata = self.metadata.get(key)
+                    if metadata and metadata.get('duration'):
+                        audio_duration = metadata['duration']
+                        logger.info(f"从元数据获取到音频时长: {audio_duration}秒")
+                        break
+            else:  # 如果没找到
+                logger.warning(f"未能从元数据获取到音频时长，metadata_prefix: {metadata_prefix}")
+                audio_duration = res[0].get("duration", 0)
             
             # 2. 处理说话人分离结果，格式化为飞书妙记风格
             logger.info("开始处理说话人分离结果...")
             speakers_data = []
             colors = ['#409EFF', '#F56C6C']
             for i, segment in enumerate(res[0]["sentence_info"]):
-                logger.debug(f"处理第 {i+1} 个语音片段")
+                #logger.debug(f"处理第 {i+1} 个语音片段")
                 # 移除标记符号并提取纯文本
                 text = segment["sentence"]
                 text = re.sub(r'<\|[^|]*\|>', '', text)
@@ -94,7 +117,7 @@ class SpeechService:
                     ]
                 }
                 speakers_data.append(speaker_data)
-                logger.debug(f"语音片段处理结果: {speaker_data}")
+
             
             # 构建标准格式的 speakers
             speakers = [
@@ -113,7 +136,7 @@ class SpeechService:
                 "code": 200,
                 "message": "success",
                 "data": {
-                    "duration": round(res[0].get("duration", 0), 2),
+                    "duration": round(audio_duration, 2),  # 使用从元数据获取的时长
                     "language": language,
                     "full_text": rich_transcription_postprocess(res[0]["text"]),
                     "segments": speakers_data,
@@ -121,12 +144,12 @@ class SpeechService:
                     "metadata": {
                         "has_timestamp": True,
                         "has_speaker": True,
-                        "has_emotion": True
+                        "has_emotion": False
                     }
                 }
             }
-            logger.info(f"语音识别完成，总时长: {recognition_result['data']['duration']}秒")
-            logger.debug(f"最终识别结果: {recognition_result}")
+            logger.info(f"语音识别完成，总时长: {audio_duration}秒")  # 使用正确的时长
+            
             
             return recognition_result
             

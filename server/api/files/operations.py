@@ -28,25 +28,43 @@ try:
         try:
             # 如果是 WAV 文件，直接使用 wave 模块
             if file_path.lower().endswith('.wav'):
-                return get_wav_duration(file_path)
-            
-            # 对于其他格式，尝试使用 FFmpeg
-            import subprocess
-            result = subprocess.run([
-                'ffmpeg', '-i', file_path, 
-                '-f', 'null', '-'
-            ], capture_output=True, text=True, stderr=subprocess.PIPE)
-            
-            # 从 FFmpeg 输出中解析时长
-            for line in result.stderr.split('\n'):
-                if 'Duration:' in line:
-                    time_str = line.split('Duration:')[1].split(',')[0].strip()
-                    h, m, s = time_str.split(':')
-                    duration = float(h) * 3600 + float(m) * 60 + float(s)
+                duration = get_wav_duration(file_path)
+                if duration is not None:
                     return duration
+            
+            # 对于其他格式，或者 WAV 读取失败时，使用 ffprobe
+            import subprocess
+            import json
+            
+            result = subprocess.run([
+                'ffprobe',
+                '-v', 'quiet',
+                '-print_format', 'json',
+                '-show_format',
+                '-show_streams',  # 添加流信息查询
+                '-i', file_path
+            ], capture_output=True, text=True, encoding='utf-8', errors='ignore')
+            
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                # 优先从 format 中获取时长
+                if 'format' in data and 'duration' in data['format']:
+                    duration = float(data['format']['duration'])
+                    logger.debug(f"从 format 获取到音频时长: {duration}秒")
+                    return duration
+                # 如果 format 中没有，尝试从音频流中获取
+                elif 'streams' in data:
+                    for stream in data['streams']:
+                        if stream.get('codec_type') == 'audio' and 'duration' in stream:
+                            duration = float(stream['duration'])
+                            logger.debug(f"从 stream 获取到音频时长: {duration}秒")
+                            return duration
+            
+            logger.error(f"无法获取音频时长，ffprobe 返回: {result.stdout}")
             return None
+            
         except Exception as e:
-            logger.error(f"Error getting duration for {file_path}: {e}")
+            logger.error(f"获取音频时长失败 {file_path}: {e}")
             return None
 
 except ImportError:

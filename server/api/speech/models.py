@@ -1,7 +1,13 @@
 import os
 from funasr import AutoModel
+import torch
+import multiprocessing
+import logging
+import psutil  # 添加这个导入来获取更详细的CPU信息
 
 __all__ = ['model']
+
+logger = logging.getLogger(__name__)
 
 class ModelService:
     """语音识别模型服务类，提供单例模型实例"""
@@ -33,25 +39,94 @@ class ModelService:
         model_dir = "iic/SenseVoiceSmall"
         model_py_path = os.path.join(SENSEVOICE_DIR, "model.py")
         
+        # 检测设备和CPU核心数
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        physical_cores = psutil.cpu_count(logical=False)  # 获取物理核心数
+        
+        # 获取详细的CPU信息
+        cpu_info = {
+            "物理CPU核心数": physical_cores,
+            "逻辑CPU核心数": psutil.cpu_count(logical=True),
+            "multiprocessing检测核心数": multiprocessing.cpu_count(),
+            "CPU使用率": f"{psutil.cpu_percent()}%",
+            "可用内存": f"{psutil.virtual_memory().available / 1024 / 1024 / 1024:.1f}GB",
+            "总内存": f"{psutil.virtual_memory().total / 1024 / 1024 / 1024:.1f}GB"
+        }
+        
+        # 打印CPU详细信息
+        logger.info("=== 系统资源信息 ===")
+        for key, value in cpu_info.items():
+            logger.info(f"{key}: {value}")
+        
+        # 获取系统内存信息
+        total_memory_gb = psutil.virtual_memory().total / 1024 / 1024 / 1024
+        logger.info(f"系统总内存: {total_memory_gb:.1f}GB")
+        
+        # 根据设备类型设置参数
+        if device == "cuda:0":
+            # GPU模式下的配置
+            config = {
+                "device": device,
+                "batch_size_s": 60,  
+                "log_level": "INFO",
+                "vad_kwargs": {
+                    "max_single_segment_time": 60000  # 默认是30秒，这里设置为60秒    
+                },
+                            # 模型推理配置
+                "cache": {},                # 每次调用使用新的缓存
+                "output_timestamp": True,   # 输出时间戳信息
+                "use_itn": True,           # 启用标点符号和数字的文本正则化
+                "ban_emo_unk": True       # 禁用情感标签
+            }
+            logger.info("=== GPU模式配置 ===")
+            logger.info(f"使用GPU模式")
+            logger.info(f"CUDA是否可用: {torch.cuda.is_available()}")
+            logger.info(f"GPU设备名称: {torch.cuda.get_device_name(0)}")
+            logger.info(f"GPU显存总量: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.0f}MB")
+        else:
+            # CPU模式下的配置
+            recommended_cpu = max(1, physical_cores - 1)
+            config = {
+                "device": device,
+                "batch_size_s": 60,  # CPU模式下会被强制为单个处理
+                "ncpu": recommended_cpu,  # CPU模式下有效
+                "log_level": "INFO",
+                "vad_kwargs": {
+                    "max_single_segment_time": 60000  # 默认是30秒，这里设置为60秒
+                },
+                # 模型推理配置
+                "cache": {},                # 每次调用使用新的缓存
+                "output_timestamp": True,   # 输出时间戳信息
+                "use_itn": True,           # 启用标点符号和数字的文本正则化
+                "ban_emo_unk": True       # 禁用情感标签
+            }
+            logger.info("=== CPU模式配置 ===")
+            logger.info(f"使用CPU模式")
+            logger.info(f"物理核心数: {physical_cores}")
+            logger.info(f"建议使用的核心数: {recommended_cpu} (物理核心数-1)")
+        
         self.model = AutoModel(
-            model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/SenseVoiceSmall"),
-            spk_model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/speech_campplus_sv_zh-cn_16k-common"),
-            vad_model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"),
-            trust_remote_code=False,
-            check_latest=False,  #禁用检查最新版本的模型
-            local_files_only=True,  # 强制只使用本地缓存
-            disable_update=True,  # 禁用 FunASR 版本检查
-            remote_code=model_py_path,
-            vad_kwargs={"max_single_segment_time": 30000},
-            spk_mode="vad_segment",
+            # 模型路径配置
+            model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/SenseVoiceSmall"),  # 主模型路径
+            spk_model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/speech_campplus_sv_zh-cn_16k-common"),  # 说话人分离模型
+            vad_model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"),  # 语音活动检测模型
+            
+            # 性能优化配置
+            trust_remote_code=False,    # 使用内部集成版本，而不是远程代码
+            check_latest=False,         # 禁用检查最新版本的模型
+            local_files_only=True,      # 强制只使用本地缓存的模型文件
+            disable_update=True,        # 禁用 FunASR 版本检查
+            remote_code=model_py_path,  # 指定模型代码路径
+            
+            # 说话人分离配置
+            spk_mode="vad_segment",     # 基于VAD切分的说话人分离模式
             spk_kwargs={
-                "cb_kwargs": {"merge_thr": 0.5},
-                "return_spk_res": True
+                "cb_kwargs": {"merge_thr": 0.5},  # 说话人聚类的阈值
+                "return_spk_res": True   # 返回说话人分离结果
             },
-            device="cpu",
-            log_level="DEBUG",
-            ncpu=6,
-            batch_size=1
+            
+            # 动态配置参数
+            **config  # 包含device(设备)、batch_size_s(批处理大小)、ncpu(CPU核心数)、log_level(日志级别)
         )
 
         

@@ -245,11 +245,11 @@ class FileService:
             "message": "识别结果不存在"
         }
     
-    def process_audio(self, audio_file: bytes, language: str = "auto") -> Dict:
+    def process_audio(self, audio_file: bytes, language: str = "auto", file_id: str = None) -> Dict:
         """处理音频文件，进行语音识别"""
-        try:
+        try:                
             # 调用语音识别服务
-            result = speech_service.process_audio(audio_file, language)
+            result = speech_service.process_audio(audio_file, language, file_id=file_id)
             
             if result.get("code") == 200:
                 # 保存识别结果
@@ -293,6 +293,7 @@ class FileService:
     def start_recognition(self, file_id: str) -> Dict:
         """开始语音识别"""
         try:
+            logger.info(f"开始识别 file_id: {file_id}")
             # 获取文件路径
             file_info = self.get_file_path(file_id)
             if file_info["code"] != 200:
@@ -309,7 +310,8 @@ class FileService:
                 audio_content = f.read()
             
             # 调用语音识别服务
-            result = speech_service.process_audio(audio_content, language)
+            logger.info(f"准备调用语音识别服务，file_id: {file_id}")
+            result = speech_service.process_audio(audio_content, language, file_id=file_id)
             
             # 如果识别成功，更新文件状态和保存结果
             if result["code"] == 200:
