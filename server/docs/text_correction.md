@@ -52,3 +52,5 @@ similarity_threshold: 0.8 # 自定义阈值
 - 支持大规模文本实时处理
 - 需要定期根据实际效果更新目标词表
 - 建议根据实际场景调整相似度阈值
+
+python -m server.api.speech.test_correction

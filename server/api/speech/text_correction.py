@@ -25,7 +25,11 @@ class TextCorrector:
     def load_config(self) -> None:
         """从txt文件更新yaml配置文件，并加载配置"""
         try:
-            # 使用相对于程序的路径
+            # 添加自定义的YAML表示方法
+            def represent_list(dumper, data):
+                return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+            yaml.add_representer(list, represent_list)
+            
             keywords_file = os.path.join(self.base_dir, "keywords")
             keywords = []
             thresholds = {}  # 存储单独设置的阈值
@@ -82,7 +86,7 @@ class TextCorrector:
             
             # 保存更新后的配置
             with open(self.config_file, 'w', encoding='utf-8') as f:
-                yaml.dump(config, f, allow_unicode=True, sort_keys=False)
+                yaml.dump(config, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
             
             # 加载配置到内存
             for word, info in config['target_words'].items():
