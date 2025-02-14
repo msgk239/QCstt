@@ -54,3 +54,4 @@ similarity_threshold: 0.8 # 自定义阈值
 - 建议根据实际场景调整相似度阈值
 
 python -m server.api.speech.test_correction
+python -m server.api.speech.test_correct_recognition

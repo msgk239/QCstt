@@ -1,4 +1,3 @@
-# 使用相对导入
 from .text_correction import text_corrector
 from ..logger import get_logger
 
@@ -15,10 +14,7 @@ def test_correction():
     
     logger.info("开始测试文本纠正...")
     for text in test_cases:
-        corrected = text_corrector.correct_text(text)
-        logger.info(f"原文本: {text}")
-        logger.info(f"纠正后: {corrected}")
-        logger.info("-" * 20)
+        text_corrector.correct_text(text)
 
 if __name__ == "__main__":
     test_correction() 
