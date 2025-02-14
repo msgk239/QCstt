@@ -9,6 +9,7 @@ import logging
 import re
 from .audio_utils import AudioConverter  # 添加导入
 from ..files.metadata import MetadataManager  # 添加导入
+import time  # 添加这个导入
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class SpeechService:
         Returns:
             包含识别结果的字典
         """
+        start_time = time.perf_counter()  # 开始计时
         try:
             if not file_id:  # 检查是否有 file_id
                 logger.error("缺少必要参数 file_id")
@@ -67,12 +69,14 @@ class SpeechService:
             
             # 2. 使用已正确配置的model进行识别
             logger.info("开始调用模型进行识别...")
+            recognition_start = time.perf_counter()  # 模型识别开始时间
             res = model.generate(
                 input=audio_file,
                 language=language,  # 语言参数默认中文
             )
-            logger.info("模型识别完成")
-            logger.debug(f"模型原始输出: {res}")
+            recognition_time = time.perf_counter() - recognition_start  # 计算模型识别时间
+            logger.info(f"模型识别完成，识别耗时: {recognition_time:.2f}秒")
+            #logger.debug(f"模型原始输出: {res}")
             
             # 从元数据中获取音频时长
             metadata_prefix = f"metadata_{file_id}"
@@ -150,6 +154,15 @@ class SpeechService:
             }
             logger.info(f"语音识别完成，总时长: {audio_duration}秒")  # 使用正确的时长
             
+            total_time = time.perf_counter() - start_time  # 计算总处理时间
+            logger.info(f"语音识别完成，音频时长: {audio_duration:.2f}秒，总处理耗时: {total_time:.2f}秒，实时率: {audio_duration/total_time:.2f}x")
+            
+            # 在返回结果中添加处理时间信息
+            recognition_result["data"]["process_info"] = {
+                "total_time": round(total_time, 2),
+                "recognition_time": round(recognition_time, 2),
+                "rtf": round(audio_duration/total_time, 2)  # Real Time Factor
+            }
             
             return recognition_result
             

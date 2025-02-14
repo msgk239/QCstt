@@ -58,27 +58,31 @@ handler = RichHandler(
 
 class LogConfig:
     """日志配置类"""
-    # 修改日志级别为 DEBUG
-    LOG_LEVEL = logging.DEBUG  # 显示所有日志信息
-    LOG_DIR = os.path.join("server", "logs")  # 修改为 server/logs
-    LOG_FILENAME = "app.log"  # 主日志文件
-    ERROR_FILENAME = "error.log"  # 错误日志文件
-    MAX_BYTES = 10 * 1024 * 1024  # 10MB
-    BACKUP_COUNT = 5
-    DEBUG = True
+    # 日志级别配置
+    # DEBUG: 显示所有日志（开发调试用）
+    # INFO: 显示一般信息
+    # WARNING: 只显示警告和错误（生产环境推荐）
+    # ERROR: 只显示错误
+    LOG_LEVEL = logging.WARNING  # 当前使用 WARNING 级别
     
-    # 添加详细日志格式
-    DETAILED_FILE_FORMAT = '%(asctime)s [%(levelname)s] %(pathname)s:%(lineno)d:\n%(message)s'
-    # 保持控制台格式简短
+    # 调试模式开关
+    # True: 显示详细日志（开发环境）
+    # False: 精简日志（生产环境）
+    DEBUG = False
+    
+    # 控制台日志格式
     CONSOLE_FORMAT = "%(levelname)s: %(message)s"
     
-    # 文件日志格式也简化
-    FILE_FORMAT = '%(asctime)s %(levelname)s: %(message)s'
-    DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+    # FastAPI 配置
+    # True: 显示详细的API调试信息
+    # False: 关闭API调试信息（生产环境推荐）
+    FASTAPI_DEBUG = False
     
-    # FastAPI 相关配置
-    FASTAPI_DEBUG = True
-    FASTAPI_LOG_LEVEL = logging.DEBUG
+    # FastAPI 日志级别
+    # logging.DEBUG: 显示所有API相关日志
+    # logging.INFO: 显示一般API信息
+    # logging.WARNING: 只显示API警告和错误（生产环境推荐）
+    FASTAPI_LOG_LEVEL = logging.WARNING
 
 class JsonFormatter(logging.Formatter):
     """自定义 JSON 格式化器"""
@@ -146,10 +150,6 @@ class Logger:
         if cls._instance is not None:
             return cls._instance
             
-        # 确保日志目录存在
-        if not os.path.exists(LogConfig.LOG_DIR):
-            os.makedirs(LogConfig.LOG_DIR)
-        
         # 获取根日志记录器
         logger = logging.getLogger()
         
@@ -160,13 +160,7 @@ class Logger:
         # 设置日志级别
         logger.setLevel(logging.DEBUG if LogConfig.DEBUG else logging.INFO)
         
-        # 修改文件日志格式化器为自定义的 JSON 格式化器
-        file_formatter = JsonFormatter(
-            LogConfig.DETAILED_FILE_FORMAT,
-            datefmt=LogConfig.DATE_FORMAT
-        )
-        
-        # 1. 使用 RichHandler 替代普通的 StreamHandler
+        # 只使用 RichHandler 进行控制台输出
         console = Console(
             force_terminal=True,
         )
@@ -176,8 +170,8 @@ class Logger:
             tracebacks_show_locals=False,
             tracebacks_extra_lines=0,
             tracebacks_theme=None,
-            tracebacks_width=100,    # 限制宽度
-            tracebacks_suppress=[    # 在这里也添加抑制配置
+            tracebacks_width=100,
+            tracebacks_suppress=[
                 "uvicorn",
                 "fastapi",
                 "starlette",
@@ -190,41 +184,22 @@ class Logger:
             show_level=True,
             omit_repeated_times=True
         )
-        console_handler.addFilter(JsonFilter())  # 添加 JSON 过滤器
+        console_handler.addFilter(JsonFilter())
         console_handler.setFormatter(logging.Formatter(LogConfig.CONSOLE_FORMAT))
-        console_handler.setLevel(logging.DEBUG)  # 终端显示所有级别
+        console_handler.setLevel(logging.DEBUG)
         logger.addHandler(console_handler)
         
-        # 2. 主日志文件处理器
-        file_handler = RotatingFileHandler(
-            os.path.join(LogConfig.LOG_DIR, LogConfig.LOG_FILENAME),
-            maxBytes=LogConfig.MAX_BYTES,
-            backupCount=LogConfig.BACKUP_COUNT,
-            encoding='utf-8'
-        )
-        file_handler.setLevel(logging.DEBUG)  # 文件记录所有级别
-        file_handler.setFormatter(file_formatter)
-        logger.addHandler(file_handler)
-        
-        # 3. 错误日志文件处理器
-        error_handler = RotatingFileHandler(
-            os.path.join(LogConfig.LOG_DIR, LogConfig.ERROR_FILENAME),
-            maxBytes=LogConfig.MAX_BYTES,
-            backupCount=LogConfig.BACKUP_COUNT,
-            encoding='utf-8'
-        )
-        error_handler.setLevel(logging.ERROR)
-        error_handler.setFormatter(file_formatter)
-        logger.addHandler(error_handler)
-        
-        # 配置第三方库的日志级别
-        logging.getLogger("uvicorn").setLevel(logging.INFO)
-        logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+        # 第三方库日志级别配置
+        # WARNING: 只显示警告和错误（生产环境推荐）
+        # INFO: 显示一般信息（开发环境可用）
+        # DEBUG: 显示所有信息（调试时可用）
+        logging.getLogger("uvicorn").setLevel(logging.WARNING)
+        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
         logging.getLogger("python_multipart").setLevel(logging.WARNING)
-        logging.getLogger("fastapi").setLevel(LogConfig.FASTAPI_LOG_LEVEL)
+        logging.getLogger("fastapi").setLevel(logging.WARNING)
+        logging.getLogger("numba").setLevel(logging.WARNING)
         
-        # 添加请求处理器
-        cls.setup_request_handlers(logger)
+        # 要切换到开发模式，可以将上面的 WARNING 改为 INFO 或 DEBUG
         
         cls._instance = logger
         return logger

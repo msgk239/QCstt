@@ -373,12 +373,7 @@ class FileOperations:
             } 
 
     def get_audio_metadata(self, file_path: str) -> Dict:
-        """获取音频文件的元数据
-        Args:
-            file_path: 音频文件路径
-        Returns:
-            Dict: 包含音频元数据的字典
-        """
+        """获取音频文件的元数据"""
         try:
             # 先检查缓存
             cache_key = f"metadata_{os.path.basename(file_path)}"
@@ -394,8 +389,9 @@ class FileOperations:
                 'channels': None
             }
 
-            # 使用 FFmpeg 获取详细信息
+            # 使用 FFmpeg 获取详细信息，明确指定编码
             import subprocess
+            import json
             result = subprocess.run([
                 'ffprobe', 
                 '-v', 'quiet',
@@ -403,26 +399,46 @@ class FileOperations:
                 '-show_format',
                 '-show_streams',
                 file_path
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, encoding='utf-8', errors='ignore')  # 添加编码设置
 
-            if result.returncode == 0:
-                import json
-                probe_data = json.loads(result.stdout)
-                
-                # 获取格式信息
-                if 'format' in probe_data:
-                    format_data = probe_data['format']
-                    metadata['duration'] = float(format_data.get('duration', 0))
-                    metadata['format'] = format_data.get('format_name')
-                    metadata['bit_rate'] = int(format_data.get('bit_rate', 0))
-                
-                # 获取音频流信息
-                if 'streams' in probe_data:
-                    for stream in probe_data['streams']:
-                        if stream.get('codec_type') == 'audio':
-                            metadata['sample_rate'] = int(stream.get('sample_rate', 0))
-                            metadata['channels'] = int(stream.get('channels', 0))
-                            break
+            if result.returncode == 0 and result.stdout:  # 确保有输出
+                try:
+                    probe_data = json.loads(result.stdout)
+                    
+                    # 获取格式信息
+                    if 'format' in probe_data:
+                        format_data = probe_data['format']
+                        metadata['duration'] = float(format_data.get('duration', 0))
+                        metadata['format'] = format_data.get('format_name')
+                        metadata['bit_rate'] = int(format_data.get('bit_rate', 0))
+                    
+                    # 获取音频流信息
+                    if 'streams' in probe_data:
+                        for stream in probe_data['streams']:
+                            if stream.get('codec_type') == 'audio':
+                                metadata['sample_rate'] = int(stream.get('sample_rate', 0))
+                                metadata['channels'] = int(stream.get('channels', 0))
+                                break
+
+                except json.JSONDecodeError as je:
+                    logger.error(f"解析 FFprobe JSON 输出失败: {je}")
+                    return {
+                        'duration': None,
+                        'format': None,
+                        'bit_rate': None,
+                        'sample_rate': None,
+                        'channels': None
+                    }
+
+            else:
+                logger.error(f"FFprobe 命令执行失败，返回码: {result.returncode}")
+                return {
+                    'duration': None,
+                    'format': None,
+                    'bit_rate': None,
+                    'sample_rate': None,
+                    'channels': None
+                }
 
             # 缓存结果
             self.metadata.update(cache_key, metadata)

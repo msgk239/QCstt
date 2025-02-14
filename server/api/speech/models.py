@@ -43,24 +43,15 @@ class ModelService:
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         physical_cores = psutil.cpu_count(logical=False)  # 获取物理核心数
         
-        # 获取详细的CPU信息
+        # 获取基本系统信息
         cpu_info = {
-            "物理CPU核心数": physical_cores,
-            "逻辑CPU核心数": psutil.cpu_count(logical=True),
-            "multiprocessing检测核心数": multiprocessing.cpu_count(),
-            "CPU使用率": f"{psutil.cpu_percent()}%",
-            "可用内存": f"{psutil.virtual_memory().available / 1024 / 1024 / 1024:.1f}GB",
-            "总内存": f"{psutil.virtual_memory().total / 1024 / 1024 / 1024:.1f}GB"
+            "物理CPU核心数": physical_cores
         }
         
-        # 打印CPU详细信息
+        # 打印系统信息
         logger.info("=== 系统资源信息 ===")
         for key, value in cpu_info.items():
             logger.info(f"{key}: {value}")
-        
-        # 获取系统内存信息
-        total_memory_gb = psutil.virtual_memory().total / 1024 / 1024 / 1024
-        logger.info(f"系统总内存: {total_memory_gb:.1f}GB")
         
         # 根据设备类型设置参数
         if device == "cuda:0":
