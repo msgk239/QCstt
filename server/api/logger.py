@@ -63,12 +63,12 @@ class LogConfig:
     # INFO: 显示一般信息
     # WARNING: 只显示警告和错误（生产环境推荐）
     # ERROR: 只显示错误
-    LOG_LEVEL = logging.WARNING  # 当前使用 WARNING 级别
+    LOG_LEVEL = logging.DEBUG  # 修改为 DEBUG 级别
     
     # 调试模式开关
     # True: 显示详细日志（开发环境）
     # False: 精简日志（生产环境）
-    DEBUG = False
+    DEBUG = True  # 修改为 True
     
     # 控制台日志格式
     CONSOLE_FORMAT = "%(levelname)s: %(message)s"
@@ -76,13 +76,13 @@ class LogConfig:
     # FastAPI 配置
     # True: 显示详细的API调试信息
     # False: 关闭API调试信息（生产环境推荐）
-    FASTAPI_DEBUG = False
+    FASTAPI_DEBUG = True  # 修改为 True
     
     # FastAPI 日志级别
     # logging.DEBUG: 显示所有API相关日志
     # logging.INFO: 显示一般API信息
     # logging.WARNING: 只显示API警告和错误（生产环境推荐）
-    FASTAPI_LOG_LEVEL = logging.WARNING
+    FASTAPI_LOG_LEVEL = logging.DEBUG  # 修改为 DEBUG
 
 class JsonFormatter(logging.Formatter):
     """自定义 JSON 格式化器"""

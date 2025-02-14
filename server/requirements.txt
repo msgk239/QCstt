@@ -6,3 +6,5 @@ pydub>=0.25.1
 soundfile>=0.12.1
 python-docx>=0.8.11
 psutil>=5.9.0
+python-Levenshtein>=0.21.1
+pypinyin>=0.49.0

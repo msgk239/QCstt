@@ -44,6 +44,8 @@ Thumbs.db
 *.flac
 *.ogg
 test.wav
+server/api/speech/correction_config.yaml
+server/api/speech/keywords
 
 # Export files
 exports/
@@ -88,3 +90,4 @@ shuchu/**
 # Conda
 .conda/
 .conda/**
+server/api/speech/keywords
