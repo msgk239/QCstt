@@ -109,7 +109,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['speaker-select'])
+const emit = defineEmits(['speaker-select', 'update-speakers'])
 
 // 恢复内部状态
 const dialogVisible = ref(false)
@@ -143,18 +143,29 @@ const handleButtonClick = () => {
 }
 
 const getSpeakerColor = () => {
+  // 先查找当前说话人
   const speaker = props.speakers.find(s => s.speakerKey === props.segment.speakerKey)
+  
+  // 如果找到说话人且有颜色，直接返回
   if (speaker?.color) {
     return speaker.color
   }
+  
+  // 如果没找到说话人，但段落本身有颜色，返回段落的颜色
+  if (props.segment.color) {
+    return props.segment.color
+  }
+  
   // 根据说话人名字来决定颜色
-  const speakerName = speaker?.speakerDisplayName || speaker?.speaker_name || ''
+  const speakerName = props.segment.speakerDisplayName || props.segment.speaker_name || ''
+  
   if (speakerName.includes('主催')) {
     return '#409EFF'  // 蓝色
   } else if (speakerName.includes('被催')) {
     return '#F56C6C'  // 红色
   }
-  return '#67C23A'  // 其他说话人默认绿色
+  
+  return '#909399'  // 灰色作为默认值
 }
 
 const getSpeakerName = () => {
@@ -183,32 +194,33 @@ const handleNameConfirm = () => {
     return
   }
 
-  // 生成随机颜色
-  const colors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399']
-  const randomColor = colors[Math.floor(Math.random() * colors.length)]
-
-  // 使用新的格式生成speakerKey
-  const speakerKey = `custom_${Date.now()}`
+  // 直接使用当前段落的 speakerKey
+  const speakerKey = props.segment.speakerKey
   
+  // 继承当前说话人的颜色
+  let color = props.segment.color
+
   // 创建新说话人
   const newSpeaker = {
-    // 前端使用的字段（可变）
-    speakerKey,                                  // 当前说话人Key
-    speakerDisplayName: newSpeakerName.value.trim(),  // 显示用的名字
-    color: randomColor,                          // 显示颜色
-    
-    // 原始字段（不变）
-    speaker_id: null,                           // 新添加的说话人没有原始ID
-    speaker_name: null,                         // 新添加的说话人没有原始名字
-    
+    speakerKey,
+    speakerDisplayName: newSpeakerName.value.trim(),
+    color,
+    speaker_id: null,
+    speaker_name: null,
     selected: true
   }
 
+  console.log('添加新说话人前的状态:', {
+    currentSpeakers: localSpeakers.value,
+    newSpeaker,
+    propsSegment: props.segment
+  })
+
   // 更新本地列表
-  localSpeakers.value = [...localSpeakers.value, {
-    ...newSpeaker,
-    selected: true
-  }]
+  localSpeakers.value = [...localSpeakers.value, newSpeaker]
+
+  // 发出事件通知父组件更新说话人列表
+  emit('update-speakers', localSpeakers.value)
 
   // 设置选中的说话人
   selectedSpeaker.value = newSpeaker
@@ -246,20 +258,30 @@ const localSpeakers = ref(props.speakers.map(speaker => ({
   selected: false
 })))
 
-// 修改 watch 以确保深度监听
+// 添加对 speakers 的监听
 watch(() => props.speakers, (newSpeakers) => {
-  localSpeakers.value = newSpeakers.map(speaker => ({
-    // 前端使用的字段（可变）
-    speakerKey: speaker.speakerKey,
-    speakerDisplayName: speaker.speakerDisplayName,
-    color: speaker.color,
-    
-    // 原始字段（不变）
-    speaker_id: speaker.speaker_id,
-    speaker_name: speaker.speaker_name,
-    
-    selected: false
-  }))
+  if (newSpeakers && newSpeakers.length > 0) {
+    localSpeakers.value = newSpeakers.map(speaker => ({
+      ...speaker,
+      selected: false
+    }))
+  }
+}, { deep: true, immediate: true })
+
+// 添加 props 监听来检查 speakers 的传递
+watch(() => props.speakers, (newSpeakers) => {
+  console.log('SpeakerManager 接收到的 speakers:', {
+    speakers: newSpeakers,
+    managerId: props.managerId,
+    segment: props.segment
+  })
+}, { immediate: true })
+
+// 添加 watch 来监控 speakers 的变化
+watch(() => props.speakers, (newVal) => {
+  console.log('speakers 内容变化:', {
+    speakers: JSON.parse(JSON.stringify(newVal))
+  })
 }, { deep: true, immediate: true })
 
 // 修改选择处理函数
