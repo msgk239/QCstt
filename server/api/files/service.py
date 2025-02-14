@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from pydub import AudioSegment
 import time
 import json
+from urllib.parse import quote
 
 # 内部模块导入
 from .config import config
@@ -442,10 +443,13 @@ class FileService:
                 media_type = mime_types[extension]
                 logger.info(f"媒体类型: {media_type}")
             
+            # 对文件名进行 URL 编码
+            filename = quote(os.path.basename(file_path))
+            
             # 设置响应头
             headers = {
                 'Accept-Ranges': 'bytes',
-                'Content-Disposition': f'inline; filename="{os.path.basename(file_path)}"',
+                'Content-Disposition': f'inline; filename*=UTF-8\'\'{filename}',
                 'Cache-Control': 'public, max-age=31536000',
                 'ETag': f'"{os.path.getmtime(file_path)}"',
                 'Last-Modified': formatdate(os.path.getmtime(file_path), usegmt=True)
@@ -464,9 +468,10 @@ class FileService:
             
         except Exception as e:
             logger.error(f"获取音频文件失败: {str(e)}", exc_info=True)
-            raise HTTPException(
+            # 返回 JSON 响应而不是抛出异常
+            return JSONResponse(
                 status_code=404 if isinstance(e, FileNotFoundError) else 500,
-                detail=str(e)
+                content={"code": 500, "message": str(e)}
             )
 
     def save_content(self, file_id: str, data: dict) -> dict:
@@ -640,8 +645,8 @@ class FileService:
                 # 遍历前端发送的 subSegments
                 for sub_segment in segment.get("subSegments", []):
                     subsegment_id = sub_segment.get("subsegmentId")
-                    logger.info(f"处理子段落 - subsegment_id: {subsegment_id}")
-                    logger.info(f"子段落内容: {json.dumps(sub_segment, ensure_ascii=False)}")
+                    #logger.info(f"处理子段落 - subsegment_id: {subsegment_id}")
+                    #logger.info(f"子段落内容: {json.dumps(sub_segment, ensure_ascii=False)}")
                     
                     if not subsegment_id:
                         logger.warning("子段落缺少 subsegmentId，跳过")
@@ -651,7 +656,7 @@ class FileService:
                     found = False
                     for i, orig_segment in enumerate(updated_segments):
                         orig_subsegment_id = orig_segment.get("subsegmentId")
-                        logger.info(f"对比原始段落 - subsegmentId: {orig_subsegment_id}")
+                        #logger.info(f"对比原始段落 - subsegmentId: {orig_subsegment_id}")
                         
                         # 提取时间部分进行匹配
                         try:
@@ -664,8 +669,8 @@ class FileService:
                             if time_part == orig_time_part:
                                 old_text = orig_segment.get("text", "")
                                 new_text = sub_segment.get("text", old_text)
-                                logger.info(f"找到匹配段落 - 原文本: {old_text}")
-                                logger.info(f"更新为新文本: {new_text}")
+                                #logger.info(f"找到匹配段落 - 原文本: {old_text}")
+                                #logger.info(f"更新为新文本: {new_text}")
                                 
                                 # 只更新文本内容
                                 updated_segments[i]["text"] = new_text

@@ -268,22 +268,6 @@ watch(() => props.speakers, (newSpeakers) => {
   }
 }, { deep: true, immediate: true })
 
-// 添加 props 监听来检查 speakers 的传递
-watch(() => props.speakers, (newSpeakers) => {
-  console.log('SpeakerManager 接收到的 speakers:', {
-    speakers: newSpeakers,
-    managerId: props.managerId,
-    segment: props.segment
-  })
-}, { immediate: true })
-
-// 添加 watch 来监控 speakers 的变化
-watch(() => props.speakers, (newVal) => {
-  console.log('speakers 内容变化:', {
-    speakers: JSON.parse(JSON.stringify(newVal))
-  })
-}, { deep: true, immediate: true })
-
 // 修改选择处理函数
 const handleSpeakerCheck = (speaker, checked) => {
   if (!checked) {

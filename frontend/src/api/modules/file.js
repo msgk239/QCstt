@@ -1,4 +1,5 @@
 import request from '../request'
+import { logger } from '@/utils/logger'
 
 /**
  * 获取文件列表
@@ -222,38 +223,29 @@ export async function updateFile(fileId, data) {
  * @returns {Promise<Blob>}
  */
 export async function getAudioFile(fileId) {
+  logger.audioLoad(`开始请求音频文件: ${fileId}`);
   try {
-    const blob = await request({
+    const response = await request({
       url: `/api/v1/files/${fileId}/audio`,
       method: 'get',
       responseType: 'blob'
-    })
+    });
+    
+    logger.audioLoad('收到音频响应', {
+      type: response?.type,
+      size: response?.size,
+      status: response?.status
+    });
 
-    // 如果响应不是 Blob，说明出错了
-    if (!(blob instanceof Blob)) {
-      throw new Error('响应格式错误')
+    if (!(response instanceof Blob)) {
+      logger.error('响应不是 Blob 类型:', response);
+      throw new Error('响应格式错误');
     }
 
-    // 如果是 JSON 响应，检查是否是错误信息
-    if (blob.type.includes('application/json')) {
-      const text = await blob.text()
-      const jsonResponse = JSON.parse(text)
-      
-      if (jsonResponse.code !== 200) {
-        throw new Error(jsonResponse.message || '获取音频文件失败')
-      }
-      throw new Error('服务器返回了 JSON 而不是音频文件')
-    }
-
-    // 如果不是音频文件，抛出错误
-    if (!blob.type.includes('audio/')) {
-      throw new Error('服务器返回的不是音频文件')
-    }
-
-    return blob
+    return response;
   } catch (error) {
-    console.error('获取音频文件失败:', error)
-    throw error
+    logger.trackError(error, '获取音频文件失败');
+    throw error;
   }
 }
 

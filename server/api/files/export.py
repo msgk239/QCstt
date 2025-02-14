@@ -178,12 +178,12 @@ class ExportService:
             
             # 添加日志查看文档内容
             logger.info("准备保存的文档内容:")
-            for paragraph in doc.paragraphs:
-                logger.info(f"段落内容: {paragraph.text}")
+            #for paragraph in doc.paragraphs:
+                #logger.info(f"段落内容: {paragraph.text}")
             
             # 保存文档
             doc.save(export_path)
-            logger.info(f"Word文档导出成功: {export_path}")
+            #logger.info(f"Word文档导出成功: {export_path}")
             
             return export_path
             
