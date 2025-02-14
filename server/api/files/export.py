@@ -40,7 +40,7 @@ class ExportService:
             
             # 获取转写数据
             transcript = file_service.get_recognition_result(file_id)
-            logger.info(f"获取到的转写数据: {transcript}")
+            #logger.info(f"获取到的转写数据: {transcript}")
             
             if transcript.get('code') != 200:
                 raise HTTPException(status_code=400, detail="获取转写数据失败")
@@ -102,12 +102,12 @@ class ExportService:
             
             with open(metadata_path, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
-                logger.info(f"读取到的 metadata: {metadata}")  # 添加日志
+                #logger.info(f"读取到的 metadata: {metadata}")  # 添加日志
             
             # 查找匹配的文件信息
             display_name = '转写文本'  # 默认标题
             for key in metadata:
-                logger.info(f"正在检查键: {key}")  # 添加日志
+                #logger.info(f"正在检查键: {key}")  # 添加日志
                 if key.startswith(file_id):
                     file_info = metadata[key]
                     display_name = file_info['display_name']  # 直接获取 display_name
