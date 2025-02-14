@@ -1,6 +1,6 @@
 import os
 from typing import List, Dict, Optional, Tuple
-from server.api.logger import get_logger
+from ..logger import get_logger
 import yaml
 from pypinyin import pinyin, Style
 import Levenshtein
