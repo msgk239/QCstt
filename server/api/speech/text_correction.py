@@ -60,7 +60,7 @@ class TextCorrector:
                             continue
                             
                         word = parts[0]
-                        threshold = 0.6  # 默认阈值
+                        threshold = 0.8  # 默认阈值
                         orig_words = []
                         
                         if len(parts) >= 2:
