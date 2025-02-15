@@ -17,15 +17,15 @@ class TextCorrector:
         # 获取当前脚本所在目录
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.config_file = os.path.join(self.base_dir, config_file)
-        # 存储格式: {word: (pinyin_list, context_words, threshold)}
-        self.target_words: Dict[str, Tuple[List[str], List[str], float]] = {}
+        # 存储格式: {word: (pinyin_list, context_words, threshold, original_words)}
+        self.target_words: Dict[str, Tuple[List[str], List[str], float, List[str]]] = {}
         self.pinyin_cache = {}  # 缓存词语的拼音结果
+        self.original_words_map = {}  # 新增：原词到目标词的映射
         self.load_config()
 
     def load_config(self) -> None:
         """从txt文件更新yaml配置文件，并加载配置"""
         try:
-            # 添加自定义的YAML表示方法
             def represent_list(dumper, data):
                 return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
             yaml.add_representer(list, represent_list)
@@ -33,28 +33,54 @@ class TextCorrector:
             keywords_file = os.path.join(self.base_dir, "keywords")
             keywords = []
             thresholds = {}  # 存储单独设置的阈值
+            original_words = {}  # 存储原词映射
+            context_words = {}  # 存储上下文词
             
             if os.path.exists(keywords_file):
                 with open(keywords_file, 'r', encoding='utf-8') as f:
                     for line in f:
                         line = line.strip()
-                        if not line:
+                        if not line or line.startswith('#'):
                             continue
-                        # 检查是否有阈值设置
-                        parts = line.split()
-                        # 检查第二部分是否是数字（支持各种小数格式）
-                        if len(parts) == 2 and any(c.isdigit() for c in parts[1]):
+                            
+                        # 提取上下文词（如果有）
+                        context_list = []
+                        if '(' in line and ')' in line:
+                            context_start = line.find('(')
+                            context_end = line.find(')')
+                            if context_start < context_end:
+                                context_part = line[context_start+1:context_end]
+                                context_list = [w.strip() for w in context_part.split(',')]
+                                # 移除上下文部分，处理剩余部分
+                                line = line[:context_start].strip()
+                        
+                        # 分割剩余部分
+                        parts = line.split(maxsplit=2)
+                        if not parts:
+                            continue
+                            
+                        word = parts[0]
+                        threshold = 0.6  # 默认阈值
+                        orig_words = []
+                        
+                        if len(parts) >= 2:
+                            second_part = parts[1]
+                            # 检查第二部分是否为阈值
                             try:
-                                word = parts[0]
-                                threshold = float(parts[1])
-                                keywords.append(word)
-                                thresholds[word] = threshold
-                                logger.info(f"词 '{word}' 设置阈值: {threshold}")
+                                threshold = float(second_part)
+                                # 如果有第三部分，那就是原词列表
+                                if len(parts) == 3:
+                                    orig_words = [w.strip() for w in parts[2].replace('，', ',').split(',')]
                             except ValueError:
-                                # 如果转换失败，就当作普通词处理
-                                keywords.append(line)
-                        else:
-                            keywords.append(line)
+                                # 如果不是阈值，就当作原词列表
+                                orig_words = [w.strip() for w in second_part.replace('，', ',').split(',')]
+                        
+                        keywords.append(word)
+                        thresholds[word] = threshold
+                        if orig_words:
+                            original_words[word] = orig_words
+                        if context_list:
+                            context_words[word] = context_list
             
             # 准备yaml配置
             config = {'target_words': {}}
@@ -69,20 +95,20 @@ class TextCorrector:
             # 更新配置
             for word in keywords:
                 if word not in existing_config['target_words']:
-                    # 使用单独设置的阈值或默认阈值
-                    threshold = thresholds.get(word, 0.6)
                     config['target_words'][word] = {
                         'pinyin': self.word_to_pinyin(word),
-                        'context_words': [],
-                        'similarity_threshold': threshold
+                        'context_words': context_words.get(word, []),
+                        'similarity_threshold': thresholds[word],
+                        'original_words': original_words.get(word, [])
                     }
                 else:
-                    # 保留已有词的配置，但更新阈值
-                    config['target_words'][word] = existing_config['target_words'][word]
-                    if word in thresholds:
-                        config['target_words'][word]['similarity_threshold'] = thresholds[word]
-                    else:
-                        config['target_words'][word]['similarity_threshold'] = 0.6
+                    # 完全更新配置
+                    config['target_words'][word] = {
+                        'pinyin': self.word_to_pinyin(word),
+                        'context_words': context_words.get(word, []),
+                        'similarity_threshold': thresholds[word],
+                        'original_words': original_words.get(word, [])
+                    }
             
             # 保存更新后的配置
             with open(self.config_file, 'w', encoding='utf-8') as f:
@@ -93,9 +119,15 @@ class TextCorrector:
                 pinyin_list = info.get('pinyin', [])
                 context_words = info.get('context_words', [])
                 threshold = info.get('similarity_threshold', 0.6)
-                self.target_words[word] = (pinyin_list, context_words, threshold)
+                orig_words = info.get('original_words', [])
+                self.target_words[word] = (pinyin_list, context_words, threshold, orig_words)
                 
-            logger.info(f"成功加载 {len(self.target_words)} 个目标词配置")
+            # 构建原词映射表
+            for target_word, (_, _, _, orig_words) in self.target_words.items():
+                for orig in orig_words:
+                    self.original_words_map[orig] = target_word
+            
+            logger.info(f"成功加载 {len(self.target_words)} 个目标词配置，{len(self.original_words_map)} 个原词映射")
             
         except Exception as e:
             logger.error(f"加载配置文件失败: {str(e)}")
@@ -141,15 +173,29 @@ class TextCorrector:
             
         return total_similarity / len(py1)
 
-    def find_best_match(self, word: str, context: str = "") -> Optional[str]:
-        """找到最匹配的目标关键词"""
+    def find_best_match(self, word: str, context: str = "") -> Optional[tuple[str, float, float]]:
+        """找到最匹配的目标关键词
+        
+        Returns:
+            如果找到匹配，返回(匹配词, 相似度, 阈值)；否则返回None
+        """
+        # 先检查原词映射表（最高优先级）
+        if word in self.original_words_map:
+            target = self.original_words_map[word]
+            # 获取目标词的阈值
+            _, _, threshold, _ = self.target_words[target]
+            return (target, 1.0, threshold)
+
         word_pinyin = self.word_to_pinyin(word)
         best_match = None
         highest_similarity = 0
+        matched_threshold = 0
         
-        logger.info(f"正在匹配词: {word} (拼音: {word_pinyin})")
-        
-        for target_word, (target_pinyin, context_words, threshold) in self.target_words.items():
+        for target_word, (target_pinyin, context_words, threshold, orig_words) in self.target_words.items():
+            # 检查是否是原词之一（最高优先级）
+            if word in orig_words:
+                return (target_word, 1.0, threshold)
+                
             # 检查词长是否相同
             if len(word) != len(target_word):
                 continue
@@ -157,30 +203,28 @@ class TextCorrector:
             # 计算拼音相似度
             similarity = self.calculate_pinyin_similarity(word_pinyin, target_pinyin)
             
-            # 添加详细的调试信息
-            logger.info(f"对比: {word}({word_pinyin}) vs {target_word}({target_pinyin}), "
-                       f"相似度: {similarity:.2f}, 阈值: {threshold}")
-            
-            # 如果有上下文词，提高相似度要求
+            # 如果目标词有上下文要求，但上下文中没有任何一个上下文词，跳过这个匹配
             if context_words and not any(w in context for w in context_words):
-                threshold += 0.1
+                continue
                 
-            if similarity > highest_similarity and similarity >= threshold:
+            # 只有当相似度大于等于阈值时才更新最高相似度和匹配结果
+            if similarity >= threshold and similarity > highest_similarity:
                 highest_similarity = similarity
                 best_match = target_word
+                matched_threshold = threshold
         
+        # 如果找到最佳匹配，返回结果
         if best_match:
-            logger.info(f"找到最佳匹配: {best_match}, 相似度: {highest_similarity:.2f}")
-        else:
-            logger.info("未找到匹配")
+            return (best_match, highest_similarity, matched_threshold)
         
-        return best_match
+        return None
 
-    def correct_text(self, text: str) -> str:
+    def correct_text(self, text: str, context: str = "") -> str:
         """纠正文本中的词语
         
         Args:
             text: 待纠正的文本
+            context: 上下文
             
         Returns:
             纠正后的文本
@@ -188,46 +232,85 @@ class TextCorrector:
         if not self.target_words:
             return text
             
-        try:
-            # 先尝试完整匹配
-            best_match = self.find_best_match(text)
-            if best_match:
-                logger.info(f"词语纠正: {text} -> {best_match}")
-                return best_match
+        # 如果输入为空或者只包含空白字符，直接返回
+        if not text or text.isspace():
+            return text
             
-            # 如果完整匹配失败，且长度与任何目标词不同，直接返回原文本
-            if not any(len(text) == len(target) for target in self.target_words.keys()):
-                return text
+        try:
+            # 先检查完整文本是否在原词映射表中
+            if text in self.original_words_map:
+                target = self.original_words_map[text]
+                if text != target:  # 只在实际发生纠正时记录日志
+                    logger.info(f"纠正: {text} -> {target}")
+                return target
+            
+            # 尝试完整匹配
+            match_result = self.find_best_match(text, context)
+            if match_result:
+                best_match, similarity, threshold = match_result
+                if similarity >= threshold and text != best_match:  # 只在实际发生纠正时记录日志
+                    logger.info(f"纠正: {text} -> {best_match}")
+                    return best_match
             
             # 分词并纠正
-            words = list(text)
             corrected_words = []
-            
             i = 0
-            while i < len(words):
-                # 尝试目标词长度的匹配
-                matched = False
-                target_lengths = set(len(target) for target in self.target_words.keys())
+            
+            while i < len(text):
+                # 如果是标点符号，直接添加并继续
+                if text[i] in '，。！？、；：""''（）【】《》':
+                    corrected_words.append(text[i])
+                    i += 1
+                    continue
                 
-                for length in sorted(target_lengths, reverse=True):
-                    if i + length > len(words):
+                # 获取所有可能的词长度，从长到短排序
+                possible_lengths = sorted(set(
+                    len(word) for word in list(self.original_words_map.keys()) + list(self.target_words.keys())
+                ), reverse=True)
+                
+                matched = False
+                for length in possible_lengths:
+                    if i + length > len(text):
                         continue
                         
-                    current_word = ''.join(words[i:i+length])
-                    best_match = self.find_best_match(current_word)
+                    current_word = text[i:i+length]
+                    if not current_word.strip():  # 跳过空白字符
+                        continue
                     
-                    if best_match:
-                        corrected_words.append(best_match)
+                    # 先检查是否是原词
+                    if current_word in self.original_words_map:
+                        target = self.original_words_map[current_word]
+                        if current_word != target:  # 只在实际发生纠正时记录日志
+                            logger.info(f"纠正: {current_word} -> {target}")
+                        corrected_words.append(target)
                         i += length
                         matched = True
-                        logger.info(f"词语纠正: {current_word} -> {best_match}")
                         break
+                    
+                    # 如果不是原词，尝试相似度匹配
+                    match_result = self.find_best_match(current_word, text)
+                    if match_result:
+                        best_match, similarity, threshold = match_result
+                        # 获取目标词的上下文要求
+                        target_context_words = self.target_words[best_match][1]
+                        
+                        # 如果有上下文要求，必须满足上下文条件；如果没有上下文要求，只检查相似度
+                        if (not target_context_words or any(w in text for w in target_context_words)) and similarity >= threshold and current_word != best_match:
+                            logger.info(f"纠正: {current_word} -> {best_match}")
+                            corrected_words.append(best_match)
+                            i += length
+                            matched = True
+                            break
                 
+                # 如果没有找到任何匹配，保持原字符
                 if not matched:
-                    corrected_words.append(words[i])
+                    corrected_words.append(text[i])
                     i += 1
             
-            return ''.join(corrected_words)
+            result = ''.join(corrected_words)
+            if result != text:  # 只在最终结果有变化时记录日志
+                logger.info(f"最终纠正: {text} -> {result}")
+            return result
             
         except Exception as e:
             logger.error(f"文本纠正失败: {str(e)}")
