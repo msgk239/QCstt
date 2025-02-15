@@ -91,3 +91,6 @@ shuchu/**
 .conda/
 .conda/**
 server/api/speech/keywords
+server/api/speech/词库.txt
+server/api/speech/keywords_unique.txt
+server/api/speech/keywords.txt

@@ -10,6 +10,7 @@ import re
 from .audio_utils import AudioConverter  # 添加导入
 from ..files.metadata import MetadataManager  # 添加导入
 import time  # 添加这个导入
+from .text_correction import text_corrector  # 导入文本纠正器实例
 
 logger = logging.getLogger(__name__)
 
@@ -76,8 +77,13 @@ class SpeechService:
             )
             recognition_time = time.perf_counter() - recognition_start  # 计算模型识别时间
             logger.info(f"模型识别完成，识别耗时: {recognition_time:.2f}秒")
-            #logger.debug(f"模型原始输出: {res}")
-            
+            logger.debug(f"模型原始输出: {res}")
+
+            # 调用文本纠正器对识别结果进行纠正
+            logger.info("recognize:开始调用文本纠正器...")
+            res = text_corrector.correct_recognition_result(res)
+            logger.info("recognize:文本纠正完成")
+
             # 从元数据中获取音频时长
             metadata_prefix = f"metadata_{file_id}"
             logger.info(f"查找元数据，前缀: {metadata_prefix}")
