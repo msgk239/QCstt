@@ -193,23 +193,38 @@ keywords (源文件)
      - 合并后的原词数量
      - 合并后的上下文词数量
 
-2. 当前合并策略：
+2. 合并策略：
    - update_keywords.py：
+     - 离线配置维护工具
      - 读取时收集所有配置
      - 使用merge_configs合并
+     - 合并阈值、原词列表和上下文词
      - 写入时使用合并后的配置
      - 会更新keywords文件内容
-     - 不处理上下文词
+     - 用于规范化配置文件
+
    - text_correction.py：
-     - 读取时直接合并
-     - 生成配置时使用合并结果
+     - 在线文本纠正服务
+     - 读取时直接合并到内存
+     - 生成yaml缓存配置
      - 内存中只保留合并后的配置
      - 不会修改keywords文件
-     - 会处理上下文词
+     - 专注于运行时文本纠正
 
-3. 建议统一的处理逻辑：
+3. 工作流程建议：
+   A. 配置维护：
+      - 修改keywords文件
+      - 运行update_keywords.py
+      - 检查合并结果
+      - 确认配置规范化
 
-   A. 抽取共用的合并逻辑：
+   B. 运行时处理：
+      - text_correction.py检测配置更新
+      - 重新生成yaml缓存
+      - 使用缓存进行文本纠正
+      - 避免修改原始配置
+
+4. 合并函数实现：
    ```python
    def merge_configs(configs: List[Tuple[int, float, List[str], List[str], str]]) -> Tuple[float, List[str], List[str]]:
        """合并配置
@@ -233,48 +248,6 @@ keywords (源文件)
        final_threshold = max(thresholds) if thresholds else 0.9
        return (final_threshold, list(all_original_words), list(all_context_words))
    ```
-
-   B. 统一处理流程：
-   1. 在 update_keywords.py 中：
-      - 使用新的merge_configs处理所有配置
-      - 保存完整的合并结果到keywords文件
-      - 格式：`目标词 阈值 原词列表 (上下文词列表)`
-      - 作为配置的规范化工具
-
-   2. 在 text_correction.py 中：
-      - 直接使用相同的merge_configs函数
-      - 读取时合并配置到内存
-      - 生成yaml缓存时使用合并结果
-      - 专注于运行时的文本纠正
-
-   C. 工作流程：
-   1. 使用update_keywords.py规范化配置：
-      - 合并重复配置
-      - 规范化格式
-      - 保存到keywords文件
-   2. text_correction.py使用规范化后的配置：
-      - 读取配置
-      - 缓存到yaml
-      - 用于文本纠正
-
-   D. 优势：
-   - 统一的合并逻辑
-   - 清晰的职责分工
-   - 避免配置不一致
-   - 更好的可维护性
-
-4. 实施建议：
-   1. 先修改update_keywords.py：
-      - 实现新的合并逻辑
-      - 添加上下文词处理
-      - 规范化输出格式
-   2. 更新text_correction.py：
-      - 使用相同的合并函数
-      - 简化重复配置处理
-   3. 更新现有配置：
-      - 运行update_keywords.py清理配置
-      - 检查合并结果
-      - 确认功能正常
 
 ## 注意事项
 
