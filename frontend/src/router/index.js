@@ -4,6 +4,7 @@ import { useFileStore } from '@/stores/fileStore'
 const HomeView = () => import('@/views/HomeView.vue')
 const EditorView = () => import('@/views/EditorView.vue')
 const TrashView = () => import('@/views/TrashView.vue')
+const HotwordsView = () => import('@/views/HotwordsView.vue')  // 添加热词管理页面
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -56,6 +57,14 @@ const router = createRouter({
       component: TrashView,
       meta: {
         title: '回收站'
+      }
+    },
+    {
+      path: '/hotwords',
+      name: 'hotwords',
+      component: HotwordsView,
+      meta: {
+        title: '热词管理'
       }
     }
   ]

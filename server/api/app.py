@@ -27,6 +27,7 @@ from .models import (
     RecognitionProgressResponse
 )
 from .files.export import export_service  # 导入导出服务
+from .speech.hotwords import hotwords_manager
 
 # FastAPI 应用配置
 app = FastAPI()
@@ -258,36 +259,31 @@ async def get_system_status():
     pass
 
 # 热词管理
-@app.get("/api/hotwords")
+@app.get("/api/v1/hotwords")
 async def get_hotwords():
-    try:
-        # 这里应该从数据库或其他存储中获取热词列表
-        hotwords = []  # 临时使用空列表，实际应该实现获取热词的逻辑
-        return JSONResponse(
-            status_code=200,
-            content={"data": hotwords}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
-        )
+    """获取热词内容"""
+    return hotwords_manager.get_content()
 
-@app.post("/api/v1/asr/hotwords")
-async def add_hotword():
-    pass
+@app.post("/api/v1/hotwords")
+async def update_hotwords(data: dict = Body(...)):
+    """更新热词内容"""
+    content = data.get('content')
+    last_modified = data.get('lastModified')
+    
+    if not content:
+        return {"code": 1, "message": "内容不能为空"}
+        
+    return hotwords_manager.update_content(content, last_modified)
 
-@app.put("/api/v1/asr/hotwords/{id}")
-async def update_hotword():
-    pass
-
-@app.delete("/api/v1/asr/hotwords/{id}")
-async def delete_hotword():
-    pass
-
-@app.post("/api/v1/asr/hotwords/batch-import")
-async def batch_import_hotwords():
-    pass
+@app.post("/api/v1/hotwords/validate")
+async def validate_hotwords(data: dict = Body(...)):
+    """验证热词格式"""
+    content = data.get('content')
+    
+    if not content:
+        return {"code": 1, "message": "内容不能为空"}
+        
+    return hotwords_manager.validate_content(content)
 
 # 热词库管理
 @app.get("/api/v1/asr/hotword-libraries")

@@ -84,12 +84,12 @@ def merge_configs(configs: List[Tuple[int, float, List[str], List[str], str]]) -
     final_threshold = max(thresholds) if thresholds else 0.9
     return (final_threshold, list(all_original_words), list(all_context_words))
 
-def read_keywords_file() -> Dict[str, List[Tuple[int, float, List[str], List[str], str]]]:
+def read_keywords_file(file_path='keywords') -> Dict[str, List[Tuple[int, float, List[str], List[str], str]]]:
     """读取keywords文件，返回 {目标词: [(行号, 阈值, 原词列表, 上下文词列表, 原始行)]} 的字典"""
     keywords_dict = {}
     duplicate_words = {}
     
-    with open('keywords', 'r', encoding='utf-8') as f:
+    with open(file_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
         for line_number, line in enumerate(lines, 1):
             line = line.strip()
@@ -252,6 +252,16 @@ def main():
     update_keywords_file(keywords_dict, word_mapping)
     
     logger.info("全部完成！")
+
+__all__ = [
+    'read_keywords_file',
+    'get_sort_key',
+    'merge_configs',
+    'process_original_word',
+    'is_pure_english',
+    'read_word_mapping',
+    'update_keywords_file'
+]
 
 if __name__ == "__main__":
     main() 

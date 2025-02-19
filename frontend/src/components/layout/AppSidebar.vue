@@ -30,13 +30,19 @@
         />
       </template>
     </el-menu-item>
+    <el-menu-item index="/hotwords">
+      <el-icon><Edit /></el-icon>
+      <template #title>
+        热词管理
+      </template>
+    </el-menu-item>
   </el-menu>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Document, Delete } from '@element-plus/icons-vue'
+import { Document, Delete, Edit } from '@element-plus/icons-vue'
 import { useFileStore } from '@/stores/fileStore'
 
 const props = defineProps({
