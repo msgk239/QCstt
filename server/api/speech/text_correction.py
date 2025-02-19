@@ -4,16 +4,29 @@ from ..logger import get_logger
 import yaml
 from pypinyin import pinyin, Style
 import Levenshtein
+import re
+import time
 
 logger = get_logger(__name__)
 
 class TextCorrector:
+    _instance = None
+    _segmenter = None
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(self, config_file: str = "correction_config.yaml"):
         """初始化文本纠正器
         
         Args:
             config_file: 配置文件路径，包含目标词及其拼音信息
         """
+        if hasattr(self, '_initialized'):
+            return
+            
         # 获取当前脚本所在目录
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.config_file = os.path.join(self.base_dir, config_file)
@@ -21,7 +34,154 @@ class TextCorrector:
         self.target_words: Dict[str, Tuple[List[str], List[str], float, List[str]]] = {}
         self.pinyin_cache = {}  # 缓存词语的拼音结果
         self.original_words_map = {}  # 新增：原词到目标词的映射
+        
+        # 初始化分词器
+        self._init_segmenter()
+        # 加载配置
         self.load_config()
+        
+        self._initialized = True
+
+    def _should_update_dict(self) -> bool:
+        """检查是否需要更新自定义词典
+        
+        Returns:
+            bool: 是否需要更新
+        """
+        keywords_path = os.path.join(self.base_dir, "keywords")
+        dict_path = os.path.join(self.base_dir, "custom_dict.txt")
+        
+        # 如果词典文件不存在，需要更新
+        if not os.path.exists(dict_path):
+            logger.info("自定义词典文件不存在，需要生成")
+            return True
+            
+        # 比较修改时间
+        keywords_mtime = os.path.getmtime(keywords_path)
+        dict_mtime = os.path.getmtime(dict_path)
+        
+        needs_update = keywords_mtime > dict_mtime
+        if needs_update:
+            logger.info("keywords文件已更新，需要重新生成词典")
+        return needs_update
+        
+    def _generate_custom_dict(self):
+        """从keywords文件生成自定义词典"""
+        logger.debug("开始生成自定义词典...")
+        words = set()  # 存储目标词
+        error_words = set()  # 存储错误识别的完整词组
+        context_words = set()  # 存储上下文词
+        keywords_path = os.path.join(self.base_dir, "keywords")
+        
+        def is_chinese_word(word: str) -> bool:
+            """判断是否是中文词"""
+            return all('\u4e00' <= c <= '\u9fa5' for c in word)
+        
+        try:
+            with open(keywords_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                        
+                    # 提取所有可能的词
+                    parts = line.split()
+                    if not parts:
+                        continue
+                        
+                    # 1. 添加目标词（第一个词）
+                    target_word = parts[0]
+                    if is_chinese_word(target_word):  # 确保是中文词
+                        words.add(target_word)
+                    
+                    # 2. 处理后续部分
+                    remaining = ' '.join(parts[1:])
+                    
+                    # 跳过数字（阈值）
+                    if remaining and remaining[0].isdigit():
+                        dot_idx = remaining.find('.')
+                        if dot_idx != -1:
+                            space_idx = remaining.find(' ', dot_idx)
+                            if space_idx != -1:
+                                remaining = remaining[space_idx+1:]
+                            else:
+                                continue
+                    
+                    # 3. 提取原词列表（支持中英文逗号）
+                    if '(' in remaining:
+                        word_part = remaining[:remaining.find('(')]
+                    else:
+                        word_part = remaining
+                        
+                    # 提取错误识别词组
+                    error_parts = [w.strip() for w in word_part.replace('，', ',').split(',')]
+                    for error_part in error_parts:
+                        if is_chinese_word(error_part) and len(error_part) > 1:
+                            error_words.add(error_part)
+                    
+                    # 4. 提取上下文词（在括号中的词）
+                    context_match = re.search(r'\((.*?)\)', remaining)
+                    if context_match:
+                        context_parts = [w.strip() for w in context_match.group(1).replace('，', ',').split(',')]
+                        for context_word in context_parts:
+                            if is_chinese_word(context_word) and len(context_word) > 1:
+                                context_words.add(context_word)
+            
+            # 保存词典文件
+            dict_path = os.path.join(self.base_dir, "custom_dict.txt")
+            
+            # 过滤并按长度排序
+            valid_words = sorted([w for w in words if len(w) > 1 and is_chinese_word(w)], 
+                               key=len, reverse=True)
+            valid_error_words = sorted([w for w in error_words if len(w) > 1 and is_chinese_word(w)], 
+                                     key=len, reverse=True)
+            valid_context_words = sorted([w for w in context_words if len(w) > 1 and is_chinese_word(w)], 
+                                       key=len, reverse=True)
+            
+            # 写入词典，按顺序写入：目标词、错误词、上下文词
+            with open(dict_path, 'w', encoding='utf-8') as f:
+                # 写入目标词（按长度排序）
+                for word in valid_words:
+                    f.write(f"{word}\n")
+                    
+                # 写入错误词（按长度排序）
+                for word in valid_error_words:
+                    if word not in words:  # 避免重复
+                        f.write(f"{word}\n")
+                        
+                # 写入上下文词（按长度排序）
+                for word in valid_context_words:
+                    if word not in words and word not in error_words:  # 避免重复
+                        f.write(f"{word}\n")
+                    
+            logger.info(f"自定义词典生成完成，共{len(valid_words)}个目标词，{len(valid_error_words)}个错误词，{len(valid_context_words)}个上下文词")
+            
+        except Exception as e:
+            logger.error(f"生成自定义词典失败: {str(e)}")
+            raise
+            
+    def _init_segmenter(self):
+        """初始化分词器"""
+        if self._segmenter is not None:
+            return
+            
+        try:
+            # 检查是否需要更新词典
+            if self._should_update_dict():
+                self._generate_custom_dict()
+                
+            # 初始化分词器
+            import pkuseg
+            dict_path = os.path.join(self.base_dir, "custom_dict.txt")
+            logger.debug("正在初始化分词器...")
+            # 使用默认通用模型
+            self._segmenter = pkuseg.pkuseg(user_dict=dict_path)
+            logger.info("分词器初始化完成")
+            
+        except Exception as e:
+            logger.error(f"初始化分词器失败: {str(e)}")
+            self._segmenter = None  # 确保失败时设为None
+            raise
 
     def load_config(self) -> None:
         """从txt文件更新yaml配置文件，并加载配置"""
@@ -60,7 +220,7 @@ class TextCorrector:
                             continue
                             
                         word = parts[0]
-                        threshold = 0.8  # 默认阈值
+                        threshold = 0.9  # 默认阈值
                         orig_words = []
                         
                         if len(parts) >= 2:
@@ -179,23 +339,18 @@ class TextCorrector:
         Returns:
             如果找到匹配，返回(匹配词, 相似度, 阈值)；否则返回None
         """
-        # 先检查原词映射表（最高优先级）
-        if word in self.original_words_map:
-            target = self.original_words_map[word]
-            # 获取目标词的阈值
-            _, _, threshold, _ = self.target_words[target]
-            return (target, 1.0, threshold)
-
+        # 如果输入词已经是目标词之一，直接返回None（无需替换）
+        if word in self.target_words:
+            return None
+            
         word_pinyin = self.word_to_pinyin(word)
         best_match = None
         highest_similarity = 0
         matched_threshold = 0
+        best_match_pinyin = None
         
-        for target_word, (target_pinyin, context_words, threshold, orig_words) in self.target_words.items():
-            # 检查是否是原词之一（最高优先级）
-            if word in orig_words:
-                return (target_word, 1.0, threshold)
-                
+        # 按词长分组，只比较相同长度的词
+        for target_word, (target_pinyin, context_words, threshold, _) in self.target_words.items():
             # 检查词长是否相同
             if len(word) != len(target_word):
                 continue
@@ -212,6 +367,8 @@ class TextCorrector:
                 highest_similarity = similarity
                 best_match = target_word
                 matched_threshold = threshold
+                best_match_pinyin = target_pinyin
+                logger.debug(f"找到相似度匹配: {word}({','.join(word_pinyin)}) -> {best_match}({','.join(target_pinyin)}) [相似度: {similarity:.3f}, 阈值: {threshold}]")
         
         # 如果找到最佳匹配，返回结果
         if best_match:
@@ -232,84 +389,96 @@ class TextCorrector:
         if not self.target_words:
             return text
             
-        # 如果输入为空或者只包含空白字符，直接返回
         if not text or text.isspace():
             return text
             
         try:
-            # 先检查完整文本是否在原词映射表中
-            if text in self.original_words_map:
-                target = self.original_words_map[text]
-                if text != target:  # 只在实际发生纠正时记录日志
-                    logger.info(f"纠正: {text} -> {target}")
-                return target
+            # 第一步：原词替换
+            corrected_text = text
+            replaced_positions = set()
+            has_any_correction = False  # 记录是否发生任何纠正（包括原词替换和相似度匹配）
             
-            # 尝试完整匹配
-            match_result = self.find_best_match(text, context)
-            if match_result:
-                best_match, similarity, threshold = match_result
-                if similarity >= threshold and text != best_match:  # 只在实际发生纠正时记录日志
-                    logger.info(f"纠正: {text} -> {best_match}")
-                    return best_match
+            # 按词长从长到短排序原词
+            all_original_words = []
+            for target_word, (_, context_words, _, orig_words) in self.target_words.items():
+                for orig in orig_words:
+                    if orig and not orig.isspace():
+                        all_original_words.append((orig, target_word, context_words))
+            all_original_words.sort(key=lambda x: len(x[0]), reverse=True)
             
-            # 分词并纠正
-            corrected_words = []
-            i = 0
+            # 进行原词替换
+            for orig_word, target_word, context_words in all_original_words:
+                start = 0
+                while True:
+                    pos = corrected_text.find(orig_word, start)
+                    if pos == -1:
+                        break
+                        
+                    if not any(pos <= p < pos + len(orig_word) for p in replaced_positions):
+                        if not context_words or any(w in text for w in context_words):
+                            if orig_word != target_word:
+                                has_any_correction = True
+                                logger.info(f"原词替换: {orig_word} -> {target_word}")
+                            corrected_text = corrected_text[:pos] + target_word + corrected_text[pos + len(orig_word):]
+                            replaced_positions.update(range(pos, pos + len(target_word)))
+                            
+                    start = pos + 1
             
-            while i < len(text):
-                # 如果是标点符号，直接添加并继续
-                if text[i] in '，。！？、；：""''（）【】《》':
-                    corrected_words.append(text[i])
-                    i += 1
+            # 第二步：分词和相似度匹配
+            if self._segmenter is None:
+                logger.warning("分词器未初始化，跳过相似度匹配")
+                return corrected_text
+                
+            # 分词处理
+            final_words = []
+            current_pos = 0
+            text_len = len(corrected_text)
+            
+            while current_pos < text_len:
+                if current_pos in replaced_positions:
+                    while current_pos < text_len and current_pos in replaced_positions:
+                        final_words.append(corrected_text[current_pos])
+                        current_pos += 1
                     continue
                 
-                # 获取所有可能的词长度，从长到短排序
-                possible_lengths = sorted(set(
-                    len(word) for word in list(self.original_words_map.keys()) + list(self.target_words.keys())
-                ), reverse=True)
+                end_pos = current_pos
+                while end_pos < text_len and end_pos not in replaced_positions:
+                    end_pos += 1
                 
-                matched = False
-                for length in possible_lengths:
-                    if i + length > len(text):
-                        continue
-                        
-                    current_word = text[i:i+length]
-                    if not current_word.strip():  # 跳过空白字符
-                        continue
+                if end_pos > current_pos:
+                    segment = corrected_text[current_pos:end_pos]
+                    words = self._segmenter.cut(segment)
+                    logger.debug(f"分词: {' | '.join(words)}")
                     
-                    # 先检查是否是原词
-                    if current_word in self.original_words_map:
-                        target = self.original_words_map[current_word]
-                        if current_word != target:  # 只在实际发生纠正时记录日志
-                            logger.info(f"纠正: {current_word} -> {target}")
-                        corrected_words.append(target)
-                        i += length
-                        matched = True
-                        break
-                    
-                    # 如果不是原词，尝试相似度匹配
-                    match_result = self.find_best_match(current_word, text)
-                    if match_result:
-                        best_match, similarity, threshold = match_result
-                        # 获取目标词的上下文要求
-                        target_context_words = self.target_words[best_match][1]
+                    for word in words:
+                        if (word in '，。！？、；：""''（）【】《》' or 
+                            len(word) == 1 or 
+                            not word or 
+                            word.isspace()):
+                            final_words.append(word)
+                            continue
+                            
+                        # 尝试相似度匹配
+                        match_result = self.find_best_match(word, corrected_text)
+                        if match_result:
+                            best_match, similarity, threshold = match_result
+                            target_context_words = self.target_words[best_match][1]
+                            
+                            if (not target_context_words or any(w in corrected_text for w in target_context_words)) and similarity >= threshold and word != best_match:
+                                has_any_correction = True
+                                word_pinyin = self.word_to_pinyin(word)
+                                target_pinyin = self.word_to_pinyin(best_match)
+                                logger.debug(f"执行相似度替换: {word}({','.join(word_pinyin)}) -> {best_match}({','.join(target_pinyin)}) [相似度: {similarity:.3f}, 阈值: {threshold}]")
+                                final_words.append(best_match)
+                                continue
                         
-                        # 如果有上下文要求，必须满足上下文条件；如果没有上下文要求，只检查相似度
-                        if (not target_context_words or any(w in text for w in target_context_words)) and similarity >= threshold and current_word != best_match:
-                            logger.info(f"纠正: {current_word} -> {best_match}")
-                            corrected_words.append(best_match)
-                            i += length
-                            matched = True
-                            break
+                        final_words.append(word)
                 
-                # 如果没有找到任何匹配，保持原字符
-                if not matched:
-                    corrected_words.append(text[i])
-                    i += 1
+                current_pos = end_pos
             
-            result = ''.join(corrected_words)
-            if result != text:  # 只在最终结果有变化时记录日志
-                logger.info(f"最终纠正: {text} -> {result}")
+            result = ''.join(final_words)
+            if has_any_correction:  # 只在发生了纠正时才输出最终结果
+                logger.info(f"最终文本纠正: {text} -> {result}")
             return result
             
         except Exception as e:
@@ -326,16 +495,57 @@ class TextCorrector:
             纠正后的识别结果
         """
         try:
-            # 纠正整体文本
-            if "text" in recognition_result[0]:
-                recognition_result[0]["text"] = self.correct_text(recognition_result[0]["text"])
+            start_time = time.time()
             
-            # 纠正每个句子片段
+            def extract_text(text: str) -> str:
+                """从带标记的文本中提取纯文本部分
+                
+                Args:
+                    text: 带标记的文本
+                    
+                Returns:
+                    纯文本部分
+                """
+                # 找到第4个标记的结束位置
+                pos = -1
+                for i in range(4):
+                    pos = text.find('|>', pos + 1)
+                    if pos == -1:
+                        return text  # 如果格式不对,返回原文本
+                
+                # 提取4个标记后到单引号前的文本
+                text = text[pos + 2:].rstrip("'")
+                return text
+            
+            # 处理每个句子片段
+            all_text_parts = []
             if "sentence_info" in recognition_result[0]:
                 for segment in recognition_result[0]["sentence_info"]:
                     if "sentence" in segment:
-                        segment["sentence"] = self.correct_text(segment["sentence"])
+                        # 提取纯文本并纠正
+                        text = extract_text(segment["sentence"])
+                        # 使用分词器进行分词和纠正
+                        if self._segmenter is None:
+                            logger.warning("分词器未初始化，使用原始文本处理方式")
+                            corrected_text = self._correct_text_without_segmenter(text)
+                        else:
+                            corrected_text = self.correct_text(text)
+                            
+                        # 替换原文本中的纯文本部分
+                        original_sentence = segment["sentence"]
+                        tags_end = original_sentence.find('>', original_sentence.rfind('<|')) + 1
+                        corrected_sentence = original_sentence[:tags_end] + corrected_text
+                        segment["sentence"] = corrected_sentence
+                        all_text_parts.append(corrected_sentence)
             
+            # 使用处理后的句子重建总文本
+            if all_text_parts:
+                # 使用原始格式拼接文本
+                combined_text = '         '.join(all_text_parts)
+                recognition_result[0]["text"] = combined_text
+            
+            end_time = time.time()
+            logger.info(f"语音识别文本纠正完成，总耗时: {(end_time - start_time)*1000:.2f}ms")
             return recognition_result
             
         except Exception as e:

@@ -92,3 +92,7 @@ shuchu/**
 server/api/speech/词库.txt
 server/api/speech/keywords_unique.txt
 server/api/speech/keywords.txt
+server/api/speech/custom_dict.txt
+server/api/speech/custom_dict.txt
+server/api/speech/custom_dict.txt
+server/api/speech/原始词库.txt
