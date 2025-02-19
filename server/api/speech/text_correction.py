@@ -183,9 +183,53 @@ class TextCorrector:
             self._segmenter = None  # 确保失败时设为None
             raise
 
+    def _should_update_config(self) -> bool:
+        """检查是否需要更新yaml配置文件
+        
+        Returns:
+            bool: 是否需要更新
+        """
+        keywords_path = os.path.join(self.base_dir, "keywords")
+        
+        # 如果配置文件不存在，需要更新
+        if not os.path.exists(self.config_file):
+            logger.info("配置文件不存在，需要生成")
+            return True
+            
+        # 比较修改时间
+        keywords_mtime = os.path.getmtime(keywords_path)
+        config_mtime = os.path.getmtime(self.config_file)
+        
+        needs_update = keywords_mtime > config_mtime
+        if needs_update:
+            logger.info("keywords文件已更新，需要重新生成配置")
+        return needs_update
+
     def load_config(self) -> None:
         """从txt文件更新yaml配置文件，并加载配置"""
         try:
+            # 检查是否需要更新配置
+            if not self._should_update_config():
+                # 直接从yaml加载配置
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f) or {'target_words': {}}
+                    
+                # 加载配置到内存
+                for word, info in config['target_words'].items():
+                    pinyin_list = info.get('pinyin', [])
+                    context_words = info.get('context_words', [])
+                    threshold = info.get('similarity_threshold', 0.6)
+                    orig_words = info.get('original_words', [])
+                    self.target_words[word] = (pinyin_list, context_words, threshold, orig_words)
+                    
+                # 构建原词映射表
+                for target_word, (_, _, _, orig_words) in self.target_words.items():
+                    for orig in orig_words:
+                        self.original_words_map[orig] = target_word
+                
+                logger.info(f"从配置文件加载了 {len(self.target_words)} 个目标词配置，{len(self.original_words_map)} 个原词映射")
+                return
+            
             def represent_list(dumper, data):
                 return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
             yaml.add_representer(list, represent_list)
@@ -195,10 +239,12 @@ class TextCorrector:
             thresholds = {}  # 存储单独设置的阈值
             original_words = {}  # 存储原词映射
             context_words = {}  # 存储上下文词
+            duplicate_words = {}  # 用于存储重复的词条
             
             if os.path.exists(keywords_file):
                 with open(keywords_file, 'r', encoding='utf-8') as f:
-                    for line in f:
+                    lines = f.readlines()
+                    for line_number, line in enumerate(lines, 1):
                         line = line.strip()
                         if not line or line.startswith('#'):
                             continue
@@ -235,40 +281,60 @@ class TextCorrector:
                                 # 如果不是阈值，就当作原词列表
                                 orig_words = [w.strip() for w in second_part.replace('，', ',').split(',')]
                         
-                        keywords.append(word)
-                        thresholds[word] = threshold
-                        if orig_words:
-                            original_words[word] = orig_words
-                        if context_list:
-                            context_words[word] = context_list
+                        # 检查是否是重复的目标词
+                        if word in keywords:
+                            if word not in duplicate_words:
+                                duplicate_words[word] = []
+                                # 添加第一次出现的位置
+                                first_line = next(i for i, l in enumerate(lines, 1) if l.strip().split(maxsplit=1)[0] == word)
+                                duplicate_words[word].append((first_line, lines[first_line-1].strip()))
+                            duplicate_words[word].append((line_number, line))
+                            # 使用最大的阈值
+                            if threshold > thresholds[word]:
+                                thresholds[word] = threshold
+                            # 合并原词列表
+                            if orig_words:
+                                if word not in original_words:
+                                    original_words[word] = set()
+                                original_words[word].update(orig_words)
+                            # 合并上下文词
+                            if context_list:
+                                if word not in context_words:
+                                    context_words[word] = set()
+                                context_words[word].update(context_list)
+                        else:
+                            keywords.append(word)
+                            thresholds[word] = threshold
+                            if orig_words:
+                                original_words[word] = set(orig_words)
+                            if context_list:
+                                context_words[word] = set(context_list)
+            
+            # 输出重复词条警告
+            if duplicate_words:
+                logger.warning("\n发现重复的目标词配置：")
+                for word, occurrences in duplicate_words.items():
+                    logger.warning(f"\n目标词 '{word}' 在以下行出现多次：")
+                    for line_num, line_content in occurrences:
+                        logger.warning(f"第 {line_num} 行: {line_content}")
+                    logger.info(f"已自动合并配置：")
+                    logger.info(f"- 使用最大阈值: {thresholds[word]}")
+                    if word in original_words:
+                        logger.info(f"- 合并后的原词数量: {len(original_words[word])}")
+                    if word in context_words:
+                        logger.info(f"- 合并后的上下文词数量: {len(context_words[word])}")
             
             # 准备yaml配置
             config = {'target_words': {}}
             
-            # 如果已存在yaml配置，先读取它
-            if os.path.exists(self.config_file):
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    existing_config = yaml.safe_load(f) or {'target_words': {}}
-            else:
-                existing_config = {'target_words': {}}
-            
             # 更新配置
             for word in keywords:
-                if word not in existing_config['target_words']:
-                    config['target_words'][word] = {
-                        'pinyin': self.word_to_pinyin(word),
-                        'context_words': context_words.get(word, []),
-                        'similarity_threshold': thresholds[word],
-                        'original_words': original_words.get(word, [])
-                    }
-                else:
-                    # 完全更新配置
-                    config['target_words'][word] = {
-                        'pinyin': self.word_to_pinyin(word),
-                        'context_words': context_words.get(word, []),
-                        'similarity_threshold': thresholds[word],
-                        'original_words': original_words.get(word, [])
-                    }
+                config['target_words'][word] = {
+                    'pinyin': self.word_to_pinyin(word),
+                    'context_words': list(context_words.get(word, set())),
+                    'similarity_threshold': thresholds[word],
+                    'original_words': list(original_words.get(word, set()))
+                }
             
             # 保存更新后的配置
             with open(self.config_file, 'w', encoding='utf-8') as f:

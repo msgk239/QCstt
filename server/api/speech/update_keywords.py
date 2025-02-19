@@ -1,6 +1,9 @@
 import os
 from typing import Dict, List, Tuple
 import re
+from ..logger import get_logger
+
+logger = get_logger(__name__)
 
 def is_pure_english(text: str) -> bool:
     """检查是否为纯英文（包含空格和标点）"""
@@ -59,16 +62,31 @@ def get_sort_key(word):
     # 5. 其他词按原始顺序排序
     return f"E_{word}"
 
-def read_keywords_file() -> Dict[str, Tuple[float, List[str]]]:
-    """读取keywords文件，返回 {目标词: (阈值, [原词列表])} 的字典"""
+def read_keywords_file() -> Dict[str, List[Tuple[int, float, List[str], str]]]:
+    """读取keywords文件，返回 {目标词: [(行号, 阈值, 原词列表, 原始行内容)]} 的字典"""
     keywords_dict = {}
+    duplicate_words = {}  # 用于存储重复的词条
+    
     with open('keywords', 'r', encoding='utf-8') as f:
-        for line in f:
+        lines = f.readlines()
+        for line_number, line in enumerate(lines, 1):
             line = line.strip()
-            if not line:
+            if not line or line.startswith('#'):
                 continue
             
+            # 提取上下文词（如果有）
+            context_list = []
+            if '(' in line and ')' in line:
+                context_start = line.find('(')
+                context_end = line.find(')')
+                if context_start < context_end:
+                    # 移除上下文部分，处理剩余部分
+                    line = line[:context_start].strip()
+            
             parts = line.split(maxsplit=2)
+            if not parts:
+                continue
+                
             target_word = parts[0]
             threshold = None
             original_words = []
@@ -80,67 +98,129 @@ def read_keywords_file() -> Dict[str, Tuple[float, List[str]]]:
                         threshold = float(parts[1])
                         # 如果有第三部分，那就是原词列表
                         if len(parts) == 3:
-                            original_words = [w.strip() for w in parts[2].split(',')]
+                            original_words = [w.strip() for w in parts[2].replace('，', ',').split(',')]
                     except ValueError:
-                        original_words = [w.strip() for w in line[len(target_word):].strip().split(',')]
+                        original_words = [w.strip() for w in line[len(target_word):].strip().replace('，', ',').split(',')]
                 else:
-                    original_words = [w.strip() for w in line[len(target_word):].strip().split(',')]
+                    original_words = [w.strip() for w in line[len(target_word):].strip().replace('，', ',').split(',')]
             
             # 处理原词列表：去除空格，过滤纯英文
             original_words = [process_original_word(w) for w in original_words if not is_pure_english(w)]
-            keywords_dict[target_word] = (threshold, original_words)
+            
+            # 记录配置
+            if target_word not in keywords_dict:
+                keywords_dict[target_word] = []
+            keywords_dict[target_word].append((line_number, threshold, original_words, line))
+            
+            # 检查是否重复
+            if len(keywords_dict[target_word]) > 1:
+                duplicate_words[target_word] = keywords_dict[target_word]
+    
+    # 输出重复词条警告
+    if duplicate_words:
+        logger.warning("\n发现重复的目标词配置：")
+        for word, occurrences in duplicate_words.items():
+            logger.warning(f"\n目标词 '{word}' 在以下行出现多次：")
+            for line_num, _, _, line in occurrences:
+                logger.warning(f"第 {line_num} 行: {line}")
     
     return keywords_dict
+
+def merge_configs(word: str, configs: List[Tuple[int, float, List[str], str]]) -> Tuple[float, List[str]]:
+    """合并同一目标词的多个配置
+    
+    Args:
+        word: 目标词
+        configs: 配置列表，每个元素是 (行号, 阈值, 原词列表, 原始行内容)
+        
+    Returns:
+        (合并后的阈值, 合并后的原词列表)
+    """
+    # 收集所有非None的阈值
+    thresholds = [t for _, t, _, _ in configs if t is not None]
+    # 合并所有原词列表
+    all_original_words = set()
+    
+    for _, _, orig_words, _ in configs:
+        all_original_words.update(orig_words)
+    
+    # 使用最严格的（最大的）阈值，如果没有阈值则使用默认值0.9
+    final_threshold = max(thresholds) if thresholds else 0.9
+    
+    logger.info(f"合并目标词 '{word}' 的配置：")
+    logger.info(f"- 选择阈值: {final_threshold}")
+    logger.info(f"- 合并后的原词数量: {len(all_original_words)}")
+    
+    return (final_threshold, list(all_original_words))
 
 def read_word_mapping() -> Dict[str, str]:
     """读取词库.txt文件，返回 {原词: 目标词} 的字典"""
     mapping = {}
-    with open('词库.txt', 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line or '：' not in line:
-                continue
-            
-            original, target = line.split('：', 1)
-            original = original.strip()
-            target = target.strip()
-            
-            # 跳过纯英文原词
-            if is_pure_english(original):
-                continue
+    try:
+        with open('词库.txt', 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or '：' not in line:
+                    continue
                 
-            # 处理原词：去除空格
-            original = process_original_word(original)
-            mapping[original] = target
+                original, target = line.split('：', 1)
+                original = original.strip()
+                target = target.strip()
+                
+                # 跳过纯英文原词
+                if is_pure_english(original):
+                    continue
+                    
+                # 处理原词：去除空格
+                original = process_original_word(original)
+                mapping[original] = target
+        
+        logger.info(f"从词库.txt读取了 {len(mapping)} 个映射关系")
+    except FileNotFoundError:
+        logger.warning("词库.txt文件不存在")
+    except Exception as e:
+        logger.error(f"读取词库.txt时出错: {str(e)}")
     
     return mapping
 
-def update_keywords_file(keywords_dict: Dict[str, Tuple[float, List[str]]], 
+def update_keywords_file(keywords_dict: Dict[str, List[Tuple[int, float, List[str], str]]], 
                         word_mapping: Dict[str, str]):
     """更新keywords文件"""
     # 收集所有目标词
     all_targets = set(keywords_dict.keys())
     all_targets.update(set(word_mapping.values()))
     
-    # 为新目标词创建条目
-    for target in word_mapping.values():
-        if target not in keywords_dict:
-            keywords_dict[target] = (None, [])
-            print(f"添加新目标词：{target}")
+    # 合并配置
+    final_configs = {}  # Dict[str, Tuple[float, List[str]]]
     
-    # 根据映射更新keywords_dict中的原词列表
+    # 首先处理已有的配置
+    for word, configs in keywords_dict.items():
+        if len(configs) > 1:
+            # 有重复配置，需要合并
+            final_configs[word] = merge_configs(word, configs)
+        else:
+            # 单个配置，直接使用
+            _, threshold, orig_words, _ = configs[0]
+            final_configs[word] = (threshold, orig_words)
+    
+    # 处理词库映射中的新目标词
+    for target in word_mapping.values():
+        if target not in final_configs:
+            final_configs[target] = (None, [])
+            logger.info(f"添加新目标词：{target}")
+    
+    # 根据映射更新原词列表
     for original, target in word_mapping.items():
-        threshold, original_words = keywords_dict[target]
-        # 处理原词：去除空格
+        threshold, original_words = final_configs[target]
         processed_original = process_original_word(original)
         if processed_original not in original_words:
             original_words.append(processed_original)
-            keywords_dict[target] = (threshold, original_words)
+            final_configs[target] = (threshold, original_words)
     
     # 写入更新后的keywords文件
     with open('keywords', 'w', encoding='utf-8') as f:
         # 使用自定义排序规则
-        sorted_items = sorted(keywords_dict.items(), key=lambda x: get_sort_key(x[0]))
+        sorted_items = sorted(final_configs.items(), key=lambda x: get_sort_key(x[0]))
         for target_word, (threshold, original_words) in sorted_items:
             line = target_word
             if threshold is not None:
@@ -148,21 +228,25 @@ def update_keywords_file(keywords_dict: Dict[str, Tuple[float, List[str]]],
             if original_words:
                 line += f" {','.join(original_words)}"
             f.write(line + '\n')
+    
+    logger.info(f"更新完成，共处理 {len(final_configs)} 个目标词")
 
 def main():
+    logger.info("开始更新keywords文件...")
+    
     # 读取现有的keywords文件
-    print("读取keywords文件...")
+    logger.info("读取keywords文件...")
     keywords_dict = read_keywords_file()
     
     # 读取词库映射
-    print("读取词库.txt文件...")
+    logger.info("读取词库.txt文件...")
     word_mapping = read_word_mapping()
     
     # 更新keywords文件
-    print("更新keywords文件...")
+    logger.info("更新keywords文件...")
     update_keywords_file(keywords_dict, word_mapping)
     
-    print("完成！")
+    logger.info("全部完成！")
 
 if __name__ == "__main__":
     main() 
