@@ -11,7 +11,6 @@ from .update_keywords import (
 )
 from datetime import datetime
 import shutil
-from .text_correction import text_corrector, TextCorrector  # 添加导入
 
 logger = get_logger(__name__)
 
@@ -96,20 +95,41 @@ class HotwordsManager:
                 for target_word in sorted(keywords_dict.keys()):
                     f.write(f"{keywords_dict[target_word]}\n")
 
-            # 主动触发词典和配置更新
-            try:
-                if text_corrector._should_update_dict():  # 添加检查
-                    text_corrector._generate_custom_dict()
-                text_corrector.load_config()  # load_config 内部有自己的检查
-                logger.info("已更新自定义词典和拼音配置")
-            except Exception as e:
-                logger.error(f"更新自定义词典或拼音配置失败: {str(e)}")
-                # 不影响主流程，继续返回成功
-
             return {'code': 0, 'message': '更新成功'}
         except Exception as e:
             logger.error(f"更新keywords文件失败: {str(e)}")
             return {'code': 1, 'message': f"更新失败: {str(e)}"}
+
+    @staticmethod
+    def is_chinese_word(word: str) -> bool:
+        """判断是否是有效的词
+        
+        规则：
+        1. 纯英文词允许（比如 DNA）
+        2. 中文词必须至少两个字，或一个字加数字/英文
+        3. 不允许包含符号（包括标点符号）
+        4. 不能全是数字
+        """
+        if not word or word.isspace():
+            return False
+        
+        chinese_count = 0
+        has_digit = False
+        
+        for c in word:
+            if '\u4e00' <= c <= '\u9fa5':  # 中文字符
+                chinese_count += 1
+            elif c.isdigit():  # 数字
+                has_digit = True
+            elif not c.isalpha():  # 非字母的其他字符（符号）
+                return False
+        
+        # 纯英文词允许
+        if word.isalpha():
+            return True
+        
+        # 要么有至少两个中文字符，要么有一个中文字符加数字/英文
+        return (chinese_count >= 2) or (chinese_count == 1 and (has_digit or any(c.isalpha() for c in word)))
 
     def validate_content(self, content: str) -> Dict:
         """验证内容格式"""
@@ -134,7 +154,7 @@ class HotwordsManager:
                 parts = line.split(maxsplit=1)
                 if parts:
                     target_word = parts[0]
-                    if not TextCorrector.is_chinese_word(target_word):  # 使用导入的检查函数
+                    if not self.is_chinese_word(target_word):
                         errors.append({
                             'line': line_num,
                             'message': '目标词格式错误（必须是纯英文，或至少2个中文字，或1个中文字加数字/英文）',
@@ -181,25 +201,25 @@ class HotwordsManager:
 
                 if len(parts) >= 2:
                     # 检查第二部分是否为阈值
-                    if any(c.isdigit() for c in parts[1]):
-                        try:
-                            threshold = float(parts[1])
-                            if not 0 <= threshold <= 1:
+                    second_part = parts[1]
+                    try:
+                        # 只有当第二部分全是数字和小数点时才尝试转换为阈值
+                        if all(c.isdigit() or c == '.' for c in second_part):
+                            threshold = float(second_part)
+                            if not 0.1 <= threshold <= 1:  # 修改阈值范围为0.1到1
                                 errors.append({
                                     'line': line_num,
-                                    'message': '阈值必须在0到1之间',
+                                    'message': '阈值必须在0.1到1之间',  # 更新错误信息
                                     'content': line
                                 })
                             # 如果有第三部分，那就是原词列表
                             if len(parts) == 3:
                                 original_words = [w.strip() for w in parts[2].replace('，', ',').split(',')]
-                        except ValueError:
-                            errors.append({
-                                'line': line_num,
-                                'message': '阈值格式错误',
-                                'content': line
-                            })
-                    else:
+                        else:
+                            # 如果第二部分不是阈值，就当作原词列表的一部分
+                            original_words = [w.strip() for w in line[len(target_word):].strip().replace('，', ',').split(',')]
+                    except ValueError:
+                        # 转换失败时不报错，而是将其视为原词列表的一部分
                         original_words = [w.strip() for w in line[len(target_word):].strip().replace('，', ',').split(',')]
 
                 # 4. 处理原词列表：去除空格，过滤纯英文
