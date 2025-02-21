@@ -15,14 +15,11 @@
     </div>
 
     <div class="editor-container">
-      <el-input
-        v-model="content"
-        type="textarea"
-        :rows="20"
-        :loading="hotwordStore.loading"
-        @input="handleContentChange"
-        placeholder="请输入热词配置，每行一个"
-      />
+      <div 
+        ref="editorRef" 
+        class="editor" 
+        :class="{ 'is-loading': hotwordStore.loading }"
+      ></div>
     </div>
 
     <div v-if="hotwordStore.errors.length" class="error-list">
@@ -41,14 +38,40 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useHotwordStore } from '@/stores/hotwordStore'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
+import { EditorState } from '@codemirror/state'
+import { EditorView, lineNumbers, keymap } from '@codemirror/view'
+import { defaultKeymap } from '@codemirror/commands'
 
 const hotwordStore = useHotwordStore()
 const { content: storeContent } = storeToRefs(hotwordStore)
-const content = ref('')
+const editorRef = ref(null)
+let editorView = null
+
+// 创建编辑器实例
+const createEditor = (content = '') => {
+  const startState = EditorState.create({
+    doc: content,
+    extensions: [
+      lineNumbers(),
+      EditorView.lineWrapping,
+      keymap.of(defaultKeymap),
+      EditorView.updateListener.of(update => {
+        if (update.docChanged) {
+          handleContentChange(update.state.doc.toString())
+        }
+      })
+    ]
+  })
+
+  editorView = new EditorView({
+    state: startState,
+    parent: editorRef.value
+  })
+}
 
 // 内容变化时进行验证
 const handleContentChange = async (value) => {
@@ -63,9 +86,10 @@ const handleContentChange = async (value) => {
 // 保存内容
 const handleSave = async () => {
   try {
-    console.debug('准备保存的内容:', content.value)
+    const content = editorView.state.doc.toString()
+    console.debug('准备保存的内容:', content)
     console.info('开始保存热词内容...')
-    await hotwordStore.saveContent(content.value)
+    await hotwordStore.saveContent(content)
     console.info('热词内容保存成功')
     ElMessage.success('保存成功')
   } catch (error) {
@@ -74,17 +98,22 @@ const handleSave = async () => {
   }
 }
 
-// 组件加载时获取内容
 onMounted(async () => {
   try {
     console.info('开始加载热词内容...')
     await hotwordStore.fetchContent()
-    content.value = storeContent.value
-    console.debug('初始化的内容:', content.value)
+    createEditor(storeContent.value)
+    console.debug('初始化的内容:', storeContent.value)
     console.info('热词内容加载成功')
   } catch (error) {
     console.error('获取内容失败:', error)
     ElMessage.error(`加载失败: ${error.message || '未知错误'}`)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (editorView) {
+    editorView.destroy()
   }
 })
 </script>
@@ -115,6 +144,18 @@ onMounted(async () => {
   display: flex;
 }
 
+.editor {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+}
+
+.editor.is-loading {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .error-list {
   margin-top: 20px;
 }
@@ -128,10 +169,17 @@ onMounted(async () => {
   margin-bottom: 8px;
 }
 
-:deep(.el-textarea__inner) {
+:deep(.cm-editor) {
+  height: 100%;
+}
+
+:deep(.cm-editor.cm-focused) {
+  outline: 2px solid var(--el-color-primary-light-8);
+}
+
+:deep(.cm-scroller) {
   font-family: monospace;
   font-size: 14px;
   line-height: 1.6;
-  height: 100%;
 }
 </style> 

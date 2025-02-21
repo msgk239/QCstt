@@ -9,6 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@codemirror/basic-setup": "^0.20.0",
+    "@codemirror/commands": "^6.3.3",
+    "@codemirror/language": "^6.10.1",
+    "@codemirror/state": "^6.4.0",
+    "@codemirror/view": "^6.24.0",
     "@element-plus/icons-vue": "^2.3.1",
     "axios": "^1.6.2",
     "dayjs": "^1.11.10",
