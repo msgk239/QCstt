@@ -112,20 +112,21 @@ y2w/                           # 项目根目录
 ```
 
 ### 导入规范
-同包内模块使用相对导入（如 `from .files import service`），外部包使用绝对导入（如 `import os`）。
+同包内模块使用相对导入（如 `from .files import service`），外部包使用绝对导入（如 `import os`）。统一用 server 作为后端的根目录
 
 ### 运行方式
 
 使用 Python 模块方式：
 ```bash
-# 在项目根目录下运行
+# 在项目根目录下运行是
 python -m server.api.app
 或者
+# 在 server 目录下运行是
+python -m api.app
+
 uvicorn server.api.app:app --reload
 ```
 
-```
-g
 ### 路径处理
 所有文件路径操作都使用 `os.path` 处理，确保跨平台兼容：
 ```python

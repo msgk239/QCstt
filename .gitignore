@@ -45,6 +45,8 @@ Thumbs.db
 *.ogg
 test.wav
 server/api/speech/correction_config.yaml
+server/api/speech/backups/
+server/api/speech/backups/**
 
 # Export files
 exports/

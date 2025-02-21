@@ -23,3 +23,6 @@ gradio
 
 # Web框架
 fastapi>=0.111.1
+
+# 测试依赖
+pytest>=7.4.0

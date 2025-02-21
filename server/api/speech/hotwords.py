@@ -9,6 +9,8 @@ from .update_keywords import (
     read_keywords_file,   # 读取关键词文件
     update_keywords_file  # 更新关键词文件
 )
+from datetime import datetime
+import shutil
 
 logger = get_logger(__name__)
 
@@ -16,10 +18,32 @@ KEYWORDS_PATH = 'keywords'
 BACKUP_PATH = 'keywords.backup'
 
 class HotwordsManager:
-    def __init__(self):
-        self.keywords_path = KEYWORDS_PATH
-        self.backup_path = BACKUP_PATH
+    def __init__(self, keywords_path=None, backup_path=None):
+        """初始化热词管理器
         
+        Args:
+            keywords_path (str, optional): keywords文件路径. 默认为None
+            backup_path (str, optional): 备份文件路径. 默认为None
+        """
+        # 获取 server 目录的绝对路径
+        server_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        # 使用绝对路径
+        self.keywords_path = keywords_path or os.path.join(server_dir, 'api', 'speech', 'keywords')
+        self.backup_dir = backup_path or os.path.join(server_dir, 'api', 'speech', 'backups')
+        
+        # 确保备份目录存在
+        if not os.path.exists(self.backup_dir):
+            os.makedirs(self.backup_dir)
+        
+        # 迁移旧的备份文件（如果存在）
+        old_backup = os.path.join(os.path.dirname(self.keywords_path), 'keywords.backup')
+        if os.path.exists(old_backup):
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            new_backup = os.path.join(self.backup_dir, f'keywords_{timestamp}.backup')
+            shutil.copy2(old_backup, new_backup)
+            logger.info(f"已迁移旧备份文件到: {new_backup}")
+
     def get_content(self) -> Dict:
         """获取keywords文件内容和最后修改时间"""
         try:
@@ -43,7 +67,7 @@ class HotwordsManager:
             # 检查文件修改时间
             if last_modified is not None:
                 current_mtime = os.path.getmtime(self.keywords_path)
-                if abs(current_mtime - last_modified) > 0.001:
+                if abs(current_mtime - last_modified) > 0.001:  # 添加一个小的容差
                     return {'code': 2, 'message': '文件已被其他人修改，请刷新后重试'}
 
             # 验证内容格式
@@ -55,11 +79,20 @@ class HotwordsManager:
             self._backup_file()
 
             # 解析内容并排序
-            keywords_dict = read_keywords_file(content)
-            word_mapping = {}  # 这里不需要词库映射
-            
-            # 使用 update_keywords_file 来处理排序和写入
-            update_keywords_file(keywords_dict, word_mapping)
+            keywords_dict = {}
+            for line in content.splitlines():
+                if line.strip():
+                    # 转换中文标点为英文标点
+                    line = line.strip().replace('，', ',').replace('（', '(').replace('）', ')')
+                    parts = line.split(' ', 2)
+                    if len(parts) >= 2:
+                        target_word = parts[0]
+                        keywords_dict[target_word] = line
+
+            # 写入排序后的内容
+            with open(self.keywords_path, 'w', encoding='utf-8') as f:
+                for target_word in sorted(keywords_dict.keys()):
+                    f.write(f"{keywords_dict[target_word]}\n")
 
             return {'code': 0, 'message': '更新成功'}
         except Exception as e:
@@ -195,14 +228,47 @@ class HotwordsManager:
         }
 
     def _backup_file(self):
-        """备份keywords文件"""
+        """备份keywords文件，使用时间戳命名"""
         try:
-            if os.path.exists(self.keywords_path):
-                with open(self.keywords_path, 'r', encoding='utf-8') as src:
-                    with open(self.backup_path, 'w', encoding='utf-8') as dst:
-                        dst.write(src.read())
+            if not os.path.exists(self.keywords_path):
+                logger.warning("keywords文件不存在，跳过备份")
+                return
+
+            # 生成带时间戳的备份文件名（不使用微秒）
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_filename = f'keywords_{timestamp}.backup'
+            backup_path = os.path.join(self.backup_dir, backup_filename)
+
+            # 使用 shutil 复制文件（更安全的文件复制方式）
+            shutil.copy2(self.keywords_path, backup_path)
+            
+            # 保留最近10个备份，删除更早的备份
+            self._cleanup_old_backups()
+            
+            logger.info(f"已创建备份: {backup_filename}")
+
         except Exception as e:
             logger.error(f"备份keywords文件失败: {str(e)}")
             raise
+
+    def _cleanup_old_backups(self, keep_count=10):
+        """清理旧的备份文件，只保留最近的 keep_count 个备份"""
+        try:
+            # 获取所有备份文件
+            backup_files = [f for f in os.listdir(self.backup_dir) 
+                          if f.startswith('keywords_') and f.endswith('.backup')]
+            
+            # 按文件名排序（因为文件名包含时间戳）
+            backup_files.sort(reverse=True)  # 文件名中的时间戳格式保证了按名字排序等同于按时间排序
+            
+            # 删除多余的备份
+            for old_file in backup_files[keep_count:]:
+                old_path = os.path.join(self.backup_dir, old_file)
+                os.remove(old_path)
+                logger.debug(f"已删除旧备份: {old_file}")
+
+        except Exception as e:
+            logger.error(f"清理旧备份失败: {str(e)}")
+            # 清理失败不影响主流程，所以这里不抛出异常
 
 hotwords_manager = HotwordsManager() 
