@@ -5,9 +5,7 @@ from ..logger import get_logger
 from .update_keywords import (
     merge_configs,      # 合并重复配置
     process_original_word,  # 处理原词
-    is_pure_english,     # 检查英文
-    read_keywords_file,   # 读取关键词文件
-    update_keywords_file  # 更新关键词文件
+    is_pure_english    # 检查英文
 )
 from datetime import datetime
 import shutil
@@ -81,17 +79,30 @@ class HotwordsManager:
 
             # 解析内容并排序
             keywords_dict = {}
+            comments = []
             for line in content.splitlines():
-                if line.strip():
-                    # 转换中文标点为英文标点
-                    line = line.strip().replace('，', ',').replace('（', '(').replace('）', ')')
-                    parts = line.split(' ', 2)
-                    if parts:  # 只要有内容就保存
-                        target_word = parts[0]
-                        keywords_dict[target_word] = line
+                line = line.strip()
+                if not line:  # 跳过空行
+                    continue
+                if line.startswith('#'):  # 保存注释行
+                    comments.append(line)
+                    continue
+                # 转换中文标点为英文标点
+                line = line.replace('，', ',').replace('（', '(').replace('）', ')')
+                parts = line.split(' ', 2)
+                if parts:  # 只要有内容就保存
+                    target_word = parts[0]
+                    keywords_dict[target_word] = line
 
             # 写入排序后的内容
             with open(self.keywords_path, 'w', encoding='utf-8') as f:
+                # 先写入注释
+                for comment in comments:
+                    f.write(f"{comment}\n")
+                # 如果有注释，添加一个空行分隔
+                if comments:
+                    f.write("\n")
+                # 再写入排序后的内容
                 for target_word in sorted(keywords_dict.keys()):
                     f.write(f"{keywords_dict[target_word]}\n")
 
