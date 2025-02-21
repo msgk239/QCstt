@@ -74,7 +74,7 @@ const fileStats = computed(() => {
 
 <style scoped>
 .app-header {
-  height: 100%;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: space-between;

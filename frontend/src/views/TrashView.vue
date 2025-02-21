@@ -333,6 +333,7 @@ watch(() => route.path, (newPath) => {
 <style scoped>
 .trash-view {
   padding: 20px;
+  width: 100%;
 }
 
 .toolbar {

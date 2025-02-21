@@ -34,6 +34,7 @@ class HotwordsManager:
         
         # 确保备份目录存在
         if not os.path.exists(self.backup_dir):
+            logger.info(f"创建备份目录: {self.backup_dir}")
             os.makedirs(self.backup_dir)
         
         # 迁移旧的备份文件（如果存在）

@@ -267,10 +267,17 @@ async def get_hotwords():
 @app.post("/api/v1/hotwords")
 async def update_hotwords(data: dict = Body(...)):
     """更新热词内容"""
+    logger.info("收到热词更新请求")
+    logger.debug(f"原始请求数据: {data}")
+    
     content = data.get('content')
     last_modified = data.get('lastModified')
     
+    logger.debug(f"解析的内容: content={content}")
+    logger.debug(f"解析的时间戳: lastModified={last_modified}")
+    
     if not content:
+        logger.error("内容为空")
         return {"code": 1, "message": "内容不能为空"}
         
     return hotwords_manager.update_content(content, last_modified)

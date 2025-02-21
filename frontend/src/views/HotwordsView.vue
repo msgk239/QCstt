@@ -53,6 +53,7 @@ const content = ref('')
 // 内容变化时进行验证
 const handleContentChange = async (value) => {
   try {
+    console.debug('内容变化，当前值:', value)
     await hotwordStore.validateContent(value)
   } catch (error) {
     console.error('验证失败:', error)
@@ -62,20 +63,28 @@ const handleContentChange = async (value) => {
 // 保存内容
 const handleSave = async () => {
   try {
+    console.debug('准备保存的内容:', content.value)
+    console.info('开始保存热词内容...')
     await hotwordStore.saveContent(content.value)
+    console.info('热词内容保存成功')
     ElMessage.success('保存成功')
   } catch (error) {
     console.error('保存失败:', error)
+    ElMessage.error(`保存失败: ${error.message || '未知错误'}`)
   }
 }
 
 // 组件加载时获取内容
 onMounted(async () => {
   try {
+    console.info('开始加载热词内容...')
     await hotwordStore.fetchContent()
     content.value = storeContent.value
+    console.debug('初始化的内容:', content.value)
+    console.info('热词内容加载成功')
   } catch (error) {
     console.error('获取内容失败:', error)
+    ElMessage.error(`加载失败: ${error.message || '未知错误'}`)
   }
 })
 </script>
@@ -84,6 +93,7 @@ onMounted(async () => {
 .hotwords-container {
   padding: 20px;
   height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 20px;
