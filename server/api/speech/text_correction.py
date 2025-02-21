@@ -74,8 +74,34 @@ class TextCorrector:
         keywords_path = os.path.join(self.base_dir, "keywords")
         
         def is_chinese_word(word: str) -> bool:
-            """判断是否是中文词"""
-            return all('\u4e00' <= c <= '\u9fa5' for c in word)
+            """判断是否是有效的词
+            
+            规则：
+            1. 纯英文词允许（比如 DNA）
+            2. 中文词必须至少两个字，或一个字加数字/英文
+            3. 不允许包含符号（包括标点符号）
+            4. 不能全是数字
+            """
+            if not word or word.isspace():
+                return False
+            
+            chinese_count = 0
+            has_digit = False
+            
+            for c in word:
+                if '\u4e00' <= c <= '\u9fa5':  # 中文字符
+                    chinese_count += 1
+                elif c.isdigit():  # 数字
+                    has_digit = True
+                elif not c.isalpha():  # 非字母的其他字符（符号）
+                    return False
+            
+            # 纯英文词允许
+            if word.isalpha():
+                return True
+            
+            # 要么有至少两个中文字符，要么有一个中文字符加数字/英文
+            return (chinese_count >= 2) or (chinese_count == 1 and (has_digit or any(c.isalpha() for c in word)))
         
         try:
             with open(keywords_path, 'r', encoding='utf-8') as f:

@@ -168,16 +168,46 @@ keywords (源文件)
 
 ## 文件更新流程
 
-1. 修改keywords文件
-2. 程序检测到keywords更新：
-   - 检查custom_dict.txt是否需要更新
-     - 不存在或keywords更新时重新生成
-     - 生成时自动去重合并
-   - 检查correction_config.yaml是否需要更新
-     - 不存在或keywords更新时重新生成
-     - 更新时自动合并重复配置
-   - 刷新内存数据结构
-     - 使用合并后的配置初始化
+1. keywords 文件更新方式：
+   A. 通过 API (HotwordsManager.update_content)
+      - 验证格式
+      - 备份原文件
+      - 写入新内容
+      - 主动触发相关文件更新：
+        ```python
+        try:
+            if text_corrector._should_update_dict():
+                text_corrector._generate_custom_dict()
+            text_corrector.load_config()
+            logger.info("已更新自定义词典和拼音配置")
+        except Exception as e:
+            logger.error(f"更新失败: {str(e)}")
+        ```
+   
+   B. 其他方式修改
+      - 下次使用时自动检测并更新
+      - 在初始化分词器和加载配置时检查
+
+2. 更新检查机制：
+   A. custom_dict.txt 检查：
+      - 不存在时重新生成
+      - keywords 修改时间 > dict 修改时间时重新生成
+      - 生成时自动去重合并
+   
+   B. correction_config.yaml 检查：
+      - 不存在时重新生成
+      - keywords 修改时间 > config 修改时间时重新生成
+      - 更新时自动合并重复配置
+
+3. 错误处理：
+   A. 主动更新时：
+      - 记录错误但不影响主流程
+      - 返回成功状态给前端
+      - 在下次使用时重试更新
+   
+   B. 被动更新时：
+      - 记录错误并继续使用旧配置
+      - 在下次使用时重试更新
 
 ## 重复配置处理流程
 

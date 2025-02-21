@@ -11,6 +11,7 @@ from .update_keywords import (
 )
 from datetime import datetime
 import shutil
+from .text_correction import text_corrector, TextCorrector  # 添加导入
 
 logger = get_logger(__name__)
 
@@ -86,7 +87,7 @@ class HotwordsManager:
                     # 转换中文标点为英文标点
                     line = line.strip().replace('，', ',').replace('（', '(').replace('）', ')')
                     parts = line.split(' ', 2)
-                    if len(parts) >= 2:
+                    if parts:  # 只要有内容就保存
                         target_word = parts[0]
                         keywords_dict[target_word] = line
 
@@ -94,6 +95,16 @@ class HotwordsManager:
             with open(self.keywords_path, 'w', encoding='utf-8') as f:
                 for target_word in sorted(keywords_dict.keys()):
                     f.write(f"{keywords_dict[target_word]}\n")
+
+            # 主动触发词典和配置更新
+            try:
+                if text_corrector._should_update_dict():  # 添加检查
+                    text_corrector._generate_custom_dict()
+                text_corrector.load_config()  # load_config 内部有自己的检查
+                logger.info("已更新自定义词典和拼音配置")
+            except Exception as e:
+                logger.error(f"更新自定义词典或拼音配置失败: {str(e)}")
+                # 不影响主流程，继续返回成功
 
             return {'code': 0, 'message': '更新成功'}
         except Exception as e:
@@ -119,6 +130,18 @@ class HotwordsManager:
                 })
 
             try:
+                # 1.5 检查目标词格式
+                parts = line.split(maxsplit=1)
+                if parts:
+                    target_word = parts[0]
+                    if not TextCorrector.is_chinese_word(target_word):  # 使用导入的检查函数
+                        errors.append({
+                            'line': line_num,
+                            'message': '目标词格式错误（必须是纯英文，或至少2个中文字，或1个中文字加数字/英文）',
+                            'content': line
+                        })
+                        continue
+
                 # 2. 提取上下文词（如果有）
                 context_list = []
                 if '(' in line:
