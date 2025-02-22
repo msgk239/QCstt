@@ -45,6 +45,7 @@ import { ElMessage } from 'element-plus'
 import { EditorState } from '@codemirror/state'
 import { EditorView, lineNumbers, keymap } from '@codemirror/view'
 import { defaultKeymap } from '@codemirror/commands'
+import { search, searchKeymap, openSearchPanel } from '@codemirror/search'
 
 const hotwordStore = useHotwordStore()
 const { content: storeContent } = storeToRefs(hotwordStore)
@@ -58,7 +59,22 @@ const createEditor = (content = '') => {
     extensions: [
       lineNumbers(),
       EditorView.lineWrapping,
-      keymap.of(defaultKeymap),
+      keymap.of([...defaultKeymap, ...searchKeymap]),
+      search({
+        top: true,
+        caseSensitive: false,
+        literal: false
+      }),
+      EditorView.domEventHandlers({
+        keydown: (event) => {
+          if (event.key === 'f' && (event.ctrlKey || event.metaKey)) {
+            openSearchPanel(editorView)
+            event.preventDefault()
+            return true
+          }
+          return false
+        }
+      }),
       EditorView.updateListener.of(update => {
         if (update.docChanged) {
           handleContentChange(update.state.doc.toString())

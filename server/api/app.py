@@ -268,12 +268,12 @@ async def get_hotwords():
 async def update_hotwords(data: dict = Body(...)):
     """更新热词内容"""
     logger.info("收到热词更新请求")
-    logger.debug(f"原始请求数据: {data}")
+    #logger.debug(f"原始请求数据: {data}")
     
     content = data.get('content')
     last_modified = data.get('lastModified')
     
-    logger.debug(f"解析的内容: content={content}")
+    #logger.debug(f"解析的内容: content={content}")
     logger.debug(f"解析的时间戳: lastModified={last_modified}")
     
     if not content:

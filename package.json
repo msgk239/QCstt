@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@codemirror/search": "^6.5.5"
+  }
+}
