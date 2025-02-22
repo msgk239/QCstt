@@ -14,14 +14,6 @@
       </div>
     </div>
 
-    <div class="editor-container">
-      <div 
-        ref="editorRef" 
-        class="editor" 
-        :class="{ 'is-loading': hotwordStore.loading }"
-      ></div>
-    </div>
-
     <div v-if="hotwordStore.errors.length" class="error-list">
       <h3>格式错误：</h3>
       <el-alert
@@ -33,6 +25,14 @@
         show-icon
         :closable="false"
       />
+    </div>
+
+    <div class="editor-container">
+      <div 
+        ref="editorRef" 
+        class="editor" 
+        :class="{ 'is-loading': hotwordStore.loading }"
+      ></div>
     </div>
   </div>
 </template>
@@ -67,8 +67,15 @@ const createEditor = (content = '') => {
       }),
       EditorView.domEventHandlers({
         keydown: (event) => {
+          // 搜索快捷键
           if (event.key === 'f' && (event.ctrlKey || event.metaKey)) {
             openSearchPanel(editorView)
+            event.preventDefault()
+            return true
+          }
+          // 保存快捷键
+          if (event.key === 's' && (event.ctrlKey || event.metaKey)) {
+            handleSave()
             event.preventDefault()
             return true
           }
@@ -141,7 +148,7 @@ onBeforeUnmount(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 10px;
 }
 
 .header {
@@ -152,11 +159,25 @@ onBeforeUnmount(() => {
   top: 0;
   background-color: #fff;
   z-index: 1;
-  padding: 10px 0;
 }
 
 .header h2 {
   margin: 0;
+}
+
+.error-list {
+  position: sticky;
+  top: 0;
+  background-color: #fff;
+  z-index: 1;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--el-color-danger-light-7);
+}
+
+.error-list h3 {
+  margin: 0 0 10px 0;
+  color: var(--el-color-danger);
 }
 
 .editor-container {
@@ -177,15 +198,6 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
-.error-list {
-  margin-top: 20px;
-}
-
-.error-list h3 {
-  margin-bottom: 10px;
-  color: var(--el-color-danger);
-}
-
 :deep(.el-alert) {
   margin-bottom: 8px;
 }
@@ -202,5 +214,9 @@ onBeforeUnmount(() => {
   font-family: monospace;
   font-size: 14px;
   line-height: 1.6;
+}
+
+:deep(.cm-panel.cm-search) {
+  z-index: 1;
 }
 </style> 
