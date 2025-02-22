@@ -144,11 +144,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .hotwords-container {
   padding: 20px;
-  height: 100%;
+  height: 100vh;
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow: hidden;
 }
 
 .header {
@@ -184,13 +185,15 @@ onBeforeUnmount(() => {
   flex: 1;
   height: 100%;
   display: flex;
+  min-height: 0;
 }
 
 .editor {
   width: 100%;
-  height: 100%;
+  height: calc(100vh - 150px);
   border: 1px solid var(--el-border-color);
   border-radius: 4px;
+  overflow: hidden;
 }
 
 .editor.is-loading {
@@ -214,6 +217,7 @@ onBeforeUnmount(() => {
   font-family: monospace;
   font-size: 14px;
   line-height: 1.6;
+  overflow: auto !important;
 }
 
 :deep(.cm-panel.cm-search) {
