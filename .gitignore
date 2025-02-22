@@ -98,3 +98,5 @@ server/api/speech/custom_dict.txt
 server/api/speech/custom_dict.txt
 server/api/speech/custom_dict.txt
 server/api/speech/原始词库.txt
+server/api/speech/ciku/原始词库_去重.txt
+server/api/speech/ciku/处理后词库.txt

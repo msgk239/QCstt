@@ -84,12 +84,39 @@ def merge_configs(configs: List[Tuple[int, float, List[str], List[str], str]]) -
     final_threshold = max(thresholds) if thresholds else 0.9
     return (final_threshold, list(all_original_words), list(all_context_words))
 
+def filter_special_chars(text: str) -> str:
+    """只保留中文、英文字母和数字"""
+    return ''.join(char for char in text 
+                  if ('\u4e00' <= char <= '\u9fff' or  # 中文字符
+                      'a' <= char.lower() <= 'z' or    # 英文字母
+                      '0' <= char <= '9'))             # 数字
+
+def is_valid_target(text: str) -> bool:
+    """检查目标词是否合法（不能只有一个中文字）"""
+    # 过滤掉特殊字符
+    filtered_text = filter_special_chars(text)
+    if not filtered_text:
+        return False
+        
+    # 统计中文字符数
+    chinese_chars = len([c for c in filtered_text if '\u4e00' <= c <= '\u9fff'])
+    
+    # 如果只有一个中文字且没有其他字符，则不合法
+    if chinese_chars == 1 and len(filtered_text) == 1:
+        return False
+        
+    return True
+
 def read_keywords_file(file_path='keywords') -> Dict[str, List[Tuple[int, float, List[str], List[str], str]]]:
     """读取keywords文件，返回 {目标词: [(行号, 阈值, 原词列表, 上下文词列表, 原始行)]} 的字典"""
+    # 修改为使用当前文件所在目录的相对路径
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    keywords_path = os.path.join(current_dir, file_path)
+    
     keywords_dict = {}
     duplicate_words = {}
     
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(keywords_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
         for line_number, line in enumerate(lines, 1):
             line = line.strip()
@@ -112,6 +139,20 @@ def read_keywords_file(file_path='keywords') -> Dict[str, List[Tuple[int, float,
                 continue
                 
             target_word = parts[0]
+            
+            # 检查目标词
+            filtered_word = filter_special_chars(target_word)
+            if not is_valid_target(target_word):
+                if not filtered_word:
+                    logger.warning(f"第 {line_number} 行: 目标词 '{target_word}' 过滤特殊字符后为空，已跳过")
+                    continue
+                elif len(filtered_word) == 1 and '\u4e00' <= filtered_word <= '\u9fff':
+                    logger.warning(f"第 {line_number} 行: 目标词 '{target_word}' 只包含一个中文字 '{filtered_word}'，已跳过")
+                    continue
+            elif filtered_word != target_word:
+                logger.warning(f"第 {line_number} 行: 目标词 '{target_word}' 包含特殊字符，已过滤为 '{filtered_word}'")
+                target_word = filtered_word
+            
             threshold = None
             original_words = []
             
@@ -157,10 +198,14 @@ def read_keywords_file(file_path='keywords') -> Dict[str, List[Tuple[int, float,
     return keywords_dict
 
 def read_word_mapping() -> Dict[str, str]:
-    """读取词库.txt文件，返回 {原词: 目标词} 的字典"""
+    """读取词库文件，返回 {原词: 目标词} 的字典"""
     mapping = {}
+    # 修改为使用当前文件所在目录的相对路径
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(current_dir, 'ciku', '原始词库_去重.txt')
+    
     try:
-        with open('词库.txt', 'r', encoding='utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if not line or '：' not in line:
@@ -178,26 +223,42 @@ def read_word_mapping() -> Dict[str, str]:
                 original = process_original_word(original)
                 mapping[original] = target
         
-        logger.info(f"从词库.txt读取了 {len(mapping)} 个映射关系")
+        logger.info(f"从{file_path}读取了 {len(mapping)} 个映射关系")
     except FileNotFoundError:
-        logger.warning("词库.txt文件不存在")
+        logger.warning(f"{file_path}文件不存在")
     except Exception as e:
-        logger.error(f"读取词库.txt时出错: {str(e)}")
+        logger.error(f"读取{file_path}时出错: {str(e)}")
     
     return mapping
 
 def update_keywords_file(keywords_dict: Dict[str, List[Tuple[int, float, List[str], List[str], str]]], 
                         word_mapping: Dict[str, str]):
     """更新keywords文件"""
-    # 收集所有目标词
-    all_targets = set(keywords_dict.keys())
-    all_targets.update(set(word_mapping.values()))
+    # 修改为使用当前文件所在目录的相对路径
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    keywords_path = os.path.join(current_dir, 'keywords')
+    
+    # 首先读取原文件，保存所有注释行
+    comments = []
+    with open(keywords_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            if line.strip().startswith('#'):
+                comments.append(line)
+    
+    # 收集所有目标词，并过滤不合法的目标词
+    all_targets = {filter_special_chars(word) for word in keywords_dict.keys() 
+                  if is_valid_target(word)}
+    all_targets.update({filter_special_chars(word) for word in word_mapping.values() 
+                       if is_valid_target(word)})
     
     # 合并配置
-    final_configs = {}  # Dict[str, Tuple[float, List[str], List[str]]]
+    final_configs = {}
     
     # 首先处理已有的配置
     for word, configs in keywords_dict.items():
+        if not is_valid_target(word):
+            logger.warning(f"跳过不合法的目标词：{word}")
+            continue
         if len(configs) > 1:
             # 有重复配置，需要合并
             final_configs[word] = merge_configs(configs)
@@ -208,12 +269,35 @@ def update_keywords_file(keywords_dict: Dict[str, List[Tuple[int, float, List[st
     
     # 处理词库映射中的新目标词
     for target in word_mapping.values():
+        filtered_target = filter_special_chars(target)
+        if not is_valid_target(target):
+            if not filtered_target:
+                logger.warning(f"跳过目标词 '{target}'：过滤特殊字符后为空")
+                continue
+            elif len(filtered_target) == 1 and '\u4e00' <= filtered_target <= '\u9fff':
+                logger.warning(f"跳过目标词 '{target}'：只包含一个中文字 '{filtered_target}'")
+                continue
+        elif filtered_target != target:
+            logger.warning(f"目标词 '{target}' 包含特殊字符，已过滤为 '{filtered_target}'")
+            target = filtered_target
+        
         if target not in final_configs:
             final_configs[target] = (None, [], [])
             logger.info(f"添加新目标词：{target}")
     
     # 根据映射更新原词列表
     for original, target in word_mapping.items():
+        # 过滤目标词中的特殊字符
+        filtered_target = filter_special_chars(target)
+        if filtered_target != target:
+            logger.warning(f"目标词 '{target}' 包含特殊字符，已过滤为 '{filtered_target}'")
+            target = filtered_target
+            
+        # 如果目标词不在配置中，跳过并提示
+        if target not in final_configs:
+            logger.warning(f"跳过映射 '{original} -> {target}'：目标词不在配置列表中")
+            continue
+            
         threshold, original_words, context_words = final_configs[target]
         processed_original = process_original_word(original)
         if processed_original not in original_words:
@@ -221,8 +305,16 @@ def update_keywords_file(keywords_dict: Dict[str, List[Tuple[int, float, List[st
             final_configs[target] = (threshold, original_words, context_words)
     
     # 写入更新后的keywords文件
-    with open('keywords', 'w', encoding='utf-8') as f:
-        # 使用自定义排序规则
+    with open(keywords_path, 'w', encoding='utf-8') as f:
+        # 首先写入所有注释
+        for comment in comments:
+            f.write(comment)
+            
+        # 如果最后一个注释后面没有空行，添加一个空行
+        if comments and not comments[-1].strip() == '':
+            f.write('\n')
+            
+        # 使用自定义排序规则写入更新的内容
         sorted_items = sorted(final_configs.items(), key=lambda x: get_sort_key(x[0]))
         for target_word, (threshold, original_words, context_words) in sorted_items:
             line = target_word
@@ -244,7 +336,7 @@ def main():
     keywords_dict = read_keywords_file()
     
     # 读取词库映射
-    logger.debug("读取词库.txt文件...")
+    logger.debug("读取词库文件...")
     word_mapping = read_word_mapping()
     
     # 更新keywords文件

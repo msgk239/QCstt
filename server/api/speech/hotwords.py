@@ -5,7 +5,8 @@ from ..logger import get_logger
 from .update_keywords import (
     merge_configs,      # 合并重复配置
     process_original_word,  # 处理原词
-    is_pure_english    # 检查英文
+    is_pure_english,    # 检查英文
+    get_sort_key        # 新增的排序函数
 )
 from datetime import datetime
 import shutil
@@ -102,8 +103,8 @@ class HotwordsManager:
                 # 如果有注释，添加一个空行分隔
                 if comments:
                     f.write("\n")
-                # 再写入排序后的内容
-                for target_word in sorted(keywords_dict.keys()):
+                # 使用get_sort_key进行排序
+                for target_word in sorted(keywords_dict.keys(), key=get_sort_key):
                     f.write(f"{keywords_dict[target_word]}\n")
 
             return {'code': 0, 'message': '更新成功'}
