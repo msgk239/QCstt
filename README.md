@@ -1,5 +1,6 @@
-# SenseVoice ASR 系统
-这是开发用的文档
+# QCstt
+
+潜催语音转文字系统 (QianCui Speech-to-Text)
 
 基于 FastAPI 和 Vue 3 开发的语音识别系统，支持多语言识别和多种音频格式。
 本系统完全保护用户隐私，所有处理均在本地完成。
@@ -120,7 +121,9 @@ y2w/                           # 项目根目录
 ```bash
 # 在项目根目录下运行是
 python -m server.api.app
-或者
+
+生产环境：
+python -m server.api.prod
 # 在 server 目录下运行是
 python -m api.app
 

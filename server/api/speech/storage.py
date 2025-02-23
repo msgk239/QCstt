@@ -14,12 +14,13 @@ class TranscriptManager:
     def save_result(self, file_id: str, result: dict) -> bool:
         """保存识别结果"""
         try:
-            logger.info(f"保存转写结果: {file_id}")
+            logger.info(f"开始保存转写结果: {file_id}")
             file_dir = get_transcript_dir(self.transcripts_dir, file_id)
             
             # 保存原始识别结果
             original_path = os.path.join(file_dir, "original.json")
             if not safe_write_json(original_path, result):
+                logger.error(f"保存原始识别结果失败: {file_id}")
                 return False
             
             # 保存元数据
@@ -34,15 +35,14 @@ class TranscriptManager:
             return safe_write_json(metadata_path, metadata)
             
         except Exception as e:
-            print(f"Save recognition result error: {str(e)}")
+            logger.error(f"保存识别结果出错: {str(e)}")
             return False
 
     def get_transcript(self, file_id: str) -> dict:
         """获取转写结果"""
         file_dir = get_transcript_dir(self.transcripts_dir, file_id)
-        print(f"\n=== 开始获取转写结果 ===")
-        print(f"文件ID: {file_id}")
-        print(f"转写目录: {file_dir}")
+        logger.info(f"开始获取转写结果, 文件ID: {file_id}")
+        logger.debug(f"转写目录: {file_dir}")
         result = {}
         
         # 读取所有相关文件
@@ -54,17 +54,16 @@ class TranscriptManager:
         
         for key, filename in file_types.items():
             file_path = os.path.join(file_dir, filename)
-            print(f"\n检查文件: {file_path}")
-            print(f"文件是否存在: {os.path.exists(file_path)}")
+            logger.debug(f"检查文件: {file_path}, 是否存在: {os.path.exists(file_path)}")
             
             data = safe_read_json(file_path)
             if data:
-                print(f"成功读取 {key} 数据")
+                logger.debug(f"成功读取 {key} 数据")
                 result[key] = data
             else:
-                print(f"未找到 {key} 数据")
+                logger.info(f"未找到 {key} 数据")
                 
-        print(f"\n=== 转写结果获取完成 ===")
+        logger.debug("转写结果获取完成")
         return result if result else None
 
     def delete_transcript(self, file_id: str) -> bool:
@@ -74,20 +73,19 @@ class TranscriptManager:
             if os.path.exists(file_dir):
                 import shutil
                 shutil.rmtree(file_dir)
+                logger.info(f"成功删除转写结果: {file_id}")
             return True
         except Exception as e:
-            print(f"Delete transcript error: {str(e)}")
+            logger.error(f"删除转写结果出错: {str(e)}")
             return False
 
     def get_metadata(self, file_id: str) -> dict:
         """获取转写元数据"""
         file_dir = get_transcript_dir(self.transcripts_dir, file_id)
         metadata_path = os.path.join(file_dir, "metadata.json")
-        print(f"\n=== 获取元数据 ===")
-        print(f"元数据路径: {metadata_path}")
-        print(f"文件是否存在: {os.path.exists(metadata_path)}")
+        logger.debug(f"获取元数据, 路径: {metadata_path}, 是否存在: {os.path.exists(metadata_path)}")
         metadata = safe_read_json(metadata_path)
-        print(f"元数据内容: {metadata}")
+        logger.debug(f"元数据内容: {metadata}")
         return metadata
 
 # 创建全局实例

@@ -35,7 +35,10 @@ app = FastAPI()
 # 配置 CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite 开发服务器默认端口
+    allow_origins=[
+        "http://localhost:5173",  # Vite 开发服务器默认端口
+        "http://localhost:4173"   # Vite 预览服务器默认端口
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -333,7 +336,6 @@ if __name__ == "__main__":
         host="0.0.0.0", 
         port=8010, 
         reload=True,
-        log_level="info",
         access_log=True,
         use_colors=True,
         log_config=None  # 使用我们自己的日志配置

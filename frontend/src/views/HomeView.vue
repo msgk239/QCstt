@@ -223,6 +223,7 @@
 import { ref, computed, onMounted, watch, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as asrApi from '@/api/modules/asr'
+import { fileApi } from '@/api/modules/file'
 import FileUpload from '@/components/file/FileUpload.vue'
 import { useRouter } from 'vue-router'
 import { useFileStore } from '@/stores/fileStore'
@@ -478,7 +479,7 @@ const getStatusType = (status) => {
 // 文件路径相关功能
 const handleCopyPath = async (file) => {
   try {
-    const response = await asrApi.getFilePath(file.file_id)
+    const response = await fileApi.getFilePath(file.file_id)
     if (response.code === 200) {
       const path = response.data.path
       await navigator.clipboard.writeText(path)
@@ -494,7 +495,7 @@ const handleCopyPath = async (file) => {
 
 const handleShowPath = async (file) => {
   try {
-    const response = await asrApi.getFilePath(file.file_id)
+    const response = await fileApi.getFilePath(file.file_id)
     if (response.code === 200) {
       const path = response.data.path
       // 使用 electron 的 shell.showItemInFolder

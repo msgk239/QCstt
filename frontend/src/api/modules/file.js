@@ -419,6 +419,12 @@ export const fileApi = {
   getTranscript,
   updateTranscript,
   formatData: formatFileData,
+  getFilePath: (fileId) => {
+    return request({
+      url: `/api/v1/files/${fileId}/path`,
+      method: 'get'
+    })
+  },
   saveContent: (fileId, data) => {
     return request({
       url: `/api/v1/files/${fileId}`,

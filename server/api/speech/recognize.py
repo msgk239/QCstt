@@ -161,7 +161,7 @@ class SpeechService:
             logger.info(f"语音识别完成，总时长: {audio_duration}秒")  # 使用正确的时长
             
             total_time = time.perf_counter() - start_time  # 计算总处理时间
-            logger.info(f"语音识别完成，音频时长: {audio_duration:.2f}秒，总处理耗时: {total_time:.2f}秒，实时率: {audio_duration/total_time:.2f}x")
+            logger.warning(f"语音识别完成，音频时长: {audio_duration:.2f}秒，总处理耗时: {total_time:.2f}秒，实时率: {audio_duration/total_time:.2f}x")
             
             # 在返回结果中添加处理时间信息
             recognition_result["data"]["process_info"] = {
