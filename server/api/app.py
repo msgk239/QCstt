@@ -15,6 +15,7 @@ from fastapi import FastAPI, UploadFile, File, Form, Query, Request, Body, HTTPE
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
 
 # 本地模块
 from .files.service import file_service
@@ -36,13 +37,24 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",  # Vite 开发服务器默认端口
-        "http://localhost:4173"   # Vite 预览服务器默认端口
+        "http://localhost:5173",  # Vite 开发服务器
+        "http://localhost:4173",  # Vite 预览服务器
+        "http://localhost:8010",  # 打包后的地址
+        "*"  # 允许所有来源（生产环境可能需要限制）
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 添加缓存中间件
+@app.middleware("http")
+async def add_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/assets/"):
+        # 为静态资源添加缓存头
+        response.headers["Cache-Control"] = "public, max-age=31536000"
+    return response
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -329,6 +341,13 @@ def standard_response(data=None, error=None, code=200):
             "message": error
         }
     )
+
+# 所有API路由定义完成后，最后才挂载静态文件
+app.mount("/", StaticFiles(
+    directory="frontend/dist",
+    html=True,
+    check_dir=False
+), name="static")
 
 if __name__ == "__main__":
     uvicorn.run(

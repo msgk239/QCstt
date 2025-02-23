@@ -123,7 +123,7 @@ y2w/                           # 项目根目录
 python -m server.api.app
 
 生产环境：
-python -m server.api.prod
+python -m server.api.QCstt
 # 在 server 目录下运行是
 python -m api.app
 
