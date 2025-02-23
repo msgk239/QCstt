@@ -63,12 +63,12 @@ class LogConfig:
     # INFO: 显示一般信息
     # WARNING: 只显示警告和错误（生产环境推荐）
     # ERROR: 只显示错误
-    LOG_LEVEL = logging.DEBUG  # 修改为 DEBUG 级别
+    LOG_LEVEL = logging.WARNING  # 修改为生产环境级别
     
     # 调试模式开关
     # True: 显示详细日志（开发环境）
     # False: 精简日志（生产环境）
-    DEBUG = True  # 修改为 True
+    DEBUG = False  # 修改为生产环境设置
     
     # 控制台日志格式
     CONSOLE_FORMAT = "%(levelname)s: %(message)s"
@@ -76,13 +76,13 @@ class LogConfig:
     # FastAPI 配置
     # True: 显示详细的API调试信息
     # False: 关闭API调试信息（生产环境推荐）
-    FASTAPI_DEBUG = True  # 修改为 True
+    FASTAPI_DEBUG = False  # 修改为生产环境设置
     
     # FastAPI 日志级别
     # logging.DEBUG: 显示所有API相关日志
     # logging.INFO: 显示一般API信息
     # logging.WARNING: 只显示API警告和错误（生产环境推荐）
-    FASTAPI_LOG_LEVEL = logging.DEBUG  # 修改为 DEBUG
+    FASTAPI_LOG_LEVEL = logging.WARNING  # 修改为生产环境级别
 
 class JsonFormatter(logging.Formatter):
     """自定义 JSON 格式化器"""
@@ -158,7 +158,7 @@ class Logger:
             logger.handlers.clear()
         
         # 设置日志级别
-        logger.setLevel(logging.DEBUG if LogConfig.DEBUG else logging.INFO)
+        logger.setLevel(logging.WARNING)  # 修改为 WARNING 级别
         
         # 只使用 RichHandler 进行控制台输出
         console = Console(
@@ -186,20 +186,15 @@ class Logger:
         )
         console_handler.addFilter(JsonFilter())
         console_handler.setFormatter(logging.Formatter(LogConfig.CONSOLE_FORMAT))
-        console_handler.setLevel(logging.DEBUG)
+        console_handler.setLevel(logging.WARNING)  # 修改为 WARNING 级别
         logger.addHandler(console_handler)
         
-        # 第三方库日志级别配置
-        # WARNING: 只显示警告和错误（生产环境推荐）
-        # INFO: 显示一般信息（开发环境可用）
-        # DEBUG: 显示所有信息（调试时可用）
+        # 第三方库日志级别配置保持 WARNING
         logging.getLogger("uvicorn").setLevel(logging.WARNING)
         logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
         logging.getLogger("python_multipart").setLevel(logging.WARNING)
         logging.getLogger("fastapi").setLevel(logging.WARNING)
         logging.getLogger("numba").setLevel(logging.WARNING)
-        
-        # 要切换到开发模式，可以将上面的 WARNING 改为 INFO 或 DEBUG
         
         cls._instance = logger
         return logger

@@ -153,3 +153,5 @@ file_path = self.audio_dir + "/" + filename
 
 ## 系统要求
 需要安装 FFmpeg（用于音频处理）：`winget install Gyan.FFmpeg`
+
+INFO: 语音识别完成，音频时长: 466.08秒，总处理耗时: 62.98秒，实时率: 7.40x 
