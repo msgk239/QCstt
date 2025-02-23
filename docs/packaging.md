@@ -20,65 +20,64 @@ Y2W/                 # 应用根目录
 
 ### 3.1 生产环境打包（无控制台）
 ```powershell
-# PowerShell 多行格式
 python -m nuitka `
-    --standalone `                  # 生成独立可执行程序
-    --windows-disable-console `     # 禁用控制台窗口
-    --output-dir=QCstt `           # 输出目录
-    --include-data-dir=frontend/dist=QCstt/frontend/dist `  # 包含前端文件
-    --include-data-dir=server=QCstt/server `               # 包含后端文件
-    --include-data-dir=.cache=QCstt/.cache `              # 包含缓存文件
-    --follow-imports `             # 自动包含所有导入的模块
-    --nofollow-import-to=*.tests ` # 排除测试文件
-    --windows-icon-from-ico=frontend/dist/favicon.ico `  # 设置程序图标
-    --mingw64 `                    # 使用MinGW64编译器(性能最好,约20%性能提升)
-    --jobs=$(nproc) `             # 自动设置并行编译数
-    --lto=yes `                    # 启用链接时优化
-    --pgo-c `                      # 启用性能指导优化
-    --static-libpython=yes `       # 静态链接Python库
-    --noinclude-pytest-mode=nofollow `      # 排除测试相关依赖
-    --noinclude-setuptools-mode=nofollow `  # 排除安装相关依赖
-    --enable-plugin=anti-bloat `   # 启用依赖优化插件
-    --report=QCstt_report.xml `    # 生成编译报告
-    --windows-uac-admin=no `       # 不请求管理员权限
-    --windows-company-name="公司名" `      # 公司名称(版本信息)
-    --windows-product-name="产品名" `      # 产品名称(版本信息)
-    --windows-file-version="1.0.0.0" `     # 文件版本
-    --windows-product-version="1.0.0.0" `  # 产品版本
-    --windows-file-description="描述" `     # 文件描述
-    --windows-copyright="版权" `           # 版权信息
-    --python-flag=no_site `        # 优化启动,不加载site包
-    --python-flag=no_warnings `    # 禁用警告信息
-    --python-flag=no_asserts `     # 禁用断言检查提升性能
-    server/api/QCstt.py           # 入口Python文件
+--standalone `
+--windows-disable-console `
+--output-dir=QCstt `
+--include-data-dir="frontend/dist=frontend/dist" `
+--include-data-dir="server=server" `
+--include-data-dir=".cache=.cache" `
+--nofollow-import-to=*.tests `
+--windows-icon-from-ico="frontend/dist/favicon.ico" `
+--mingw64 `
+--jobs=4 `
+--lto=yes `
+--noinclude-pytest-mode=nofollow `
+--noinclude-setuptools-mode=nofollow `
+--report=QCstt_report.xml `
+--python-flag=no_site `
+--python-flag=no_warnings `
+--python-flag=no_asserts `
+"server/api/QCstt.py"
+```
 
 ### 3.2 生产环境测试打包（有控制台）
 ```powershell
-# PowerShell 多行格式
 python -m nuitka `
-    --standalone `                  # 生成独立可执行程序
-    --output-dir=QCstt_test `      # 输出目录
-    --include-data-dir=frontend/dist=QCstt_test/frontend/dist `  # 包含前端文件
-    --include-data-dir=server=QCstt_test/server `               # 包含后端文件
-    --include-data-dir=.cache=QCstt_test/.cache `              # 包含模型文件
-    --follow-imports `             # 自动包含所有导入的模块
-    --nofollow-import-to=*.tests ` # 排除测试文件
-    --windows-icon-from-ico=frontend/dist/favicon.ico `  # 设置程序图标
-    --module-parameter=torch-disable-jit=no `   # 允许PyTorch JIT
-    --module-parameter=numba-disable-jit=no `   # 允许Numba JIT
-    --mingw64 `                    # 使用MinGW64编译器获得更好性能
-    --jobs=$(nproc) `             # 自动设置并行编译数
-    --lto=yes `                    # 启用链接时优化
-    --pgo-c `                      # 启用性能指导优化
-    --static-libpython=yes `       # 静态链接Python库
-    --noinclude-pytest-mode=nofollow `      # 排除测试相关依赖
-    --noinclude-setuptools-mode=nofollow `  # 排除安装相关依赖
-    --enable-plugin=anti-bloat `   # 启用依赖优化插件
-    --report=QCstt_test_report.xml `    # 生成编译报告
-    --windows-uac-admin=no `       # 不请求管理员权限
-    --python-flag=no_site `        # 优化启动,不加载site包
-    server/api/QCstt.py           # 入口Python文件
+--standalone `
+--output-dir=QCstt_test `
+--include-data-dir="frontend/dist=frontend/dist" `
+--include-data-dir="server=server" `
+--include-data-dir=".cache=.cache" `
+--nofollow-import-to=*.tests `
+--windows-icon-from-ico="frontend/dist/favicon.ico" `
+--module-parameter=torch-disable-jit=no `
+--module-parameter=numba-disable-jit=no `
+--mingw64 `
+--jobs=6 `
+--lto=yes `
+--noinclude-pytest-mode=nofollow `
+--noinclude-setuptools-mode=nofollow `
+--report=QCstt_test_report.xml `
+--python-flag=no_site `
+"server/api/QCstt.py"
 ```
+
+### 3.3 打包参数说明
+- `--standalone`: 生成独立可执行程序
+- `--windows-disable-console`: 禁用控制台窗口
+- `--output-dir`: 指定输出目录
+- `--include-data-dir`: 包含需要的数据文件和目录
+- `--nofollow-import-to`: 排除测试文件
+- `--windows-icon-from-ico`: 设置程序图标
+- `--mingw64`: 使用MinGW64编译器(性能最好,约20%性能提升)
+- `--jobs`: 自动设置并行编译数
+- `--lto`: 启用链接时优化
+- `--noinclude-pytest-mode`: 排除测试相关依赖
+- `--noinclude-setuptools-mode`: 排除安装相关依赖
+- `--report`: 生成编译报告
+- `--python-flag`: 设置Python运行时标志
+- `--module-parameter`: 控制特定模块的行为
 
 ## 4. 注意事项
 - 确保在正确的conda环境
