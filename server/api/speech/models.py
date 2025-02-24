@@ -28,11 +28,9 @@ class ModelService:
         SENSEVOICE_DIR = os.path.join(SCRIPT_DIR, "SenseVoice")
         
         # 设置缓存路径
-        if not os.getenv('MODELSCOPE_CACHE'):
-            cache_dir = os.path.join(SCRIPT_DIR, ".cache")
-            os.makedirs(cache_dir, exist_ok=True)
-            os.environ['MODELSCOPE_CACHE'] = os.path.join(cache_dir, "modelscope")
-            os.environ['HF_HOME'] = os.path.join(cache_dir, "huggingface")
+        cache_dir = os.path.join(SCRIPT_DIR, ".cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        os.environ['MODELSCOPE_CACHE'] = os.path.join(cache_dir, "modelscope")
 
 
         model_dir = "iic/SenseVoiceSmall"

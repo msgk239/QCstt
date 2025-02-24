@@ -1,3 +1,14 @@
+#SenseVoice要求的依赖
+torch<=2.3
+torchaudio
+modelscope
+#huggingface 不在这里下载模型
+#huggingface_hub 不在这里下载模型
+funasr>=1.1.3
+numpy<=1.26.4
+#gradio 是一个用于快速创建机器学习模型 Web 界面的库。这里用不上
+fastapi>=0.111.1
+
 # 基础服务依赖
 uvicorn>=0.24.0
 mutagen>=1.47.0
@@ -13,16 +24,6 @@ python-Levenshtein>=0.21.1
 pkuseg>=0.0.25
 pypinyin>=0.49.0
 
-# 语音识别相关依赖
-modelscope
-huggingface
-huggingface_hub
-funasr>=1.1.3
-numpy<=1.26.4
-gradio
-
-# Web框架
-fastapi>=0.111.1
-
 # 测试依赖
 pytest>=7.4.0
+

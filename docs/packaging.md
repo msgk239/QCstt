@@ -50,17 +50,18 @@ python -m nuitka `
 --include-data-dir="server=server" `
 --include-data-dir=".cache=.cache" `
 --nofollow-import-to=*.tests `
---follow-import-to="server.*" `
---windows-icon-from-ico="frontend/dist/favicon.ico" `
---module-parameter=torch-disable-jit=no `
---module-parameter=numba-disable-jit=no `
---mingw64 `
---jobs=4 `
---show-memory
+--nofollow-import-to=huggingface.* `
+--nofollow-import-to=huggingface_hub.* `
+--nofollow-import-to=gradio.* `
+--nofollow-import-to=modelscope.* `
+--nofollow-import-to=pytest.* `
 --noinclude-pytest-mode=nofollow `
 --noinclude-setuptools-mode=nofollow `
+--module-parameter=torch-disable-jit=no
+--windows-icon-from-ico="frontend/dist/favicon.ico" `
+--mingw64 `
 --python-flag=no_site `
---enable-plugin=no-qt
+--enable-plugin=no-qt `
 "server/api/QCstt.py"
 ```
 
@@ -79,6 +80,44 @@ python -m nuitka `
 - `--report`: 生成编译报告
 - `--python-flag`: 设置Python运行时标志
 - `--module-parameter`: 控制特定模块的行为
+
+### 3.4 大型依赖库处理
+### 排除编译的库
+```powershell
+# 以下库已确认不需要，可以安全排除编译
+--nofollow-import-to=huggingface.* `
+--nofollow-import-to=huggingface_hub.* `
+--nofollow-import-to=gradio.* `
+--nofollow-import-to=modelscope.* `
+--nofollow-import-to=torch.* `
+--nofollow-import-to=torchaudio.* `
+--nofollow-import-to=numpy.* `
+--nofollow-import-to=pytest.* `
+```
+
+### 需要复制的库文件
+```powershell
+# 核心运行时依赖
+--include-data-dir=".conda/Lib/site-packages/torch=.conda/Lib/site-packages/torch" `
+--include-data-dir=".conda/Lib/site-packages/torchaudio=.conda/Lib/site-packages/torchaudio" `
+--include-data-dir=".conda/Lib/site-packages/numpy=.conda/Lib/site-packages/numpy" `
+```
+
+注意：
+1. 这些库已确认不用于核心功能，可以直接排除:
+   - huggingface/huggingface_hub: 仅用于可选的模型下载
+   - gradio: 仅用于演示界面
+   - modelscope: 仅用于可选的模型下载
+   - torch/torchaudio: 核心功能在预编译的 DLL 中,Python 代码只是包装器
+   - numpy: 同上,核心计算在 C 扩展中
+2. 不需要复制这些库文件，因为:
+   - 模型文件已预先下载到 .cache 目录
+   - 模型加载使用 torch 等核心库
+3. torch/torchaudio/numpy 需要复制整个库文件夹，因为:
+   - 包含了必要的预编译 DLL/so 文件
+   - 这些 DLL/so 包含了实际的计算功能
+   - 避免编译可以防止分叉炸弹等问题
+4. 如果后续发现有依赖问题，再重新评估
 
 ## 4. 注意事项
 - 确保在正确的conda环境
