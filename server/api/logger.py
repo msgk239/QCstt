@@ -1,7 +1,4 @@
-import os
-import sys
 import logging
-from logging.handlers import RotatingFileHandler
 from typing import Optional, Any
 from rich.logging import RichHandler
 from rich.console import Console
@@ -10,8 +7,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.status import Status
 from rich.table import Table
 from rich.tree import Tree
-from rich.panel import Panel
-from rich import print
 import json
 
 # 创建控制台实例时配置
@@ -194,7 +189,6 @@ class Logger:
         logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)
         logging.getLogger("python_multipart").setLevel(logging.DEBUG)
         logging.getLogger("fastapi").setLevel(logging.DEBUG)
-        logging.getLogger("numba").setLevel(logging.DEBUG)
         
         cls._instance = logger
         return logger

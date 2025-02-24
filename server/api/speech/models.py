@@ -1,7 +1,6 @@
 import os
 from funasr import AutoModel
 import torch
-import multiprocessing
 import logging
 import psutil  # 添加这个导入来获取更详细的CPU信息
 

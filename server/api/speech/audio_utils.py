@@ -1,7 +1,5 @@
 import io
 import logging
-import numpy as np
-import soundfile as sf
 from pydub import AudioSegment
 
 logger = logging.getLogger(__name__)

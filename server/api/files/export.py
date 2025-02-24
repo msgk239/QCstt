@@ -1,4 +1,3 @@
-from typing import Optional
 from fastapi import HTTPException
 import os
 from docx import Document

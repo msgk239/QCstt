@@ -50,16 +50,17 @@ python -m nuitka `
 --include-data-dir="server=server" `
 --include-data-dir=".cache=.cache" `
 --nofollow-import-to=*.tests `
+--follow-import-to="server.*" `
 --windows-icon-from-ico="frontend/dist/favicon.ico" `
 --module-parameter=torch-disable-jit=no `
 --module-parameter=numba-disable-jit=no `
 --mingw64 `
---jobs=6 `
---lto=yes `
+--jobs=4 `
+--show-memory
 --noinclude-pytest-mode=nofollow `
 --noinclude-setuptools-mode=nofollow `
---report=QCstt_test_report.xml `
 --python-flag=no_site `
+--enable-plugin=no-qt
 "server/api/QCstt.py"
 ```
 

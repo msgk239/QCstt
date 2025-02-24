@@ -1,7 +1,5 @@
 # 标准库
 import json
-import os
-from typing import Optional
 import time
 
 # 初始化日志配置（移到最前面）
@@ -11,16 +9,15 @@ logger = Logger.get_logger(__name__)
 
 # 第三方库
 import uvicorn
-from fastapi import FastAPI, UploadFile, File, Form, Query, Request, Body, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Query, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
 # 本地模块
 from .files.service import file_service
 from .speech.recognize import speech_service
-from .speech.storage import transcript_manager
 from .models import (
     BaseResponse,
     FileResponse, 
@@ -111,11 +108,6 @@ async def upload_file(
         logger.debug(f"file 参数: {file}")
         logger.debug(f"options 参数: {options}")
         
-        if not file:
-            error_msg = "未接收到文件"
-            logger.error(error_msg)
-            return {"code": 422, "message": error_msg}
-            
         logger.info(f"文件信息: 名称={file.filename}, 类型={file.content_type}, 大小={file.size if hasattr(file, 'size') else '未知'}")
         logger.debug(f"完整请求头: {dict(file.headers)}")
         logger.debug(f"上传选项: {options}")

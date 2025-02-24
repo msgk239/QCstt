@@ -1,10 +1,9 @@
-from .app import app
+from server.api.app import app
+from server.api.logger import get_logger
 import uvicorn
-from .logger import get_logger
 import webbrowser
 import threading
 import time
-import sys
 import traceback
 
 logger = get_logger(__name__)
