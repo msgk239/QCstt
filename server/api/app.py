@@ -80,7 +80,7 @@ async def log_requests(request: Request, call_next):
     try:
         response = await call_next(request)
         process_time = time.time() - start_time
-        logger.info(f"请求处理完成 - {request.method} {request.url} - {response.status_code} - {process_time:.2f}s")
+        logger.debug(f"请求处理完成 - {request.method} {request.url} - {response.status_code} - {process_time:.2f}s")
         return response
     except Exception as e:
         process_time = time.time() - start_time
@@ -178,7 +178,7 @@ async def delete_file(file_id: str):
 @app.put("/api/v1/files/{file_id}")
 async def update_file(file_id: str, data: dict = Body(...)):
     logger.info(f"收到更新请求 - file_id: {file_id}")
-    logger.info(f"请求数据类型: {type(data)}")  # 添加类型检查
+    logger.debug(f"请求数据类型: {type(data)}")
 
     
     # 如果是字符串，尝试解析成字典
@@ -275,13 +275,10 @@ async def get_hotwords():
 async def update_hotwords(data: dict = Body(...)):
     """更新热词内容"""
     logger.info("收到热词更新请求")
-    #logger.debug(f"原始请求数据: {data}")
+    logger.debug(f"解析的时间戳: lastModified={last_modified}")
     
     content = data.get('content')
     last_modified = data.get('lastModified')
-    
-    #logger.debug(f"解析的内容: content={content}")
-    logger.debug(f"解析的时间戳: lastModified={last_modified}")
     
     if not content:
         logger.error("内容为空")

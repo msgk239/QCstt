@@ -96,22 +96,22 @@ def safe_write_json(file_path: str, data: dict, ensure_path: bool = True) -> boo
     try:
         if ensure_path:
             dir_path = os.path.dirname(file_path)
-            logger.info(f"确保目录存在: {dir_path}")
+            logger.debug(f"确保目录存在: {dir_path}")
             if not ensure_dir(dir_path):
                 logger.error(f"创建目录失败: {dir_path}")
                 return False
         
-        logger.info(f"开始写入文件: {file_path}")
+        logger.debug(f"开始写入文件: {file_path}")
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         logger.info(f"文件写入成功: {file_path}")
         return True
     except Exception as e:
         logger.error(f"写入JSON文件失败: {file_path}", exc_info=True)
-        logger.error(f"错误详情: {str(e)}")
-        logger.error(f"文件路径: {file_path}")
-        logger.error(f"目录是否存在: {os.path.exists(os.path.dirname(file_path))}")
-        logger.error(f"目录权限: {oct(os.stat(os.path.dirname(file_path)).st_mode)[-3:]}")
+        logger.debug(f"错误详情: {str(e)}")
+        logger.debug(f"文件路径: {file_path}")
+        logger.debug(f"目录是否存在: {os.path.exists(os.path.dirname(file_path))}")
+        logger.debug(f"目录权限: {oct(os.stat(os.path.dirname(file_path)).st_mode)[-3:]}")
         return False
 
 def get_audio_metadata(file_path: str, metadata_path: str) -> dict:
@@ -123,18 +123,14 @@ def get_audio_metadata(file_path: str, metadata_path: str) -> dict:
         dict: 包含音频时长等信息的元数据
     """
     try:
-        # 读取 metadata.json
         metadata = safe_read_json(metadata_path, {})
         
-        # 获取文件名（不含路径）
         filename = os.path.basename(file_path)
         logger.debug(f"查找音频元数据 - 文件名: {filename}")
         logger.debug(f"当前元数据内容: {metadata}")
         
-        # 尝试不同的文件名格式匹配
         file_metadata = metadata.get(filename, {})
         if not file_metadata:
-            # 尝试去掉时间戳前缀的匹配
             simple_name = '_'.join(filename.split('_')[2:]) if '_' in filename else filename
             file_metadata = metadata.get(simple_name, {})
             logger.debug(f"尝试简化文件名匹配: {simple_name}")
@@ -154,4 +150,4 @@ def get_audio_metadata(file_path: str, metadata_path: str) -> dict:
         return {
             "duration": 0,
             "duration_str": "00:00"
-        } 
+        }

@@ -254,7 +254,7 @@ class FileOperations:
                     logger.info(f"找到文件: {filename}")
                     return filename
                 
-            logger.error(f"未找到文件ID对应的文件: {file_id}")
+            logger.warning(f"未找到文件ID对应的文件: {file_id}")
             return None
         except Exception as e:
             logger.error(f"查找文件时发生错误: {str(e)}")

@@ -39,7 +39,7 @@ class FileService:
     def save_uploaded_file(self, file_content, filename, options=None):
         """保存上传的文件，生成标准文件ID"""
         try:
-            logger.info(f"开始处理文件上传")
+            logger.info(f"开始处理文件上传: {filename}")
             
             # 验证参数
             if not file_content:
@@ -51,6 +51,7 @@ class FileService:
             upload_options = options or {}
             upload_options['original_filename'] = filename
             upload_options['language'] = upload_options.get('language', 'zh')
+            logger.debug(f"上传选项: {upload_options}")
             
             # 调用 operations 处理文件保存
             return self.operations.save_uploaded_file(file_content, upload_options)
@@ -74,6 +75,7 @@ class FileService:
             Dict: 包含文件路径的响应
         """
         try:
+            logger.debug(f"获取文件路径 - file_id: {file_id}")
             file_path = self.operations.get_file_path(file_id)
             return {
                 "code": 200,
@@ -156,6 +158,7 @@ class FileService:
             file_info = self.get_file_path(file_id)
             
             if file_info["code"] != 200:
+                logger.debug(f"获取文件路径失败: {file_info}")
                 return file_info
                 
             file_path = file_info["data"]["path"]
@@ -163,6 +166,7 @@ class FileService:
             
             # 获取转写结果
             transcripts = transcript_manager.get_transcript(file_id)
+            logger.debug(f"获取到转写结果: {True if transcripts else False}")
             
             # 获取两种元数据
             # 1. 从 转写metadata 获取的元数据
@@ -173,6 +177,7 @@ class FileService:
             
             # 合并元数据：优先使用 transcript_metadata 的值
             metadata = {**metadata_result, **transcript_metadata}
+            logger.debug(f"合并后的元数据: {metadata}")
             
             # 构建响应
             status = metadata.get("status", "未识别") if metadata else "未识别"
@@ -202,7 +207,7 @@ class FileService:
             return response
             
         except Exception as e:
-            logger.error(f"Get file detail error: {str(e)}", exc_info=True)
+            logger.error(f"获取文件详情失败: {str(e)}", exc_info=True)
             return {
                 "code": 500,
                 "message": f"获取文件详情失败: {str(e)}"
@@ -296,6 +301,7 @@ class FileService:
             # 获取文件路径
             file_info = self.get_file_path(file_id)
             if file_info["code"] != 200:
+                logger.debug(f"获取文件路径失败: {file_info}")
                 return file_info
                 
             file_path = file_info["data"]["path"]
@@ -303,10 +309,12 @@ class FileService:
             # 直接从 metadata 获取语言设置，默认为中文
             metadata = self.metadata.get_by_file_id(file_id) or {}
             language = metadata.get("options", {}).get("language", "zh")
+            logger.debug(f"识别语言: {language}")
             
             # 读取音频文件
             with open(file_path, "rb") as f:
                 audio_content = f.read()
+            logger.debug(f"已读取音频文件，大小: {len(audio_content)} 字节")
             
             # 调用语音识别服务
             logger.info(f"准备调用语音识别服务，file_id: {file_id}")
@@ -314,12 +322,16 @@ class FileService:
             
             # 如果识别成功，更新文件状态和保存结果
             if result["code"] == 200:
+                logger.info(f"识别成功，更新文件状态为已完成")
                 self.update_file_status(file_id, "已完成")
                 transcript_manager.save_result(file_id, result)
+            else:
+                logger.error(f"识别失败: {result}")
             
             return result
             
         except Exception as e:
+            logger.error(f"识别失败: {str(e)}", exc_info=True)
             return {
                 "code": 500,
                 "message": f"识别失败: {str(e)}"
@@ -397,18 +409,18 @@ class FileService:
     
     def get_audio_file(self, file_id: str):
         """获取音频文件"""
-        logger.info(f"=== 开始获取音频文件 === file_id: {file_id}")
+        logger.info(f"获取音频文件 - file_id: {file_id}")
         try:
             # 获取文件路径
             file_info = self.get_file_path(file_id)
-            logger.info(f"获取文件路径结果: {file_info}")
+            logger.debug(f"获取文件路径结果: {file_info}")
             
             if file_info["code"] != 200:
                 logger.error(f"文件不存在: {file_id}")
                 raise FileNotFoundError(f"文件不存在: {file_id}")
             
             file_path = file_info["data"]["path"]
-            logger.info(f"文件路径: {file_path}")
+            logger.debug(f"文件路径: {file_path}")
             
             # 检查文件是否存在和可读
             if not os.path.exists(file_path):
@@ -418,7 +430,7 @@ class FileService:
             
             # 获取文件扩展名和MIME类型
             extension = os.path.splitext(file_path)[1].lower()
-            logger.info(f"文件扩展名: {extension}")
+            logger.debug(f"文件扩展名: {extension}")
             
             mime_types = {
                 '.mp3': 'audio/mpeg',
@@ -436,10 +448,10 @@ class FileService:
                 audio.export(temp_path, format='mp3')
                 file_path = temp_path
                 media_type = 'audio/mpeg'
-                logger.info(f"转换后的文件路径: {file_path}")
+                logger.debug(f"转换后的文件路径: {file_path}")
             else:
                 media_type = mime_types[extension]
-                logger.info(f"媒体类型: {media_type}")
+                logger.debug(f"媒体类型: {media_type}")
             
             # 对文件名进行 URL 编码
             filename = quote(os.path.basename(file_path))
@@ -452,7 +464,7 @@ class FileService:
                 'ETag': f'"{os.path.getmtime(file_path)}"',
                 'Last-Modified': formatdate(os.path.getmtime(file_path), usegmt=True)
             }
-            logger.info(f"响应头: {headers}")
+            logger.debug(f"响应头: {headers}")
             
             response = FileResponse(
                 path=file_path,
@@ -460,8 +472,7 @@ class FileService:
                 filename=os.path.basename(file_path),
                 headers=headers
             )
-            logger.info(f"响应对象类型: {type(response)}")
-            logger.info(f"响应对象属性: {dir(response)}")
+            logger.debug(f"已创建文件响应对象")
             return response
             
         except Exception as e:
@@ -481,13 +492,14 @@ class FileService:
             Dict: 包含保存结果的响应
         """
         try:
-            logger.info(f"开始保存文件内容 - file_id: {file_id}")
-            logger.info(f"data类型: {type(data)}")
+            logger.info(f"保存文件内容 - file_id: {file_id}")
+            logger.debug(f"数据类型: {type(data)}")
             
             # 1. 获取转写文件路径
             transcript_dir = os.path.join(self.config.transcripts_dir, file_id)
             original_path = os.path.join(transcript_dir, 'original.json')
             backup_path = os.path.join(transcript_dir, 'original.backup.json')
+            logger.debug(f"转写文件路径: {original_path}")
             
             # 2. 读取现有的 original.json 内容
             original_content = {}
@@ -504,6 +516,7 @@ class FileService:
                     logger.error(f"读取原始文件失败: {str(e)}")
                     original_content = {"code": 200, "message": "success", "data": {}}
             else:
+                logger.debug("原始文件不存在，创建新文件")
                 original_content = {"code": 200, "message": "success", "data": {}}
             
             # 3. 确保data字段存在
@@ -515,6 +528,7 @@ class FileService:
                 original_content["data"].get("speakers") and 
                 "speakerKey" not in original_content["data"]["speakers"][0]
             ):
+                logger.info("初始化标准格式的说话人信息")
                 # 初始化标准格式的 speakers
                 original_content["data"]["speakers"] = [
                     {
@@ -538,6 +552,7 @@ class FileService:
                 logger.info("处理说话人更新")
                 segments_data = data.get('segments', {}).get('merged', [])
                 updated_segments = original_content.get("data", {}).get("segments", []).copy()
+                logger.debug(f"更新前段落数量: {len(updated_segments)}")
                 
                 # 根据 segmentId 更新说话人信息
                 for segment in segments_data:
@@ -549,6 +564,7 @@ class FileService:
                         'speakerDisplayName': segment.get('speakerDisplayName'),
                         'color': segment.get('color', '#409EFF')
                     }
+                    logger.debug(f"更新说话人信息: {speaker_info}")
                     
                     # 遍历前端传来的子段落
                     for subsegment in segment.get('subSegments', []):
@@ -561,6 +577,7 @@ class FileService:
                 # 更新 speakers
                 updated_speakers = original_content["data"].get("speakers", []).copy()
                 frontend_speakers = data.get("speakers", [])
+                logger.debug(f"更新前说话人数量: {len(updated_speakers)}")
                 
                 # 根据前端传来的数据更新 speakers
                 for i, speaker in enumerate(updated_speakers):
@@ -582,9 +599,11 @@ class FileService:
                     "speakers": data.get("speakers", []),  # 更新说话人列表
                     "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
+                logger.info(f"更新后段落数量: {len(updated_segments)}, 说话人数量: {len(data.get('speakers', []))}")
                 
                 # 保存更新后的内容
                 if not safe_write_json(original_path, original_content):
+                    logger.error("保存内容失败")
                     return {"code": 500, "message": "保存内容失败"}
                 
                 # 更新metadata
@@ -619,12 +638,15 @@ class FileService:
             # 4. 获取原有segments数据
             original_data = original_content.get("data", {})
             original_segments = original_data.get("segments", [])
+            logger.debug(f"原有段落数量: {len(original_segments)}")
             
             # 5. 检查是否是第一次更新
             is_first_update = len(original_segments) > 0 and "subsegmentId" not in original_segments[0]
+            logger.debug(f"是否是第一次更新: {is_first_update}")
             
             # 6. 处理新的segments数据
             if is_first_update:
+                logger.info("处理第一次更新")
                 updated_segments = []
                 segments_data = data.get("segments", {})
                 
@@ -632,9 +654,11 @@ class FileService:
                 if "merged" in segments_data:
                     for segment in segments_data["merged"]:  # 从 merged 字段里取数组
                         updated_segments.extend(segment.get("subSegments", []))
+                logger.debug(f"更新后段落数量: {len(updated_segments)}")
             
             else:
                 # 后续更新：只更新匹配的segment
+                logger.info("处理后续更新")
                 updated_segments = original_segments.copy()  # 复制原有的所有segments
                 segment = data.get("segments")
                 #logger.info(f"收到的前端数据: {json.dumps(segment, ensure_ascii=False)}")
@@ -643,7 +667,7 @@ class FileService:
                 # 遍历前端发送的 subSegments
                 for sub_segment in segment.get("subSegments", []):
                     subsegment_id = sub_segment.get("subsegmentId")
-                    #logger.info(f"处理子段落 - subsegment_id: {subsegment_id}")
+                    logger.debug(f"处理子段落 - subsegment_id: {subsegment_id}")
                     #logger.info(f"子段落内容: {json.dumps(sub_segment, ensure_ascii=False)}")
                     
                     if not subsegment_id:
@@ -662,13 +686,12 @@ class FileService:
                             time_part = subsegment_id.split("-", 1)[1]
                             orig_time_part = orig_subsegment_id.split("-", 1)[1]
                             
-                            logger.info(f"对比时间部分 - 新: {time_part}, 原: {orig_time_part}")
+                            logger.debug(f"对比时间部分 - 新: {time_part}, 原: {orig_time_part}")
                             
                             if time_part == orig_time_part:
                                 old_text = orig_segment.get("text", "")
                                 new_text = sub_segment.get("text", old_text)
-                                #logger.info(f"找到匹配段落 - 原文本: {old_text}")
-                                #logger.info(f"更新为新文本: {new_text}")
+                                logger.debug(f"找到匹配段落 - 原文本长度: {len(old_text)}, 新文本长度: {len(new_text)}")
                                 
                                 # 只更新文本内容
                                 updated_segments[i]["text"] = new_text
@@ -690,6 +713,7 @@ class FileService:
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "full_text": " ".join(s.get("text", "") for s in updated_segments)  # 只用主段落的 text
             })
+            logger.info(f"更新后段落数量: {len(updated_segments)}, 说话人数量: {len(data.get('speakers', original_data.get('speakers', [])))}")
 
             # 8. 保留其他原有字段
             for key in original_data:
@@ -698,6 +722,7 @@ class FileService:
             
             # 9. 保存更新后的内容
             if not safe_write_json(original_path, original_content):
+                logger.error("保存内容失败")
                 return {"code": 500, "message": "保存内容失败"}
             
             # 10. 更新metadata
