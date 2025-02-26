@@ -33,11 +33,15 @@ git clone https://github.com/msgk239/QCstt.git
 
 ### 2. 安装必要工具
 ```bash
-# 安装FFmpeg
-winget install Gyan.FFmpeg
+#安装scoop
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+
+#安装FFmpeg
+scoop install ffmpeg
 
 # 安装Miniconda
-winget install Anaconda.Miniconda3
+scoop install miniconda3
 ```
 
 ### 3. 安装后端的依赖

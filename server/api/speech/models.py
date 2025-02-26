@@ -1,6 +1,5 @@
 import os
 from funasr import AutoModel
-import torch
 from torch.cuda import is_available, get_device_name, get_device_properties
 import logging
 import psutil  # 添加这个导入来获取更详细的CPU信息
@@ -37,9 +36,23 @@ class ModelService:
         os.environ['MODELSCOPE_CACHE'] = os.path.join(cache_dir, "modelscope")
         os.environ['HF_HOME'] = os.path.join(cache_dir, "huggingface")
 
-        model_dir = "iic/SenseVoiceSmall"
-        model_py_path = os.path.join(SENSEVOICE_DIR, "model.py")
+        # 检查模型文件是否存在
+        model_files_exist = all(os.path.exists(os.path.join(cache_dir, "modelscope/hub/iic", path)) for path in [
+            "SenseVoiceSmall",
+            "speech_campplus_sv_zh-cn_16k-common",
+            "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+        ])
         
+        if not model_files_exist:
+            logger.warning("首次运行，需要下载模型文件(约1GB)...")
+            model_path = "iic/SenseVoiceSmall"
+            spk_model_path = "iic/speech_campplus_sv_zh-cn_16k-common"
+            vad_model_path = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"
+        else:
+            model_path = os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/SenseVoiceSmall")
+            spk_model_path = os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/speech_campplus_sv_zh-cn_16k-common")
+            vad_model_path = os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch")
+
         # 检测设备和CPU核心数
         device = "cuda:0" if is_available() else "cpu"
         physical_cores = psutil.cpu_count(logical=False)  # 获取物理核心数
@@ -98,17 +111,16 @@ class ModelService:
             logger.info(f"建议使用的核心数: {recommended_cpu} (物理核心数-1)")
         
         self.model = AutoModel(
-            # 模型路径配置
-            model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/SenseVoiceSmall"),  # 主模型路径
-            spk_model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/speech_campplus_sv_zh-cn_16k-common"),  # 说话人分离模型
-            vad_model=os.path.join(SCRIPT_DIR, ".cache/modelscope/hub/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"),  # 语音活动检测模型
+            model=model_path,
+            spk_model=spk_model_path,
+            vad_model=vad_model_path,
             
             # 性能优化配置
             trust_remote_code=False,    # 使用内部集成版本，而不是远程代码
             check_latest=False,         # 禁用检查最新版本的模型
             local_files_only=True,      # 强制只使用本地缓存的模型文件
             disable_update=True,        # 禁用 FunASR 版本检查
-            remote_code=model_py_path,  # 指定模型代码路径
+            remote_code=os.path.join(SENSEVOICE_DIR, "model.py"),  # 指定模型代码路径
             
             # 说话人分离配置
             spk_mode="vad_segment",     # 基于VAD切分的说话人分离模式
