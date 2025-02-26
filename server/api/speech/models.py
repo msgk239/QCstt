@@ -1,6 +1,7 @@
 import os
 from funasr import AutoModel
 import torch
+from torch.cuda import is_available, get_device_name, get_device_properties
 import logging
 import psutil  # 添加这个导入来获取更详细的CPU信息
 
@@ -28,16 +29,19 @@ class ModelService:
         SENSEVOICE_DIR = os.path.join(SCRIPT_DIR, "SenseVoice")
         
         # 设置缓存路径
+        # 直接使用.cache目录作为模型缓存，不检查环境变量
+        # 如果已有模型文件，可根据需要添加条件判断
+        # 注意：如果修改此处缓存路径，需同步更新下方AutoModel中的模型路径配置
         cache_dir = os.path.join(SCRIPT_DIR, ".cache")
         os.makedirs(cache_dir, exist_ok=True)
         os.environ['MODELSCOPE_CACHE'] = os.path.join(cache_dir, "modelscope")
-
+        os.environ['HF_HOME'] = os.path.join(cache_dir, "huggingface")
 
         model_dir = "iic/SenseVoiceSmall"
         model_py_path = os.path.join(SENSEVOICE_DIR, "model.py")
         
         # 检测设备和CPU核心数
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        device = "cuda:0" if is_available() else "cpu"
         physical_cores = psutil.cpu_count(logical=False)  # 获取物理核心数
         
         # 获取基本系统信息
@@ -68,9 +72,9 @@ class ModelService:
             }
             logger.info("=== GPU模式配置 ===")
             logger.info(f"使用GPU模式")
-            logger.info(f"CUDA是否可用: {torch.cuda.is_available()}")
-            logger.info(f"GPU设备名称: {torch.cuda.get_device_name(0)}")
-            logger.info(f"GPU显存总量: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.0f}MB")
+            logger.info(f"CUDA是否可用: {is_available()}")
+            logger.info(f"GPU设备名称: {get_device_name(0)}")
+            logger.info(f"GPU显存总量: {get_device_properties(0).total_memory / 1024**2:.0f}MB")
         else:
             # CPU模式下的配置
             recommended_cpu = max(1, physical_cores - 1)

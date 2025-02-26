@@ -21,8 +21,9 @@ class ExportService:
             'md': self._export_to_markdown,
             'srt': self._export_to_srt
         }
-        # 创建导出文件的临时目录
-        self.export_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'exports')
+        # 创建导出文件的临时目录，设置为项目根目录下的exports
+        self.export_dir = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'exports')
+        logger.info(f"导出目录设置为: {self.export_dir}")
         os.makedirs(self.export_dir, exist_ok=True)
     
     async def handle_export_request(self, file_id: str, format: str) -> FileResponse:
@@ -35,18 +36,18 @@ class ExportService:
             FileResponse: 文件响应
         """
         try:
-            logger.info(f"导出文件 {file_id} 为 {format} 格式")
+            logger.info(f"开始导出文件 {file_id} 为 {format} 格式")
             
             # 获取转写数据
             transcript = file_service.get_recognition_result(file_id)
-            #logger.info(f"获取到的转写数据: {transcript}")
+            #logger.debug(f"获取到的转写数据: {transcript}")
             
             if transcript.get('code') != 200:
                 raise HTTPException(status_code=400, detail="获取转写数据失败")
                 
             # 使用导出服务处理导出
             file_path = self.export_transcript(file_id, format, transcript)
-            logger.info(f"生成的文件路径: {file_path}")
+            logger.info(f"导出成功，文件路径: {file_path}")
             
             # 返回文件响应
             return FileResponse(
@@ -97,24 +98,24 @@ class ExportService:
             
             # 从根目录的 metadata.json 获取文件名
             metadata_path = os.path.join('storage', 'metadata.json')
-            logger.info(f"metadata 文件路径: {metadata_path}")  # 添加日志
+            logger.debug(f"读取 metadata 文件: {metadata_path}")  # 改为debug级别
             
             with open(metadata_path, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
-                #logger.info(f"读取到的 metadata: {metadata}")  # 添加日志
+                #logger.debug(f"读取到的 metadata: {metadata}")  # 改为debug级别
             
             # 查找匹配的文件信息
             display_name = '转写文本'  # 默认标题
             for key in metadata:
-                #logger.info(f"正在检查键: {key}")  # 添加日志
+                #logger.debug(f"正在检查键: {key}")  # 改为debug级别
                 if key.startswith(file_id):
                     file_info = metadata[key]
                     display_name = file_info['display_name']  # 直接获取 display_name
-                    logger.info(f"找到匹配的文件名: {display_name}")  # 添加日志
+                    logger.debug(f"找到匹配的文件名: {display_name}")  # 改为debug级别
                     break
             
             # 设置文档标题
-            logger.info(f"最终使用的标题: {display_name}")  # 添加日志
+            logger.debug(f"设置文档标题: {display_name}")  # 改为debug级别
             title = doc.add_heading(display_name, level=1)
             title.alignment = WD_ALIGN_PARAGRAPH.CENTER
             
@@ -176,13 +177,13 @@ class ExportService:
             export_path = os.path.join(self.export_dir, f"{file_id}_transcript.docx")
             
             # 添加日志查看文档内容
-            logger.info("准备保存的文档内容:")
+            logger.debug("准备保存文档内容")  # 改为debug级别
             #for paragraph in doc.paragraphs:
-                #logger.info(f"段落内容: {paragraph.text}")
+                #logger.debug(f"段落内容: {paragraph.text}")  # 改为debug级别
             
             # 保存文档
             doc.save(export_path)
-            #logger.info(f"Word文档导出成功: {export_path}")
+            logger.info(f"Word文档导出成功: {export_path}")  # 保留为info级别，这是关键信息
             
             return export_path
             
