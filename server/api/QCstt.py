@@ -1,12 +1,16 @@
-from server.api.app import app
-from server.api.logger import get_logger
+from server.api.logger import Logger, get_logger
+
+# 1. 先设置日志级别
+Logger.set_entry_point("server.api.QCstt")
+logger = get_logger("server.api.QCstt")
+
+# 2. 然后导入所有模块
 import uvicorn
 import webbrowser
 import threading
 import time
 import traceback
-
-logger = get_logger(__name__)
+from server.api.app import app
 
 def open_browser():
     """延迟2秒后打开浏览器"""

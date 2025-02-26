@@ -8,6 +8,7 @@ from rich.status import Status
 from rich.table import Table
 from rich.tree import Tree
 import json
+import inspect
 
 # 创建控制台实例时配置
 console = Console(
@@ -78,6 +79,12 @@ class LogConfig:
     # logging.INFO: 显示一般API信息
     # logging.WARNING: 只显示API警告和错误（生产环境推荐）
     FASTAPI_LOG_LEVEL = logging.DEBUG  # 改为调试级别
+    
+    # 入口文件配置
+    ENTRY_LOG_LEVELS = {
+        "server.api.app": logging.DEBUG,      # 从 app.py 启动时使用 DEBUG 级别
+        "server.api.QCstt": logging.INFO,     # 从 QCstt.py 启动时使用 INFO 级别
+    }
 
 class JsonFormatter(logging.Formatter):
     """自定义 JSON 格式化器"""
@@ -136,13 +143,56 @@ class JsonFilter(logging.Filter):
 
 class Logger:
     """日志管理类"""
-    _instance: Optional[logging.Logger] = None
-    _console = Console()  # rich console 实例
+    _instance = None
+    _entry_point = None
     
     @classmethod
+    def set_entry_point(cls, entry_point: str):
+        """设置入口文件模块名并更新根日志级别"""
+        frame = inspect.currentframe()
+        while frame:
+            if frame.f_globals.get('__name__') == '__main__':
+                cls._entry_point = entry_point
+                # 获取新的日志级别
+                log_level = LogConfig.ENTRY_LOG_LEVELS.get(entry_point, LogConfig.LOG_LEVEL)
+                # 设置根日志记录器的级别
+                logging.getLogger().setLevel(log_level)
+                
+                # 同时设置第三方库的日志级别
+                for logger_name in [
+                    "uvicorn",
+                    "uvicorn.access",
+                    "python_multipart",
+                    "fastapi"
+                ]:
+                    logging.getLogger(logger_name).setLevel(log_level)
+                break
+            frame = frame.f_back
+    
+    @classmethod
+    def get_logger(cls, name: str = None) -> logging.Logger:
+        """获取日志记录器
+        
+        如果系统还没有初始化，会自动调用 setup() 进行初始化。
+        所有返回的 logger 都会继承根日志记录器的级别。
+        
+        Args:
+            name: logger 的名称，如果不指定则返回根日志记录器
+            
+        Returns:
+            logging.Logger: 日志记录器实例
+        """
+        # 确保系统已初始化
+        if not cls._instance:
+            cls.setup()
+        # 返回指定名称的 logger 或根日志记录器
+        return logging.getLogger(name) if name else cls._instance
+
+    @classmethod
     def setup(cls) -> logging.Logger:
-        """配置并返回日志记录器"""
-        if cls._instance is not None:
+        """配置并返回根日志记录器"""
+        # 如果已经初始化过，直接返回实例
+        if cls._instance:
             return cls._instance
             
         # 获取根日志记录器
@@ -152,13 +202,11 @@ class Logger:
         if logger.handlers:
             logger.handlers.clear()
         
-        # 设置日志级别
-        logger.setLevel(logging.DEBUG)  # 改为 DEBUG 级别
+        # 根据入口点设置日志级别
+        log_level = LogConfig.ENTRY_LOG_LEVELS.get(cls._entry_point, LogConfig.LOG_LEVEL)
+        logger.setLevel(log_level)
         
-        # 只使用 RichHandler 进行控制台输出
-        console = Console(
-            force_terminal=True,
-        )
+        # 控制台处理器配置...
         console_handler = RichHandler(
             console=console,
             rich_tracebacks=True,
@@ -181,27 +229,24 @@ class Logger:
         )
         console_handler.addFilter(JsonFilter())
         console_handler.setFormatter(logging.Formatter(LogConfig.CONSOLE_FORMAT))
-        console_handler.setLevel(logging.DEBUG)  # 改为 DEBUG 级别
+        console_handler.setLevel(log_level)  # 使用相同的日志级别
         logger.addHandler(console_handler)
         
-        # 第三方库日志级别配置也改为 DEBUG
-        logging.getLogger("uvicorn").setLevel(logging.DEBUG)
-        logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)
-        logging.getLogger("python_multipart").setLevel(logging.DEBUG)
-        logging.getLogger("fastapi").setLevel(logging.DEBUG)
+        # 第三方库日志级别配置
+        third_party_loggers = [
+            "uvicorn",
+            "uvicorn.access",
+            "python_multipart",
+            "fastapi"
+        ]
+        
+        # 根据入口点设置第三方库的日志级别
+        for logger_name in third_party_loggers:
+            third_party_logger = logging.getLogger(logger_name)
+            third_party_logger.setLevel(log_level)
         
         cls._instance = logger
         return logger
-    
-    @classmethod
-    def get_logger(cls, name: str = None) -> logging.Logger:
-        """获取指定名称的日志记录器"""
-        if cls._instance is None:
-            cls.setup()
-        
-        if name:
-            return logging.getLogger(name)
-        return cls._instance
     
     @staticmethod
     def setup_request_handlers(logger):
@@ -230,7 +275,7 @@ class Logger:
             "[progress.percentage]{task.percentage:>3.0f}%",
             "•",
             "{task.completed}/{task.total}",
-            console=cls._console
+            console=console
         )
         progress.add_task(description, total=total)
         return progress
@@ -238,7 +283,7 @@ class Logger:
     @classmethod
     def status(cls, message: str) -> Status:
         """创建状态显示"""
-        return Status(message, console=cls._console)
+        return Status(message, console=console)
     
     @classmethod
     def table(cls, title: str = None) -> Table:

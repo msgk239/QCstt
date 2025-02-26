@@ -2,10 +2,12 @@
 import json
 import time
 
-# 初始化日志配置（移到最前面）
-from .logger import Logger
-Logger.setup()
-logger = Logger.get_logger(__name__)
+# 初始化日志
+from server.api.logger import Logger, get_logger
+
+# 设置调试模式的日志级别
+Logger.set_entry_point("server.api.app")
+logger = get_logger("server.api.app")
 
 # 第三方库
 import uvicorn
@@ -24,7 +26,7 @@ from .models import (
     FileListResponse,
     RecognitionProgressResponse
 )
-from .files.export import export_service  # 导入导出服务
+from .files.export import export_service
 from .speech.hotwords import hotwords_manager
 
 # FastAPI 应用配置

@@ -105,11 +105,11 @@ npm run preview
 ```bash
 # 在项目根目录下运行
 
-# 调试模式
+# 调试模式 (DEBUG)
 python -m server.api.app
 # 前端访问地址: http://localhost:5173 或 http://localhost:4173
 
-# 生产环境调试
+# 生产环境调试 (INFO)
 python -m server.api.QCstt
 # 前端访问地址: http://localhost:8010
 
@@ -117,7 +117,6 @@ python -m server.api.QCstt
 python -m server.api.package
 # 前端访问地址: http://localhost:8010
 ```
-
 > 注意: 日志级别可通过修改 logger.py 来控制，支持 debug、info、warning、error 等级别
 
 ## 注意事项
