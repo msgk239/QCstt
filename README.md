@@ -9,7 +9,7 @@
 - 可以本地无网处理，保护隐私
 - 支持热词纠正，热词可以自定义
 - 支持多种音频格式转换为文本
-- 界面上可以批量改说话人名词
+- 界面上可以批量改说话人名称
 - 点击文本可以出声，点击音频可以高亮滚动
 - 可以直接在上面修改错别字
 - 目前只支持导出word
@@ -32,37 +32,39 @@ git clone https://github.com/msgk239/QCstt.git
 ```
 
 ### 2. 安装必要工具
+#### 2.1 安装 Scoop
 ```bash
-#安装scoop
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+```
 
-#安装FFmpeg
+#### 2.2 安装 FFmpeg
+```bash
 scoop install ffmpeg
+```
 
-# 安装Miniconda
+#### 2.3 安装 Miniconda
+```bash
 scoop install miniconda3
 ```
 
-### 3. 安装后端的依赖
+### 3. 配置 Python 环境
+#### 3.1 创建虚拟环境
 ```bash
-# 在项目根目录创建Python 3.9.21环境
-# conda create: 创建一个新的conda虚拟环境
-# --prefix ./.conda: 指定环境创建在当前项目根目录下的.conda文件夹中
-# python=3.9.21: 指定Python版本为3.9.21
-# -y: 自动确认所有提示，不需要手动确认
+# 在项目根目录创建 Python 3.9.21 环境
 conda create --prefix ./.conda python=3.9.21 -y
 
 # 激活项目本地环境
-# 注意：使用--prefix创建的环境需要使用完整路径激活
 conda activate ./.conda
+```
 
-# 临时修复：替换funasr文件
-# 注意：这是临时解决方案，当funasr更新后将不再需要此步骤
-# 将项目根目录下的auto_model.py文件复制到本地conda环境的funasr包目录中，覆盖原有文件
-# 如果提示是否覆盖，请选择Y(是)
-copy /Y auto_model.py ./.conda/Lib/site-packages/funasr/auto/auto_model.py
+> 提示：也可以使用 VS Code 创建虚拟环境
+> 1. 按 F1 打开命令面板
+> 2. 输入并选择 "Python: Select Interpreter"
+> 3. 选择创建新的虚拟环境，并选择 conda
 
+#### 3.2 安装依赖
+```bash
 # 进入服务器目录
 cd server
 
@@ -70,14 +72,21 @@ cd server
 pip install -r requirements.txt
 ```
 
-### 4. 启动后端服务
+#### 3.3 临时修复
 ```bash
-# 启动API服务
+# 替换 funasr 文件（临时解决方案）
+copy /Y auto_model.py ./.conda/Lib/site-packages/funasr/auto/auto_model.py
+```
+
+### 4. 启动服务
+#### 4.1 启动后端
+```bash
+# 启动 API 服务
 python -m server.api.app
 ```
 服务端将在 http://localhost:8010 启动
 
-### 5. 启动前端（开发模式）
+#### 4.2 启动前端
 ```bash
 # 进入前端目录
 cd frontend
@@ -87,19 +96,21 @@ npm install
 
 # 开发模式启动
 npm run dev
-# 前端将在 http://localhost:5173 启动
+```
+前端将在 http://localhost:5173 启动
 
-# 到这里就可以到浏览器访问 http://localhost:5173 查看效果了
+现在可以访问 http://localhost:5173 查看效果
 
-# 下面是构建和预览模式启动
+#### 4.3 生产环境部署（可选）
+```bash
 # 构建前端项目
 npm run build
+
 # 预览模式启动
 npm run preview
-# 前端将在 http://localhost:4173 启动
-
-#访问 http://localhost:4173 查看效果，没问题就可以按照下面的运行方式选择
 ```
+前端将在 http://localhost:4173 启动
+
 ## 运行方式说明
 
 后端使用 Python FastAPI，前端使用 Vue 3。
@@ -134,4 +145,4 @@ Copyright © 2025 msgk - QCstt (潜催语音转文字系统)
 
 本项目代码遵循 MIT 许可证。
 
-本项目使用了 FunASR (https://github.com/modelscope/FunASR?tab=readme-ov-file#license)，其代码遵循 MIT 许可证，模型遵循 FunASR 模型开源许可证 (Version 1.1)。
+本项目使用了 FunASR (https://github.com/modelscope/FunASR?tab=readme-ov-file#license) ，其代码遵循 MIT 许可证，模型遵循 FunASR 模型开源许可证 (Version 1.1)。

@@ -108,3 +108,6 @@ QCstt_test/**
 QCstt/
 QCstt/**
 modules5909.txt
+QCstt.build/
+QCstt.build/**
+
