@@ -13,8 +13,8 @@ jobs:
           fetch-depth: 0  # 获取完整历史
       - name: Push to Gitee
         run: |
-          git remote add gitee https://gitee.com/${{ secrets.GITEE_USERNAME }}/${{ secrets.GITEE_REPO }}.git
-          git push gitee main  # 同步到 Gitee 的 main 分支
+          git remote add gitee https://${{ secrets.GITEE_USERNAME }}:${{ secrets.GITEE_TOKEN }}@gitee.com/${{ secrets.GITEE_USERNAME }}/${{ secrets.GITEE_REPO }}.git
+          git push gitee master  # 同步到 Gitee 的 master 分支
         env:
           GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
