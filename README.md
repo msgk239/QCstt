@@ -24,11 +24,17 @@
 
 ### 1. 下载本项目
 ```bash
+# GitHub仓库
 # 浅克隆（shallow clone）下载最新的提交
 git clone --depth=1 https://github.com/msgk239/QCstt.git
-
 # 或者完整克隆
 git clone https://github.com/msgk239/QCstt.git
+
+# Gitee仓库（同步更新）
+# 浅克隆（shallow clone）下载最新的提交
+git clone --depth=1 https://gitee.com/msgk/QCstt.git
+# 或者完整克隆
+git clone https://gitee.com/msgk/QCstt.git
 ```
 
 ### 2. 安装必要工具
@@ -140,6 +146,7 @@ python -m server.api.package
 - 建议备份热词文件在server\api\speech\keywords
 - 第一次下载模型需要联网，后面可以本地运行
 - 有些文档不是最新的，请以代码为准
+
 ## 版权声明
 Copyright © 2025 msgk - QCstt (潜催语音转文字系统)
 
