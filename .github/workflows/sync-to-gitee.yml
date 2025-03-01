@@ -14,7 +14,7 @@ jobs:
       - name: Push to Gitee
         run: |
           git remote add gitee https://${{ secrets.GITEE_USERNAME }}:${{ secrets.GITEE_TOKEN }}@gitee.com/${{ secrets.GITEE_USERNAME }}/${{ secrets.GITEE_REPO }}.git
-          git push gitee master  # 同步到 Gitee 的 master 分支
+          git push gitee main  # 同步到 Gitee 的 main 分支
         env:
           GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
