@@ -1,0 +1,21 @@
+name: Sync to Gitee
+on: 
+  push:  # 每次 push 时触发
+    branches:
+      - main  # 默认监听 main 分支，可改为你的主要分支，例如 master
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # 获取完整历史
+      - name: Push to Gitee
+        run: |
+          git remote add gitee https://gitee.com/${{ secrets.GITEE_USERNAME }}/${{ secrets.GITEE_REPO }}.git
+          git push gitee main  # 同步到 Gitee 的 main 分支
+        env:
+          GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO }}
