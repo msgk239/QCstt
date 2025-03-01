@@ -3,6 +3,8 @@ on:
   push:  # 每次 push 时触发
     branches:
       - main  # 默认监听 main 分支，可改为你的主要分支，例如 master
+    tags:
+      - '*'  # 监听所有标签的推送
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -15,6 +17,7 @@ jobs:
         run: |
           git remote add gitee https://${{ secrets.GITEE_USERNAME }}:${{ secrets.GITEE_TOKEN }}@gitee.com/${{ secrets.GITEE_USERNAME }}/${{ secrets.GITEE_REPO }}.git
           git push gitee main  # 同步到 Gitee 的 main 分支
+          git push gitee --tags  # 同步所有标签到 Gitee
         env:
           GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
