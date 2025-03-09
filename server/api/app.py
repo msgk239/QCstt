@@ -39,7 +39,6 @@ app.add_middleware(
         "http://localhost:5173",  # Vite 开发服务器
         "http://localhost:4173",  # Vite 预览服务器
         "http://localhost:8010",  # 打包后的地址
-        "*"  # 允许所有来源（生产环境可能需要限制）
     ],
     allow_credentials=True,
     allow_methods=["*"],

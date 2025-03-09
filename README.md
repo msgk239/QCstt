@@ -78,12 +78,6 @@ cd server
 pip install -r requirements.txt
 ```
 
-#### 3.3 临时修复
-```bash
-# 替换 funasr 文件（临时解决方案）
-copy /Y auto_model.py ./.conda/Lib/site-packages/funasr/auto/auto_model.py
-```
-
 ### 4. 启动服务
 #### 4.1 启动后端
 ```bash
@@ -109,6 +103,8 @@ npm run dev
 
 #### 4.3 生产环境部署（可选）
 ```bash
+# 进入前端目录
+cd frontend
 # 构建前端项目
 npm run build
 
