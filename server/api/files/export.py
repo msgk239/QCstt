@@ -7,6 +7,7 @@ from starlette.responses import FileResponse
 from ..logger import get_logger
 from .service import file_service
 import json
+import re
 
 logger = get_logger(__name__)
 
@@ -19,7 +20,8 @@ class ExportService:
             'pdf': self._export_to_pdf,
             'txt': self._export_to_txt,
             'md': self._export_to_markdown,
-            'srt': self._export_to_srt
+            'srt': self._export_to_srt,
+            'rst': self._export_to_rst
         }
         # 创建导出文件的临时目录，设置为项目根目录下的exports
         self.export_dir = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'exports')
@@ -215,9 +217,256 @@ class ExportService:
         raise NotImplementedError("Markdown导出功能尚未实现")
     
     def _export_to_srt(self, file_id: str, data: dict) -> str:
-        """导出为SRT字幕文件"""
-        # TODO: 实现SRT导出逻辑
-        raise NotImplementedError("SRT导出功能尚未实现")
+        """
+        导出为SRT字幕文件
+        Args:
+            file_id: 文件ID
+            data: 转写数据，格式如 original.json
+        Returns:
+            str: 导出文件的路径
+        """
+        try:
+            # 从 data 中获取实际的转写数据
+            transcript_data = data.get('data', {}).get('data', {})
+            segments = transcript_data.get('segments', [])
+
+            # 生成导出文件路径
+            export_path = os.path.join(self.export_dir, f"{file_id}_transcript.srt")
+
+            with open(export_path, 'w', encoding='utf-8') as srt_file:
+                index = 1
+                
+                for segment in segments:
+                    # 检查是否有子段落，前端可能会传入合并后的段落
+                    if 'subSegments' in segment and segment['subSegments']:
+                        # 使用子段落
+                        for sub_segment in segment['subSegments']:
+                            # 检查是否有字级别的时间戳
+                            if 'timestamps' in sub_segment and sub_segment['timestamps']:
+                                # 处理字级别的时间戳
+                                timestamps = sub_segment['timestamps']
+                                text = sub_segment['text']
+                                current_line = ""
+                                current_words = []
+                                line_start_time = None
+                                line_end_time = None
+                                
+                                # 按字符和标点符号分割文本
+                                for i, char in enumerate(text):
+                                    # 尝试获取当前字符对应的时间戳
+                                    if i < len(timestamps):
+                                        timestamp = timestamps[i]
+                                        if not line_start_time:
+                                            line_start_time = timestamp['start']
+                                        line_end_time = timestamp['end']
+                                    
+                                    current_line += char
+                                    current_words.append(char)
+                                    
+                                    # 如果遇到逗号、句号或文本长度达到限制，输出一行
+                                    if char in '。，' or len(current_line) >= 30:
+                                        if current_line.strip():
+                                            srt_start = self._format_srt_time(line_start_time)
+                                            srt_end = self._format_srt_time(line_end_time)
+                                            srt_file.write(f"{index}\n")
+                                            srt_file.write(f"{srt_start} --> {srt_end}\n")
+                                            srt_file.write(f"{current_line.strip()}\n\n")
+                                            index += 1
+                                        
+                                        # 重置变量
+                                        current_line = ""
+                                        current_words = []
+                                        line_start_time = None
+                                        line_end_time = None
+                                
+                                # 处理最后剩余的内容
+                                if current_line.strip() and line_start_time is not None and line_end_time is not None:
+                                    srt_start = self._format_srt_time(line_start_time)
+                                    srt_end = self._format_srt_time(line_end_time)
+                                    srt_file.write(f"{index}\n")
+                                    srt_file.write(f"{srt_start} --> {srt_end}\n")
+                                    srt_file.write(f"{current_line.strip()}\n\n")
+                                    index += 1
+                            else:
+                                # 无字级别时间戳，使用段落级别的分割
+                                start_time = self._format_srt_time(sub_segment.get('start_time', segment['start_time']))
+                                end_time = self._format_srt_time(sub_segment.get('end_time', segment['end_time']))
+                                text_content = sub_segment.get('text', '')
+                                
+                                # 分割文本为多行
+                                lines = self._split_text(text_content)
+                                for line in lines:
+                                    if line.strip():  # 确保不写入空行
+                                        srt_file.write(f"{index}\n")
+                                        srt_file.write(f"{start_time} --> {end_time}\n")
+                                        srt_file.write(f"{line.strip()}\n\n")
+                                        index += 1
+                    else:
+                        # 检查是否有字级别的时间戳
+                        if 'timestamps' in segment and segment['timestamps']:
+                            # 处理字级别的时间戳
+                            timestamps = segment['timestamps']
+                            text = segment['text']
+                            current_line = ""
+                            current_words = []
+                            line_start_time = None
+                            line_end_time = None
+                            
+                            # 按字符和标点符号分割文本
+                            for i, char in enumerate(text):
+                                # 尝试获取当前字符对应的时间戳
+                                if i < len(timestamps):
+                                    timestamp = timestamps[i]
+                                    if not line_start_time:
+                                        line_start_time = timestamp['start']
+                                    line_end_time = timestamp['end']
+                                
+                                current_line += char
+                                current_words.append(char)
+                                
+                                # 如果遇到逗号、句号或文本长度达到限制，输出一行
+                                if char in '。，' or len(current_line) >= 30:
+                                    if current_line.strip():
+                                        srt_start = self._format_srt_time(line_start_time)
+                                        srt_end = self._format_srt_time(line_end_time)
+                                        srt_file.write(f"{index}\n")
+                                        srt_file.write(f"{srt_start} --> {srt_end}\n")
+                                        srt_file.write(f"{current_line.strip()}\n\n")
+                                        index += 1
+                                    
+                                    # 重置变量
+                                    current_line = ""
+                                    current_words = []
+                                    line_start_time = None
+                                    line_end_time = None
+                            
+                            # 处理最后剩余的内容
+                            if current_line.strip() and line_start_time is not None and line_end_time is not None:
+                                srt_start = self._format_srt_time(line_start_time)
+                                srt_end = self._format_srt_time(line_end_time)
+                                srt_file.write(f"{index}\n")
+                                srt_file.write(f"{srt_start} --> {srt_end}\n")
+                                srt_file.write(f"{current_line.strip()}\n\n")
+                                index += 1
+                        else:
+                            # 无字级别时间戳，使用段落级别的分割
+                            # 使用主段落
+                            start_time = self._format_srt_time(segment['start_time'])
+                            end_time = self._format_srt_time(segment['end_time'])
+                            text_content = segment['text']
+
+                            # 分割文本为多行
+                            lines = self._split_text(text_content)
+                            for line in lines:
+                                if line.strip():  # 确保不写入空行
+                                    srt_file.write(f"{index}\n")
+                                    srt_file.write(f"{start_time} --> {end_time}\n")
+                                    srt_file.write(f"{line.strip()}\n\n")
+                                    index += 1
+
+            logger.info(f"SRT文档导出成功: {export_path}")
+            return export_path
+
+        except Exception as e:
+            logger.error(f"SRT导出失败: {str(e)}", exc_info=True)
+            raise Exception(f"SRT导出失败: {str(e)}")
+
+    def _format_srt_time(self, seconds: float) -> str:
+        """
+        将秒数转换为SRT时间字符串格式 (hh:mm:ss,ms)
+        """
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        seconds = int(seconds % 60)
+        milliseconds = int((seconds % 1) * 1000)
+        return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
+    
+    def _split_text(self, text: str, max_length: int = 30) -> list:
+        """
+        分割文本为多行，在逗号和句号处分割，同时保留标点符号，并限制每行的长度
+        """
+        # 使用正则表达式在标点符号后进行分割，但保留标点符号
+        pattern = r'([。，])'
+        parts = re.split(pattern, text)
+        
+        lines = []
+        current_line = ""
+        
+        i = 0
+        while i < len(parts):
+            part = parts[i]
+            
+            # 如果当前部分是标点符号
+            if i + 1 < len(parts) and parts[i + 1] in '。，':
+                punctuation = parts[i + 1]
+                combined = part + punctuation
+                
+                # 如果添加这部分后长度超过限制，先添加当前行
+                if current_line and len(current_line) + len(combined) > max_length:
+                    lines.append(current_line)
+                    current_line = combined
+                else:
+                    current_line += combined
+                
+                i += 2  # 跳过已处理的标点符号
+            else:
+                # 普通文本部分
+                if current_line and len(current_line) + len(part) > max_length:
+                    lines.append(current_line)
+                    current_line = part
+                else:
+                    current_line += part
+                i += 1
+            
+            # 如果当前部分以标点符号结尾，将其作为一个独立的行
+            if current_line and current_line[-1] in '。，':
+                lines.append(current_line)
+                current_line = ""
+        
+        # 添加最后剩余的行
+        if current_line:
+            lines.append(current_line)
+            
+        return lines
+    
+    def _export_to_rst(self, file_id: str, data: dict) -> str:
+        """
+        导出为RST文件
+        Args:
+            file_id: 文件ID
+            data: 转写数据，格式如 original.json
+        Returns:
+            str: 导出文件的路径
+        """
+        try:
+            # 从 data 中获取实际的转写数据
+            transcript_data = data.get('data', {}).get('data', {})
+            segments = transcript_data.get('segments', [])
+
+            # 生成导出文件路径
+            export_path = os.path.join(self.export_dir, f"{file_id}_transcript.rst")
+
+            with open(export_path, 'w', encoding='utf-8') as rst_file:
+                # 写入标题
+                rst_file.write(f"{file_id} 转写文本\n")
+                rst_file.write("=" * len(f"{file_id} 转写文本") + "\n\n")
+
+                # 写入每个段落
+                for segment in segments:
+                    speaker = segment['speakerDisplayName']
+                    start_time = self._format_time(segment['start_time'])
+                    end_time = self._format_time(segment['end_time'])
+                    text_content = '\n'.join(segment['text'])
+
+                    rst_file.write(f"{speaker} [{start_time} - {end_time}]\n")
+                    rst_file.write(f"{text_content}\n\n")
+
+            logger.info(f"RST文档导出成功: {export_path}")
+            return export_path
+
+        except Exception as e:
+            logger.error(f"RST导出失败: {str(e)}", exc_info=True)
+            raise Exception(f"RST导出失败: {str(e)}")
 
 # 创建全局实例
 export_service = ExportService() 
