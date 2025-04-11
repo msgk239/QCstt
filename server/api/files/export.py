@@ -241,128 +241,12 @@ class ExportService:
                     if 'subSegments' in segment and segment['subSegments']:
                         # 使用子段落
                         for sub_segment in segment['subSegments']:
-                            # 检查是否有字级别的时间戳
-                            if 'timestamps' in sub_segment and sub_segment['timestamps']:
-                                # 处理字级别的时间戳
-                                timestamps = sub_segment['timestamps']
-                                text = sub_segment['text']
-                                current_line = ""
-                                current_words = []
-                                line_start_time = None
-                                line_end_time = None
-                                
-                                # 按字符和标点符号分割文本
-                                for i, char in enumerate(text):
-                                    # 尝试获取当前字符对应的时间戳
-                                    if i < len(timestamps):
-                                        timestamp = timestamps[i]
-                                        if not line_start_time:
-                                            line_start_time = timestamp['start']
-                                        line_end_time = timestamp['end']
-                                    
-                                    current_line += char
-                                    current_words.append(char)
-                                    
-                                    # 如果遇到逗号、句号或文本长度达到限制，输出一行
-                                    if char in '。，' or len(current_line) >= 30:
-                                        if current_line.strip():
-                                            srt_start = self._format_srt_time(line_start_time)
-                                            srt_end = self._format_srt_time(line_end_time)
-                                            srt_file.write(f"{index}\n")
-                                            srt_file.write(f"{srt_start} --> {srt_end}\n")
-                                            srt_file.write(f"{current_line.strip()}\n\n")
-                                            index += 1
-                                        
-                                        # 重置变量
-                                        current_line = ""
-                                        current_words = []
-                                        line_start_time = None
-                                        line_end_time = None
-                                
-                                # 处理最后剩余的内容
-                                if current_line.strip() and line_start_time is not None and line_end_time is not None:
-                                    srt_start = self._format_srt_time(line_start_time)
-                                    srt_end = self._format_srt_time(line_end_time)
-                                    srt_file.write(f"{index}\n")
-                                    srt_file.write(f"{srt_start} --> {srt_end}\n")
-                                    srt_file.write(f"{current_line.strip()}\n\n")
-                                    index += 1
-                            else:
-                                # 无字级别时间戳，使用段落级别的分割
-                                start_time = self._format_srt_time(sub_segment.get('start_time', segment['start_time']))
-                                end_time = self._format_srt_time(sub_segment.get('end_time', segment['end_time']))
-                                text_content = sub_segment.get('text', '')
-                                
-                                # 分割文本为多行
-                                lines = self._split_text(text_content)
-                                for line in lines:
-                                    if line.strip():  # 确保不写入空行
-                                        srt_file.write(f"{index}\n")
-                                        srt_file.write(f"{start_time} --> {end_time}\n")
-                                        srt_file.write(f"{line.strip()}\n\n")
-                                        index += 1
+                            self._process_segment_to_srt(sub_segment, srt_file, index)
+                            index += len(self._split_text(sub_segment.get('text', '')))
                     else:
-                        # 检查是否有字级别的时间戳
-                        if 'timestamps' in segment and segment['timestamps']:
-                            # 处理字级别的时间戳
-                            timestamps = segment['timestamps']
-                            text = segment['text']
-                            current_line = ""
-                            current_words = []
-                            line_start_time = None
-                            line_end_time = None
-                            
-                            # 按字符和标点符号分割文本
-                            for i, char in enumerate(text):
-                                # 尝试获取当前字符对应的时间戳
-                                if i < len(timestamps):
-                                    timestamp = timestamps[i]
-                                    if not line_start_time:
-                                        line_start_time = timestamp['start']
-                                    line_end_time = timestamp['end']
-                                
-                                current_line += char
-                                current_words.append(char)
-                                
-                                # 如果遇到逗号、句号或文本长度达到限制，输出一行
-                                if char in '。，' or len(current_line) >= 30:
-                                    if current_line.strip():
-                                        srt_start = self._format_srt_time(line_start_time)
-                                        srt_end = self._format_srt_time(line_end_time)
-                                        srt_file.write(f"{index}\n")
-                                        srt_file.write(f"{srt_start} --> {srt_end}\n")
-                                        srt_file.write(f"{current_line.strip()}\n\n")
-                                        index += 1
-                                    
-                                    # 重置变量
-                                    current_line = ""
-                                    current_words = []
-                                    line_start_time = None
-                                    line_end_time = None
-                            
-                            # 处理最后剩余的内容
-                            if current_line.strip() and line_start_time is not None and line_end_time is not None:
-                                srt_start = self._format_srt_time(line_start_time)
-                                srt_end = self._format_srt_time(line_end_time)
-                                srt_file.write(f"{index}\n")
-                                srt_file.write(f"{srt_start} --> {srt_end}\n")
-                                srt_file.write(f"{current_line.strip()}\n\n")
-                                index += 1
-                        else:
-                            # 无字级别时间戳，使用段落级别的分割
-                            # 使用主段落
-                            start_time = self._format_srt_time(segment['start_time'])
-                            end_time = self._format_srt_time(segment['end_time'])
-                            text_content = segment['text']
-
-                            # 分割文本为多行
-                            lines = self._split_text(text_content)
-                            for line in lines:
-                                if line.strip():  # 确保不写入空行
-                                    srt_file.write(f"{index}\n")
-                                    srt_file.write(f"{start_time} --> {end_time}\n")
-                                    srt_file.write(f"{line.strip()}\n\n")
-                                    index += 1
+                        # 使用主段落
+                        self._process_segment_to_srt(segment, srt_file, index)
+                        index += len(self._split_text(segment.get('text', '')))
 
             logger.info(f"SRT文档导出成功: {export_path}")
             return export_path
@@ -370,16 +254,109 @@ class ExportService:
         except Exception as e:
             logger.error(f"SRT导出失败: {str(e)}", exc_info=True)
             raise Exception(f"SRT导出失败: {str(e)}")
-
+            
+    def _process_segment_to_srt(self, segment, srt_file, start_index):
+        """
+        处理一个段落并转换为SRT格式
+        """
+        # 检查是否有字级别的时间戳
+        if 'timestamps' in segment and segment['timestamps'] and len(segment['timestamps']) > 0:
+            # 处理字级别的时间戳
+            self._process_with_char_timestamps(segment, srt_file, start_index)
+        else:
+            # 无字级别时间戳，使用段落级别的时间戳
+            self._process_without_char_timestamps(segment, srt_file, start_index)
+    
+    def _process_with_char_timestamps(self, segment, srt_file, start_index):
+        """
+        使用字级别时间戳处理段落
+        """
+        timestamps = segment['timestamps']
+        text = segment['text']
+        
+        # 分割文本并收集每一部分的时间戳
+        parts = []
+        current_part = ""
+        part_start_time = None
+        part_end_time = None
+        
+        for i, char in enumerate(text):
+            # 获取当前字符的时间戳
+            if i < len(timestamps):
+                timestamp = timestamps[i]
+                if part_start_time is None:
+                    part_start_time = timestamp['start']
+                part_end_time = timestamp['end']
+            
+            current_part += char
+            
+            # 当遇到标点符号或达到长度限制时，创建一个新部分
+            if char in '。，' or len(current_part) >= 30:
+                if current_part.strip() and part_start_time is not None and part_end_time is not None:
+                    parts.append({
+                        'text': current_part.strip(),
+                        'start_time': part_start_time,
+                        'end_time': part_end_time
+                    })
+                
+                # 重置为下一个部分
+                current_part = ""
+                part_start_time = None if i + 1 < len(timestamps) else part_end_time
+                part_end_time = None
+        
+        # 处理最后剩余的内容
+        if current_part.strip() and part_start_time is not None and part_end_time is not None:
+            parts.append({
+                'text': current_part.strip(),
+                'start_time': part_start_time,
+                'end_time': part_end_time
+            })
+        
+        # 写入SRT文件
+        index = start_index
+        for part in parts:
+            srt_start = self._format_srt_time(part['start_time'])
+            srt_end = self._format_srt_time(part['end_time'])
+            srt_file.write(f"{index}\n")
+            srt_file.write(f"{srt_start} --> {srt_end}\n")
+            srt_file.write(f"{part['text']}\n\n")
+            index += 1
+    
+    def _process_without_char_timestamps(self, segment, srt_file, start_index):
+        """
+        使用段落级别时间戳处理段落
+        """
+        start_time = self._format_srt_time(segment['start_time'])
+        end_time = self._format_srt_time(segment['end_time'])
+        text_content = segment['text']
+        
+        # 分割文本为多行
+        lines = self._split_text(text_content)
+        index = start_index
+        
+        for line in lines:
+            if line.strip():  # 确保不写入空行
+                srt_file.write(f"{index}\n")
+                srt_file.write(f"{start_time} --> {end_time}\n")
+                srt_file.write(f"{line.strip()}\n\n")
+                index += 1
+    
     def _format_srt_time(self, seconds: float) -> str:
         """
         将秒数转换为SRT时间字符串格式 (hh:mm:ss,ms)
+        确保毫秒部分的精度准确
         """
+        if seconds is None:
+            seconds = 0.0
+            
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
-        seconds = int(seconds % 60)
-        milliseconds = int((seconds % 1) * 1000)
-        return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
+        seconds_value = seconds % 60
+        # 保留整数部分和小数部分，确保毫秒的精度
+        seconds_int = int(seconds_value)
+        milliseconds = int(round((seconds_value - seconds_int) * 1000))
+        
+        return f"{hours:02}:{minutes:02}:{seconds_int:02},{milliseconds:03}"
     
     def _split_text(self, text: str, max_length: int = 30) -> list:
         """
